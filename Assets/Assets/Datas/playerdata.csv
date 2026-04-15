@@ -1,0 +1,2 @@
+coins,100,
+# Collection/deck: card,m,<monsterId>,count | card,s,<spellOrdinal>,count — same for deckslot (5 cols). Legacy 3-col card/deck/deckslot rows remap old spell ids on load.
