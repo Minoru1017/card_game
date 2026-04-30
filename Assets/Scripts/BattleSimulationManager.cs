@@ -14,6 +14,41 @@ public enum BattleTurnBannerKind
 
 public class BattleSimulationManager : MonoBehaviour
 {
+    // MASTER INDEX (merged legacy + 2026-04-15 updates)
+    // 1) Battle core (legacy):
+    //    - Deck build/shuffle, opening presentation, turn sequencing, win/lose checks.
+    //    - Player/enemy action gates and spell/attack resolve flow.
+    // 2) Difficulty/runtime config (legacy):
+    //    - Runtime difficulty queue/apply and enemy deck constraints.
+    // 3) Weather naming + rotation:
+    //    - GetWeatherLabel()
+    //    - GetRotatingWeatherBySerial()
+    //    - GetFirstWeatherOverrideIfAny()
+    // 4) Weather phase flow:
+    //    - CoPresentWeatherForecastForTurn()
+    //    - TryEnterWeatherPhaseForCurrentRound()
+    // 5) Weather rule effects:
+    //    - ApplyWeatherSpellPowerBonus()
+    //    - ApplyFogDirectDamageReductionIfNeeded()
+    //    - ApplyHolyLightHealBonusIfNeeded()
+    //    - ApplyFireRainEndTurnEffect()
+    // 6) Weather UI text export:
+    //    - GetCurrentWeatherForecastDetailsText()
+    //    - GetWeatherPseudoCardText()
+    //    - GetCurrentWeatherLabelForUi()
+    //    - GetCurrentWeatherRemainingRoundsForUi()
+    //    - GetNextWeatherForecastHintForUi()
+    //    - GetActiveWeatherBoardEffectTextForUi()
+
+    private enum BattleWeatherType
+    {
+        None,
+        FireRain,
+        HolyLight,
+        Fog,
+        Gale
+    }
+
     public struct AttackVisualData
     {
         public bool attackerIsPlayer;
@@ -46,19 +81,19 @@ public class BattleSimulationManager : MonoBehaviour
     public int maxHandSize = 7;
     public int enemyDeckSize = 20;
     public bool useFixedEnemyDeck = true;
-    public int[] fixedEnemyDeckCardIds = new int[] { 0, 1, -1, 2, -2, 3, -3, 4, 5, 6 };
+    public int[] fixedEnemyDeckCardIds = new int[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 16, 18, 19, 22, -1, -2, -3 };
     public bool forceEnemyStartWithMonster = false;
 
     [Header("Enemy deck spell mix")]
     [Tooltip("When building a random enemy deck (non-fixed pool), ensure at least this many spell cards if any exist in CardStore.")]
     [Range(0, 20)]
-    [SerializeField] private int minEnemySpellsInDeck = 3;
+    [SerializeField] private int minEnemySpellsInDeck = 2;
 
     [Header("Win-rate balance (50–70% target)")]
     [Tooltip("All battles: enemy may keep this many monsters above your deck max ATK/HP before replacement. Higher = stronger enemy (tune ~8–16).")]
     [Range(0, 30)]
     [FormerlySerializedAs("batchSimEnemyOverLimitAllowance")]
-    [SerializeField] private int enemyOverLimitAllowance = 12;
+    [SerializeField] private int enemyOverLimitAllowance = 6;
     [Tooltip("All battles: if true, skip injecting weak 0 ATK or 0 HP filler monsters when the deck rule would add them.")]
     [FormerlySerializedAs("batchSimSkipZeroStatEnemyFiller")]
     [SerializeField] private bool skipZeroStatEnemyFiller = true;
@@ -66,6 +101,37 @@ public class BattleSimulationManager : MonoBehaviour
     [Range(0f, 0.5f)]
     [FormerlySerializedAs("batchSimPlayerSpellFirstChance")]
     [SerializeField] private float autoSimPlayerSpellFirstChance = 0.22f;
+
+    private bool runtimeDifficultyConfigPending;
+    private bool runtimeUseFixedEnemyDeck;
+    private int[] runtimeFixedEnemyDeckCardIds;
+    private int runtimeEnemyOverLimitAllowance;
+    private int runtimeMinEnemySpellsInDeck;
+    private BattleWeatherType currentWeather = BattleWeatherType.None;
+    private int weatherTurnSerial;
+    private bool playerFirstSpellBoostAvailable;
+    private bool enemyFirstSpellBoostAvailable;
+    private bool weatherForecastInProgress;
+    [SerializeField] private float weatherForecastPresentationSeconds = 5f;
+    [SerializeField] private int weatherActiveDurationRounds = 3;
+    [SerializeField] private int weatherForecastCooldownRounds = 3;
+    [Header("Weather First Trigger Override")]
+    [Tooltip("勾選後，第一輪天氣觸發將優先套用「緋焰時雨」。若同時勾選多個，依序取第一個：緋焰時雨 > 月華聖祈 > 蒼潮夜湧 > 朔風森詠。")]
+    [SerializeField] private bool firstWeatherPreferFireRain;
+    [Tooltip("勾選後，第一輪天氣觸發將優先套用「月華聖祈」。")]
+    [SerializeField] private bool firstWeatherPreferHolyLight;
+    [Tooltip("勾選後，第一輪天氣觸發將優先套用「蒼潮夜湧」。")]
+    [SerializeField] private bool firstWeatherPreferFog;
+    [Tooltip("勾選後，第一輪天氣觸發將優先套用「朔風森詠」。")]
+    [SerializeField] private bool firstWeatherPreferGale;
+    private bool firstWeatherOverrideConsumed;
+    private int weatherActiveRoundsRemaining;
+    private int weatherCooldownRoundsRemaining;
+    private int weatherRemainingRoundsForUi;
+    private BattleWeatherType queuedWeatherForNextRound = BattleWeatherType.None;
+    private BattleWeatherType forecastPreviewWeatherForUi = BattleWeatherType.None;
+    private readonly List<BattleWeatherType> weatherRandomCycleBag = new List<BattleWeatherType>(4);
+    private int weatherRandomCycleCursor;
 
     /// <summary>Batch auto-play only: spell-before-monster chance when field is empty.</summary>
     public float AutoSimPlayerSpellFirstChance => autoSimPlayerSpellFirstChance;
@@ -103,6 +169,10 @@ public class BattleSimulationManager : MonoBehaviour
     public event System.Action<bool, bool> FireballVisualRequested;
     /// <summary>林可的凝視每回合全體 -5 觸發時；true=我方場上凝視牌，false=敵方場上凝視牌（供眼睛攻擊特效）。</summary>
     public event System.Action<bool> LinGazePeriodicStrikeVisualRequested;
+    /// <summary>天氣全域預報開始：天氣名稱、效果敘述。</summary>
+    public event System.Action<string, string> WeatherForecastStarted;
+    /// <summary>天氣全域預報結束（回合恢復）。</summary>
+    public event System.Action WeatherForecastFinished;
     /// <summary>畫面中央回合浮動提示（略過批次勝率模擬時的顯示，結束戰鬥時仍會隱藏）。</summary>
     public event System.Action<BattleTurnBannerKind> TurnBannerRequested;
     /// <summary>玩家將手牌成功放到場上（怪獸上場，或林可的凝視結算後置於場上）。</summary>
@@ -160,10 +230,336 @@ public class BattleSimulationManager : MonoBehaviour
         PlayerTurnActionWindowOpenedForPromptUi?.Invoke();
     }
 
+    private string GetWeatherLabel(BattleWeatherType wt)
+    {
+        switch (wt)
+        {
+            case BattleWeatherType.FireRain: return "緋焰時雨";
+            case BattleWeatherType.HolyLight: return "月華聖祈";
+            case BattleWeatherType.Fog: return "蒼潮夜湧";
+            case BattleWeatherType.Gale: return "朔風森詠";
+            default: return "無";
+        }
+    }
+
+    private BattleWeatherType GetRotatingWeatherBySerial(int serial)
+    {
+        if (serial <= 0) return BattleWeatherType.None;
+        int r = (serial - 1) % 4;
+        switch (r)
+        {
+            case 0: return BattleWeatherType.FireRain;
+            case 1: return BattleWeatherType.HolyLight;
+            case 2: return BattleWeatherType.Fog;
+            default: return BattleWeatherType.Gale;
+        }
+    }
+
+    private BattleWeatherType GetFirstWeatherOverrideIfAny()
+    {
+        if (firstWeatherPreferFireRain) return BattleWeatherType.FireRain;
+        if (firstWeatherPreferHolyLight) return BattleWeatherType.HolyLight;
+        if (firstWeatherPreferFog) return BattleWeatherType.Fog;
+        if (firstWeatherPreferGale) return BattleWeatherType.Gale;
+        return BattleWeatherType.None;
+    }
+
+    private void RefillWeatherRandomCycleBag(BattleWeatherType exclude = BattleWeatherType.None)
+    {
+        weatherRandomCycleBag.Clear();
+        weatherRandomCycleCursor = 0;
+        if (exclude != BattleWeatherType.FireRain) weatherRandomCycleBag.Add(BattleWeatherType.FireRain);
+        if (exclude != BattleWeatherType.HolyLight) weatherRandomCycleBag.Add(BattleWeatherType.HolyLight);
+        if (exclude != BattleWeatherType.Fog) weatherRandomCycleBag.Add(BattleWeatherType.Fog);
+        if (exclude != BattleWeatherType.Gale) weatherRandomCycleBag.Add(BattleWeatherType.Gale);
+        for (int i = weatherRandomCycleBag.Count - 1; i > 0; i--)
+        {
+            int j = Random.Range(0, i + 1);
+            BattleWeatherType t = weatherRandomCycleBag[i];
+            weatherRandomCycleBag[i] = weatherRandomCycleBag[j];
+            weatherRandomCycleBag[j] = t;
+        }
+    }
+
+    private BattleWeatherType DrawNextWeatherRandomNoRepeat()
+    {
+        if (weatherRandomCycleCursor >= weatherRandomCycleBag.Count)
+            RefillWeatherRandomCycleBag();
+        if (weatherRandomCycleBag.Count <= 0) return BattleWeatherType.FireRain;
+        BattleWeatherType picked = weatherRandomCycleBag[Mathf.Clamp(weatherRandomCycleCursor, 0, weatherRandomCycleBag.Count - 1)];
+        weatherRandomCycleCursor++;
+        return picked;
+    }
+
+    private BattleWeatherType PickForecastWeatherForNextRound()
+    {
+        BattleWeatherType overridden = BattleWeatherType.None;
+        if (!firstWeatherOverrideConsumed && weatherTurnSerial == 0)
+        {
+            overridden = GetFirstWeatherOverrideIfAny();
+            firstWeatherOverrideConsumed = true;
+        }
+        if (overridden != BattleWeatherType.None)
+        {
+            // First-trigger override counts as one draw in the current cycle.
+            RefillWeatherRandomCycleBag(overridden);
+            return overridden;
+        }
+        return DrawNextWeatherRandomNoRepeat();
+    }
+
+    private string GetWeatherForecastDetailsText(BattleWeatherType wt)
+    {
+        string ComposeForecastDetail(string benefit, string drawback, string impacted)
+        {
+            bool hasBenefit = !string.IsNullOrEmpty(benefit);
+            bool hasDrawback = !string.IsNullOrEmpty(drawback);
+            if (hasBenefit && hasDrawback)
+                return "增益: " + benefit + "\n減益: " + drawback + "\n受影響卡牌: " + impacted;
+            if (hasBenefit)
+                return "增益: " + benefit + "\n受影響卡牌: " + impacted;
+            if (hasDrawback)
+                return "減益: " + drawback + "\n受影響卡牌: " + impacted;
+            return "受影響卡牌: " + impacted;
+        }
+
+        switch (wt)
+        {
+            case BattleWeatherType.FireRain:
+                return ComposeForecastDetail(
+                    string.Empty,
+                    "雙方場上怪獸於回合結束各受 5 點傷害",
+                    "高血量怪獸較有優勢");
+            case BattleWeatherType.HolyLight:
+                return ComposeForecastDetail(
+                    "所有治療效果增加 10",
+                    string.Empty,
+                    "治療類法術與續航型怪獸更有利");
+            case BattleWeatherType.Fog:
+                return ComposeForecastDetail(
+                    "防守方生存壓力下降",
+                    "直接攻擊英雄傷害減少 50%",
+                    "直傷與快攻終結效率下降");
+            case BattleWeatherType.Gale:
+                return ComposeForecastDetail(
+                    "雙方本回合首張法術效果增加 20%",
+                    string.Empty,
+                    "爆發型與功能型法術價值提升");
+            default:
+                return "本回合無天氣加成與減益";
+        }
+    }
+
+    private void PrepareWeatherEffectFlagsForCurrentRound()
+    {
+        playerFirstSpellBoostAvailable = false;
+        enemyFirstSpellBoostAvailable = false;
+        if (currentWeather == BattleWeatherType.Gale)
+        {
+            // 狂風：本回合雙方第一張法術都可享受 20% 強化。
+            playerFirstSpellBoostAvailable = true;
+            enemyFirstSpellBoostAvailable = true;
+        }
+
+    }
+
+    private string GetCurrentWeatherEffectText()
+    {
+        switch (currentWeather)
+        {
+            case BattleWeatherType.FireRain: return "回合結束：雙方場上怪獸各受 5 點傷害。";
+            case BattleWeatherType.HolyLight: return "本回合所有治療 +10。";
+            case BattleWeatherType.Fog: return "本回合直接攻擊英雄傷害 -50%。";
+            case BattleWeatherType.Gale: return "本回合首張法術效果 +20%。";
+            default: return "本回合無額外天氣效果。";
+        }
+    }
+
+    private IEnumerator CoPresentWeatherForecastForTurn(bool isPlayerTurnNow)
+    {
+        bool forecastTriggeredThisRound = TryEnterWeatherPhaseForCurrentRound();
+        BattleLayoutVisualRefreshRequested?.Invoke();
+        if (!forecastTriggeredThisRound) yield break;
+
+        BattleWeatherType forecastType = forecastPreviewWeatherForUi != BattleWeatherType.None ? forecastPreviewWeatherForUi : currentWeather;
+        string weatherName = GetWeatherLabel(forecastType);
+        string effectText = GetWeatherForecastDetailsText(forecastType);
+        WeatherForecastStarted?.Invoke(weatherName, effectText);
+        weatherForecastInProgress = true;
+
+        string owner = isPlayerTurnNow ? "我方" : "敵方";
+        ShowBattleToast("天氣預報: " + weatherName + " | " + owner + "回合", 2.4f);
+        LogBattleHistory("天氣預報: " + weatherName + " | 效果: " + effectText);
+
+        if (!BattleAutoSimPlugin.IsRunning)
+        {
+            float wait = Mathf.Clamp(weatherForecastPresentationSeconds, 0.2f, 8f);
+            yield return new WaitForSecondsRealtime(wait);
+        }
+
+        weatherForecastInProgress = false;
+        WeatherForecastFinished?.Invoke();
+    }
+
+    private bool TryEnterWeatherPhaseForCurrentRound()
+    {
+        weatherRemainingRoundsForUi = 0;
+
+        // 初始回合（無論先後手）不觸發天氣預報。
+        if (currentRound <= 1)
+        {
+            currentWeather = BattleWeatherType.None;
+            forecastPreviewWeatherForUi = BattleWeatherType.None;
+            PrepareWeatherEffectFlagsForCurrentRound();
+            return false;
+        }
+
+        // 天氣作用中：維持效果，但只在啟動當回合播報視窗。
+        if (weatherActiveRoundsRemaining > 0)
+        {
+            BattleWeatherType activeWeather = currentWeather;
+            forecastPreviewWeatherForUi = BattleWeatherType.None;
+            weatherRemainingRoundsForUi = weatherActiveRoundsRemaining;
+            PrepareWeatherEffectFlagsForCurrentRound();
+            weatherActiveRoundsRemaining--;
+            if (weatherActiveRoundsRemaining <= 0)
+            {
+                weatherCooldownRoundsRemaining = Mathf.Max(0, weatherForecastCooldownRounds);
+                string weatherName = GetWeatherLabel(activeWeather);
+                if (!string.IsNullOrEmpty(weatherName) && weatherName != "無")
+                    LogBattleHistory("天氣結算: " + weatherName + " 效果結束");
+            }
+            return false;
+        }
+
+        // Resolve the queued weather chosen by forecast on previous no-weather round.
+        if (queuedWeatherForNextRound != BattleWeatherType.None)
+        {
+            currentWeather = queuedWeatherForNextRound;
+            queuedWeatherForNextRound = BattleWeatherType.None;
+            forecastPreviewWeatherForUi = BattleWeatherType.None;
+            weatherTurnSerial++;
+            weatherActiveRoundsRemaining = Mathf.Max(1, weatherActiveDurationRounds);
+            weatherRemainingRoundsForUi = weatherActiveRoundsRemaining;
+            PrepareWeatherEffectFlagsForCurrentRound();
+            weatherActiveRoundsRemaining--;
+            if (weatherActiveRoundsRemaining <= 0)
+                weatherCooldownRoundsRemaining = Mathf.Max(0, weatherForecastCooldownRounds);
+            return false;
+        }
+
+        // No active weather now; this is the forecast round that picks next round's weather.
+        currentWeather = BattleWeatherType.None;
+        PrepareWeatherEffectFlagsForCurrentRound();
+        if (weatherCooldownRoundsRemaining > 1)
+        {
+            weatherCooldownRoundsRemaining--;
+            forecastPreviewWeatherForUi = BattleWeatherType.None;
+            return false;
+        }
+        if (weatherCooldownRoundsRemaining == 1)
+            weatherCooldownRoundsRemaining = 0;
+
+        BattleWeatherType picked = PickForecastWeatherForNextRound();
+        queuedWeatherForNextRound = picked;
+        forecastPreviewWeatherForUi = picked;
+        PrepareWeatherEffectFlagsForCurrentRound();
+        return queuedWeatherForNextRound != BattleWeatherType.None;
+    }
+
+    private string GetCurrentWeatherForecastDetailsText()
+    {
+        return GetWeatherForecastDetailsText(currentWeather);
+    }
+
+    private string GetWeatherPseudoCardText(bool forPlayerSide)
+    {
+        switch (currentWeather)
+        {
+            case BattleWeatherType.FireRain:
+                return "【天氣偽卡】緋焰時雨：回合結束時，場上怪獸 -5 HP";
+            case BattleWeatherType.HolyLight:
+                return "【天氣偽卡】月華聖祈：本回合治療 +10";
+            case BattleWeatherType.Fog:
+                return "【天氣偽卡】蒼潮夜湧：本回合直擊英雄傷害 -50%";
+            case BattleWeatherType.Gale:
+                bool hasBuff = forPlayerSide ? playerFirstSpellBoostAvailable : enemyFirstSpellBoostAvailable;
+                return hasBuff
+                    ? "【天氣偽卡】朔風森詠：本回合首張法術效果 +20%（未觸發）"
+                    : "【天氣偽卡】朔風森詠：本回合首張法術效果 +20%（已觸發）";
+            default:
+                return "【天氣偽卡】無";
+        }
+    }
+
+    private int ApplyWeatherSpellPowerBonus(int baseValue, bool isPlayerCaster)
+    {
+        int v = baseValue;
+        if (currentWeather == BattleWeatherType.Gale)
+        {
+            bool consume = isPlayerCaster ? playerFirstSpellBoostAvailable : enemyFirstSpellBoostAvailable;
+            if (consume)
+            {
+                v = Mathf.CeilToInt(baseValue * 1.2f);
+                if (isPlayerCaster) playerFirstSpellBoostAvailable = false;
+                else enemyFirstSpellBoostAvailable = false;
+            }
+        }
+        return v;
+    }
+
+    private int ApplyFogDirectDamageReductionIfNeeded(int directDamage)
+    {
+        if (currentWeather != BattleWeatherType.Fog) return directDamage;
+        return Mathf.Max(0, Mathf.CeilToInt(directDamage * 0.5f));
+    }
+
+    private int ApplyHolyLightHealBonusIfNeeded(int baseHeal)
+    {
+        if (currentWeather != BattleWeatherType.HolyLight) return baseHeal;
+        return baseHeal + 10;
+    }
+
+    private void ApplyFireRainEndTurnEffect()
+    {
+        if (currentWeather != BattleWeatherType.FireRain) return;
+        const int dot = 5;
+        bool any = false;
+        bool hitPlayerMonster = false;
+        bool hitEnemyMonster = false;
+        if (playerField != null)
+        {
+            hitPlayerMonster = true;
+            playerField.currentHp -= dot;
+            if (playerField.currentHp <= 0) playerField = null;
+            any = true;
+        }
+        if (enemyField != null)
+        {
+            hitEnemyMonster = true;
+            enemyField.currentHp -= dot;
+            if (enemyField.currentHp <= 0) enemyField = null;
+            any = true;
+        }
+        if (!any) return;
+
+        string txt = "緋焰時雨：回合結束，雙方場上怪獸各受 5 點傷害。";
+        ShowBattleToast(txt, 2.4f);
+        LogBattleHistory(txt);
+        if (hitPlayerMonster && hitEnemyMonster)
+            LogBattleHistory("天氣結算：我方與敵方場上怪獸各 -5 HP（英雄不受此效果影響）。");
+        else if (hitPlayerMonster)
+            LogBattleHistory("天氣結算：我方場上怪獸 -5 HP（英雄不受此效果影響）。");
+        else if (hitEnemyMonster)
+            LogBattleHistory("天氣結算：敵方場上怪獸 -5 HP（英雄不受此效果影響）。");
+        BattleLayoutVisualRefreshRequested?.Invoke();
+    }
+
     private readonly List<string> battleHistoryLines = new List<string>(128);
     private readonly List<string> pendingDiscardHistoryLines = new List<string>(16);
     private Coroutine discardHistoryFlushRoutine;
     private const float DiscardHistoryFlushDelaySeconds = 0.14f;
+    private bool playerHeroDeathLoggedThisBattle;
 
     /// <summary>本局累積的對戰歷史（每行一則）；批次模擬不寫入。</summary>
     public string GetBattleHistoryFullText()
@@ -221,6 +617,19 @@ public class BattleSimulationManager : MonoBehaviour
                 LogBattleHistory("對戰結束");
                 LogBattleHistory("平手");
                 break;
+        }
+    }
+
+    private void RecordPlayerHeroHpLossHistory(int hpBefore, int hpAfter, int damage, string source)
+    {
+        if (BattleAutoSimPlugin.IsRunning) return;
+        int actualDamage = Mathf.Max(0, damage);
+        LogBattleHistory(source + "：我方英雄受到 " + actualDamage + " 點傷害");
+        LogBattleHistory("我方英雄生命: " + hpBefore + " 降至 " + hpAfter + "（-" + actualDamage + "）");
+        if (!playerHeroDeathLoggedThisBattle && hpBefore > 0 && hpAfter <= 0)
+        {
+            playerHeroDeathLoggedThisBattle = true;
+            LogBattleHistory("我方英雄死亡");
         }
     }
 
@@ -422,6 +831,7 @@ public class BattleSimulationManager : MonoBehaviour
 
         battleHistoryLines.Clear();
         pendingDiscardHistoryLines.Clear();
+        playerHeroDeathLoggedThisBattle = false;
         if (discardHistoryFlushRoutine != null)
         {
             StopCoroutine(discardHistoryFlushRoutine);
@@ -474,6 +884,19 @@ public class BattleSimulationManager : MonoBehaviour
         openingEnemyDice = 0;
         openingPlayerFirst = true;
         currentRound = 1;
+        currentWeather = BattleWeatherType.None;
+        weatherTurnSerial = 0;
+        playerFirstSpellBoostAvailable = false;
+        enemyFirstSpellBoostAvailable = false;
+        weatherForecastInProgress = false;
+        firstWeatherOverrideConsumed = false;
+        weatherActiveRoundsRemaining = 0;
+        weatherCooldownRoundsRemaining = 0;
+        weatherRemainingRoundsForUi = 0;
+        queuedWeatherForNextRound = BattleWeatherType.None;
+        forecastPreviewWeatherForUi = BattleWeatherType.None;
+        weatherRandomCycleBag.Clear();
+        weatherRandomCycleCursor = 0;
 
         BuildPlayerDeck();
         BattleVerbose("BattleSimulation: loaded player deck count = " + playerDeck.Count);
@@ -531,6 +954,7 @@ public class BattleSimulationManager : MonoBehaviour
         }
         else
         {
+            yield return StartCoroutine(CoPresentWeatherForecastForTurn(true));
             NotifyPlayerTurnActionWindowOpenedForPromptUi();
         }
     }
@@ -697,7 +1121,7 @@ public class BattleSimulationManager : MonoBehaviour
                 BattleVerbose("Enemy field is empty: direct attack is allowed on your next player turn after you end this turn.");
                 return;
             }
-            int directDmg = playerField.attack;
+            int directDmg = ApplyFogDirectDamageReductionIfNeeded(playerField.attack);
             enemyHp -= directDmg;
             LogBattleHistory("我方場地上 怪物牌 " + playerField.cardName + " 對敵方英雄造成" + directDmg + " 點傷害");
             AttackPerformed?.Invoke(new AttackVisualData
@@ -744,6 +1168,11 @@ public class BattleSimulationManager : MonoBehaviour
         if (!battleOver && !playerHasAttackedThisTurn)
         {
             PlayerAttack();
+        }
+        if (!battleOver)
+        {
+            ApplyFireRainEndTurnEffect();
+            CheckBattleResult();
         }
         if (battleOver)
         {
@@ -800,6 +1229,11 @@ public class BattleSimulationManager : MonoBehaviour
         BattleVerbose("Enemy turn: after attack");
         if (!BattleAutoSimPlugin.IsRunning)
             yield return new WaitForSeconds(0.2f);
+        if (!battleOver)
+        {
+            ApplyFireRainEndTurnEffect();
+            CheckBattleResult();
+        }
 
         CheckBattleResult();
         if (battleOver)
@@ -843,6 +1277,7 @@ public class BattleSimulationManager : MonoBehaviour
         EnsurePlayerHandDiscardRequirement();
         BattleVerbose("Player turn started | Round " + currentRound);
         PrintBattleState();
+        yield return StartCoroutine(CoPresentWeatherForecastForTurn(true));
         turnSequenceInProgress = false;
         NotifyPlayerTurnActionWindowOpenedForPromptUi();
     }
@@ -965,9 +1400,11 @@ public class BattleSimulationManager : MonoBehaviour
                 BattleVerbose("Enemy direct attack blocked: can attack only on next enemy turn after seeing empty player field.");
                 return;
             }
-            int directDmg = enemyField.attack;
+            int directDmg = ApplyFogDirectDamageReductionIfNeeded(enemyField.attack);
+            int hpBefore = playerHp;
             playerHp -= directDmg;
             LogBattleHistory("敵方場地上 怪物牌 " + enemyField.cardName + " 對我方英雄造成" + directDmg + " 點傷害");
+            RecordPlayerHeroHpLossHistory(hpBefore, playerHp, directDmg, "敵方場地怪獸直擊");
             AttackPerformed?.Invoke(new AttackVisualData
             {
                 attackerIsPlayer = false,
@@ -1097,8 +1534,12 @@ public class BattleSimulationManager : MonoBehaviour
 
     private void ApplyLinGazePeriodicDamage(int amount)
     {
+        int playerHpBefore = playerHp;
         playerHp = Mathf.Max(0, playerHp - amount);
         enemyHp = Mathf.Max(0, enemyHp - amount);
+        int playerHeroDamage = Mathf.Max(0, playerHpBefore - playerHp);
+        if (playerHeroDamage > 0)
+            RecordPlayerHeroHpLossHistory(playerHpBefore, playerHp, playerHeroDamage, "林可的凝視");
         if (playerField != null)
         {
             playerField.currentHp -= amount;
@@ -1159,7 +1600,7 @@ public class BattleSimulationManager : MonoBehaviour
 
     private void ApplyPlayerSpellFireball(SpellCard spell)
     {
-        const int dmg = 20;
+        int dmg = ApplyWeatherSpellPowerBonus(20, true);
         int deal;
         if (enemyField != null)
         {
@@ -1183,10 +1624,10 @@ public class BattleSimulationManager : MonoBehaviour
             ShowBattleToast("初級治療：我方場上需要怪物才能回復。", 2.2f);
             return false;
         }
-        const int healAmount = 40;
+        int healAmount = ApplyHolyLightHealBonusIfNeeded(ApplyWeatherSpellPowerBonus(40, true));
         playerField.currentHp += healAmount;
         LogBattleHistory("我方使用了 法術牌 " + spell.cardName + " 對我方回復" + healAmount + "點生命值");
-        ShowBattleToast("初級治療：我方場上怪獸 +" + 40 + " HP（目前 " + playerField.currentHp + "／上限 " + playerField.maxHp + "，可溢出）。", 2.8f);
+        ShowBattleToast("初級治療：我方場上怪獸 +" + healAmount + " HP（目前 " + playerField.currentHp + "／上限 " + playerField.maxHp + "，可溢出）。", 2.8f);
         return true;
     }
 
@@ -1222,7 +1663,9 @@ public class BattleSimulationManager : MonoBehaviour
             case 2:
                 return ApplyEnemySpellLinGaze(spell);
             default:
+                int hpBefore = playerHp;
                 playerHp -= 2;
+                RecordPlayerHeroHpLossHistory(hpBefore, playerHp, 2, "敵方法術效果");
                 return true;
         }
     }
@@ -1234,10 +1677,10 @@ public class BattleSimulationManager : MonoBehaviour
             ShowBattleToast("初級治療：敵方場上需要怪物才能回復。", 2.2f);
             return false;
         }
-        const int healAmount = 40;
+        int healAmount = ApplyHolyLightHealBonusIfNeeded(ApplyWeatherSpellPowerBonus(40, false));
         enemyField.currentHp += healAmount;
         LogBattleHistory("敵方使用了 法術牌 " + spell.cardName + " 對敵方回復" + healAmount + "點生命值");
-        ShowBattleToast("初級治療：敵方場上怪獸 +" + 40 + " HP（目前 " + enemyField.currentHp + "／上限 " + enemyField.maxHp + "，可溢出）。", 2.8f);
+        ShowBattleToast("初級治療：敵方場上怪獸 +" + healAmount + " HP（目前 " + enemyField.currentHp + "／上限 " + enemyField.maxHp + "，可溢出）。", 2.8f);
         return true;
     }
 
@@ -1261,7 +1704,7 @@ public class BattleSimulationManager : MonoBehaviour
 
     private void ApplyEnemySpellFireball(SpellCard spell)
     {
-        const int dmg = 20;
+        int dmg = ApplyWeatherSpellPowerBonus(20, false);
         int deal;
         if (playerField != null)
         {
@@ -1274,6 +1717,8 @@ public class BattleSimulationManager : MonoBehaviour
             int before = playerHp;
             playerHp = Mathf.Max(0, playerHp - dmg);
             deal = before - playerHp;
+            if (deal > 0)
+                RecordPlayerHeroHpLossHistory(before, playerHp, deal, "敵方法術 " + spell.cardName);
         }
         LogBattleHistory("敵方咒術區 法術牌 " + spell.cardName + " 對我方造成" + deal + "點傷害");
     }
@@ -1323,7 +1768,16 @@ public class BattleSimulationManager : MonoBehaviour
 
     private void BuildEnemyDeck()
     {
-        int targetEnemyDeckSize = Mathf.Max(1, GetPlayerSavedDeckCardCount());
+        if (runtimeDifficultyConfigPending)
+        {
+            useFixedEnemyDeck = runtimeUseFixedEnemyDeck;
+            if (runtimeFixedEnemyDeckCardIds != null && runtimeFixedEnemyDeckCardIds.Length > 0)
+                fixedEnemyDeckCardIds = runtimeFixedEnemyDeckCardIds;
+            enemyOverLimitAllowance = Mathf.Clamp(runtimeEnemyOverLimitAllowance, 0, 30);
+            minEnemySpellsInDeck = Mathf.Clamp(runtimeMinEnemySpellsInDeck, 0, 20);
+            runtimeDifficultyConfigPending = false;
+        }
+        int targetEnemyDeckSize = GetTargetEnemyDeckSizeToMatchPlayer();
         int playerMaxAttack;
         int playerMaxHealth;
         GetPlayerSavedDeckMaxStats(out playerMaxAttack, out playerMaxHealth);
@@ -1396,6 +1850,31 @@ public class BattleSimulationManager : MonoBehaviour
 
         EnsureMinSpellsInEnemyDeck(spells, targetEnemyDeckSize);
         ApplyEnemyDeckPowerBalancing(playerMaxAttack, playerMaxHealth);
+    }
+
+    /// <summary>Apply runtime enemy-difficulty config before the next battle deck build.</summary>
+    public void QueueRuntimeDifficultyConfig(
+        bool useFixed,
+        int[] fixedDeckIds,
+        int overLimitAllowance,
+        int minSpells)
+    {
+        runtimeUseFixedEnemyDeck = useFixed;
+        runtimeFixedEnemyDeckCardIds = fixedDeckIds != null ? (int[])fixedDeckIds.Clone() : null;
+        runtimeEnemyOverLimitAllowance = overLimitAllowance;
+        runtimeMinEnemySpellsInDeck = minSpells;
+        runtimeDifficultyConfigPending = true;
+    }
+
+    /// <summary>
+    /// Enemy deck size should follow the player's actual battle deck count first.
+    /// Fallback to saved deck metadata, then inspector default if needed.
+    /// </summary>
+    private int GetTargetEnemyDeckSizeToMatchPlayer()
+    {
+        if (playerDeck != null && playerDeck.Count > 0)
+            return Mathf.Max(1, playerDeck.Count);
+        return Mathf.Max(1, GetPlayerSavedDeckCardCount());
     }
 
     private void EnsureMinSpellsInEnemyDeck(List<Card> spells, int targetEnemyDeckSize)
@@ -1541,6 +2020,7 @@ public class BattleSimulationManager : MonoBehaviour
         if (battleOver) return false;
         if (IsEnemyDiscardPopupLockActive()) return false;
         if (openingPresentationInProgress) return false;
+        if (weatherForecastInProgress) return false;
         if (activeSpellCastPresentationCount > 0) return false;
         if (!playerTurn)
             return false;
@@ -1789,6 +2269,7 @@ public class BattleSimulationManager : MonoBehaviour
             battleResult = 2;
             BattleVerbose("平手：雙方英雄 HP≥1，且皆無牌可打（手牌、牌庫與場上皆無可用牌）。");
             RecordBattleOutcomeHistory();
+            PlayerProfileCsvService.RecordBattleResult(battleResult);
             NotifyTurnBanner(BattleTurnBannerKind.Hidden);
             return;
         }
@@ -1798,6 +2279,7 @@ public class BattleSimulationManager : MonoBehaviour
             battleResult = 2;
             BattleVerbose("平手：雙方英雄於同一次結算中生命皆≤0。");
             RecordBattleOutcomeHistory();
+            PlayerProfileCsvService.RecordBattleResult(battleResult);
             NotifyTurnBanner(BattleTurnBannerKind.Hidden);
             return;
         }
@@ -1812,6 +2294,7 @@ public class BattleSimulationManager : MonoBehaviour
             battleResult = 2;
             BattleVerbose("平手：雙方皆符合戰敗條件（英雄 HP≤0 或手牌＋場上無牌）。");
             RecordBattleOutcomeHistory();
+            PlayerProfileCsvService.RecordBattleResult(battleResult);
             NotifyTurnBanner(BattleTurnBannerKind.Hidden);
             return;
         }
@@ -1819,8 +2302,14 @@ public class BattleSimulationManager : MonoBehaviour
         {
             battleOver = true;
             battleResult = -1;
+            if (playerHp <= 0 && !playerHeroDeathLoggedThisBattle)
+            {
+                playerHeroDeathLoggedThisBattle = true;
+                LogBattleHistory("我方英雄死亡");
+            }
             BattleVerbose("我方戰敗：英雄 HP≤0，或手牌與場上無牌。");
             RecordBattleOutcomeHistory();
+            PlayerProfileCsvService.RecordBattleResult(battleResult);
             NotifyTurnBanner(BattleTurnBannerKind.Hidden);
             return;
         }
@@ -1830,6 +2319,7 @@ public class BattleSimulationManager : MonoBehaviour
             battleResult = 1;
             BattleVerbose("我方勝利：敵方符合戰敗條件（英雄 HP≤0 或手牌＋場上無牌）。");
             RecordBattleOutcomeHistory();
+            PlayerProfileCsvService.RecordBattleResult(battleResult);
             NotifyTurnBanner(BattleTurnBannerKind.Hidden);
         }
     }
@@ -1847,6 +2337,9 @@ public class BattleSimulationManager : MonoBehaviour
         return
             "State | PlayerHP=" + playerHp +
             " EnemyHP=" + enemyHp +
+            " Round=" + currentRound +
+            " Weather=" + GetWeatherLabel(currentWeather) +
+            (weatherRemainingRoundsForUi > 0 ? "(剩餘" + weatherRemainingRoundsForUi + "回合)" : string.Empty) +
             " PlayerHand=" + playerHand.Count +
             " EnemyHand=" + enemyHand.Count +
             " PlayerDiscard=" + playerDiscardPile.Count +
@@ -1854,6 +2347,55 @@ public class BattleSimulationManager : MonoBehaviour
             (playerPendingDiscardCount > 0 ? "  [請棄牌 " + playerPendingDiscardCount + "]" : string.Empty) +
             " PlayerField=" + pf + gaze +
             " EnemyField=" + ef;
+    }
+
+    public bool IsWeatherForecastInProgress()
+    {
+        return weatherForecastInProgress;
+    }
+
+    public string GetCurrentWeatherLabelForUi()
+    {
+        return GetWeatherLabel(currentWeather);
+    }
+
+    public string GetCurrentWeatherEffectForUi()
+    {
+        return GetCurrentWeatherEffectText();
+    }
+
+    public int GetCurrentWeatherRemainingRoundsForUi()
+    {
+        return weatherRemainingRoundsForUi;
+    }
+
+    public string GetNextWeatherForecastHintForUi()
+    {
+        if (currentRound <= 1)
+            return "初始回合不觸發天氣預報";
+        if (weatherRemainingRoundsForUi > 0)
+            return "天氣作用中";
+        if (queuedWeatherForNextRound != BattleWeatherType.None)
+            return "下一回合將套用: " + GetWeatherLabel(queuedWeatherForNextRound);
+        if (weatherCooldownRoundsRemaining <= 0)
+            return "下一回合將觸發天氣預報";
+        if (weatherCooldownRoundsRemaining == 1)
+            return "再 1 回合後觸發天氣預報";
+        return "再 " + weatherCooldownRoundsRemaining + " 回合後觸發天氣預報";
+    }
+
+    public string GetActiveWeatherBoardEffectTextForUi()
+    {
+        if (weatherRemainingRoundsForUi <= 0 || currentWeather == BattleWeatherType.None)
+            return "目前無作用中的場上效果。";
+        return GetCurrentWeatherForecastDetailsText();
+    }
+
+    public string GetQueuedWeatherForNextRoundLabelForUi()
+    {
+        return queuedWeatherForNextRound == BattleWeatherType.None
+            ? "（未決定）"
+            : GetWeatherLabel(queuedWeatherForNextRound);
     }
 
     public int GetPlayerHandCount() { return playerHand.Count; }
@@ -1932,7 +2474,7 @@ public class BattleSimulationManager : MonoBehaviour
     }
 
     public bool IsOpeningPresentationInProgress() { return openingPresentationInProgress; }
-    public bool IsTurnSequenceInProgress() { return turnSequenceInProgress; }
+    public bool IsTurnSequenceInProgress() { return turnSequenceInProgress || weatherForecastInProgress; }
     public bool IsSpellCastPresentationActive() { return activeSpellCastPresentationCount > 0 || enemySpellPresentationDepth > 0; }
     public float GetSpellCastPresentationSeconds() { return spellCastPresentationSeconds; }
     public bool IsBattleOver() { return battleOver; }
@@ -1962,6 +2504,84 @@ public class BattleSimulationManager : MonoBehaviour
 
     public int GetBattleSessionId() { return battleSessionId; }
 
+    /// <summary>
+    /// 玩家視角的 AI 量化指標（0~100）。
+    /// Threat: 當前壓制度（我方是否正在被壓著打）
+    /// Burst:  下一回合爆發風險（我方被一波帶走的危險度）
+    /// Tempo:  敵方續戰節奏（中長期優勢）
+    /// </summary>
+    public string GetEnemyAiQuantifiedTextForPlayerView()
+    {
+        int threat = GetEnemyThreatScoreForPlayerView();
+        int burst = GetEnemyBurstRiskScoreForPlayerView();
+        int tempo = GetEnemyTempoScoreForPlayerView();
+        string tier = GetEnemyPressureTierLabel(threat, burst, tempo);
+        return
+            "Enemy pressure (" + tier + ")\n" +
+            "Threat " + threat + "/100  |  Burst " + burst + "/100  |  Tempo " + tempo + "/100";
+    }
+
+    public int GetEnemyThreatScoreForPlayerView()
+    {
+        float score = 16f;
+        if (enemyField != null)
+        {
+            score += enemyField.attack * 0.72f;
+            score += Mathf.Clamp(enemyField.currentHp, 0, 120) * 0.24f;
+            if (enemyCanDirectAttackThisTurn) score += 16f;
+        }
+        if (playerField == null) score += 10f;
+        if (EnemyLinGazeActive()) score += 12f;
+        if (PlayerLinGazeActive()) score -= 18f;
+
+        int hpLost = Mathf.Max(0, startHealth - playerHp);
+        score += hpLost * 1.35f;
+        score += Mathf.Clamp(enemyHand.Count, 0, 10) * 2.1f;
+
+        return Mathf.Clamp(Mathf.RoundToInt(score), 0, 100);
+    }
+
+    public int GetEnemyBurstRiskScoreForPlayerView()
+    {
+        float score = 8f;
+        if (enemyField != null && playerField == null)
+        {
+            score += 22f;
+            score += enemyField.attack * 0.55f;
+            if (enemyCanDirectAttackThisTurn) score += 18f;
+        }
+
+        if (playerHp <= 12) score += (12 - playerHp) * 3.2f;
+        score += Mathf.Clamp(enemyHand.Count, 0, 10) * 2.8f;
+
+        // 玩家視角只看「可能性」：手牌越多、我方越空場，越容易被法術補刀。
+        if (playerField == null) score += 8f;
+
+        return Mathf.Clamp(Mathf.RoundToInt(score), 0, 100);
+    }
+
+    public int GetEnemyTempoScoreForPlayerView()
+    {
+        float score = 28f;
+        score += Mathf.Clamp(enemyHp, 0, 60) * 1.1f;
+        score -= Mathf.Clamp(playerHp, 0, 60) * 0.75f;
+        score += Mathf.Clamp(enemyDeck.Count - playerDeck.Count, -10, 10) * 1.8f;
+        score += Mathf.Clamp(enemyHand.Count - playerHand.Count, -5, 5) * 3.5f;
+        if (enemyField != null) score += 8f;
+        if (playerField == null) score += 6f;
+
+        return Mathf.Clamp(Mathf.RoundToInt(score), 0, 100);
+    }
+
+    private static string GetEnemyPressureTierLabel(int threat, int burst, int tempo)
+    {
+        float weighted = threat * 0.5f + burst * 0.3f + tempo * 0.2f;
+        if (weighted >= 80f) return "Severe";
+        if (weighted >= 62f) return "High";
+        if (weighted >= 40f) return "Medium";
+        return "Low";
+    }
+
     public string GetPlayerFieldText()
     {
         string m = playerField == null
@@ -1970,13 +2590,16 @@ public class BattleSimulationManager : MonoBehaviour
         string g = PlayerLinGazeActive()
             ? "  |  林可的凝視 剩" + playerLinGazeRoundsRemaining + "回合"
             : string.Empty;
-        return "Player field: " + m + g;
+        string w = "  |  " + GetWeatherPseudoCardText(true);
+        return "Player field: " + m + g + w;
     }
 
     public string GetEnemyFieldText()
     {
-        if (enemyField == null) return "Enemy field: (empty)";
-        return "Enemy field: " + DebugFieldMonsterName(enemyField) + " ATK " + enemyField.attack + " HP " + enemyField.currentHp + "/" + enemyField.maxHp;
+        string baseLine = enemyField == null
+            ? "Enemy field: (empty)"
+            : "Enemy field: " + DebugFieldMonsterName(enemyField) + " ATK " + enemyField.attack + " HP " + enemyField.currentHp + "/" + enemyField.maxHp;
+        return baseLine + "  |  " + GetWeatherPseudoCardText(false);
     }
 
     public string GetCardPreviewText(Card card)
@@ -2050,11 +2673,18 @@ public class BattleSimulationManager : MonoBehaviour
         {
             MonsterCard display = new MonsterCard(m.id, m.cardName, field.attack, field.maxHp);
             display.healthPoint = field.currentHp;
+            display.cardNameEnglish = m.cardNameEnglish;
+            display.SetArtwork(m.artworkResourcePath, m.artworkSprite);
             return display;
         }
 
         MonsterCard fallback = new MonsterCard(field.id, field.cardName, field.attack, Mathf.Max(1, field.maxHp > 0 ? field.maxHp : field.currentHp));
         fallback.healthPoint = field.currentHp;
+        if (source != null)
+        {
+            fallback.cardNameEnglish = source.cardNameEnglish;
+            fallback.SetArtwork(source.artworkResourcePath, source.artworkSprite);
+        }
         return fallback;
     }
 

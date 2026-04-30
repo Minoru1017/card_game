@@ -136,7 +136,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &23277562
 RectTransform:
   m_ObjectHideFlags: 0
@@ -173,9 +173,77 @@ MonoBehaviour:
   buildbeckSceneName: Buildbeck
   cardStoreSceneName: CardStore
   playerData: {fileID: 0}
+  cardStore: {fileID: 0}
   enterBattleButton: {fileID: 0}
   noDeckHintLegacyText: {fileID: 0}
   noDeckHintTMPText: {fileID: 0}
+  previewUseFixedEnemyDeck: 1
+  previewFixedEnemyDeckCardIds: 0100000002000000030000000400000005000000060000000700000008000000090000000a0000000b0000000c0000000e00000010000000120000001300000016000000fffffffffefffffffdffffff
+  previewEnemyOverLimitAllowance: 6
+  previewMinEnemySpellsInDeck: 2
+  selectedDifficultyTier: 2
+  difficultyButtonsExpanded: 1
+  difficultyProfiles:
+  - tier: 0
+    labelZh: "\u5165\u9580"
+    locked: 0
+    deckStrengthIndex: 8
+    spellRatioIndex: 8
+    overLimitToleranceIndex: 5
+    useFixedDeck: 1
+    revealRatio: 1
+    scoreMultiplier: 0.72
+    overLimitBias: -1
+    minSpellsBias: -1
+    fixedDeckOverride: 
+  - tier: 1
+    labelZh: "\u7C21\u55AE"
+    locked: 0
+    deckStrengthIndex: 24
+    spellRatioIndex: 18
+    overLimitToleranceIndex: 20
+    useFixedDeck: 1
+    revealRatio: 0.68
+    scoreMultiplier: 0.82
+    overLimitBias: -1
+    minSpellsBias: -1
+    fixedDeckOverride: 
+  - tier: 2
+    labelZh: "\u666E\u901A"
+    locked: 0
+    deckStrengthIndex: 50
+    spellRatioIndex: 45
+    overLimitToleranceIndex: 45
+    useFixedDeck: 1
+    revealRatio: 0.5
+    scoreMultiplier: 1
+    overLimitBias: 0
+    minSpellsBias: 0
+    fixedDeckOverride: 
+  - tier: 3
+    labelZh: "\u56F0\u96E3"
+    locked: 0
+    deckStrengthIndex: 70
+    spellRatioIndex: 65
+    overLimitToleranceIndex: 70
+    useFixedDeck: 1
+    revealRatio: 0.42
+    scoreMultiplier: 1.14
+    overLimitBias: 0
+    minSpellsBias: 0
+    fixedDeckOverride: 
+  - tier: 4
+    labelZh: "\u9B54\u738B"
+    locked: 1
+    deckStrengthIndex: 85
+    spellRatioIndex: 80
+    overLimitToleranceIndex: 90
+    useFixedDeck: 1
+    revealRatio: 0.35
+    scoreMultiplier: 1.28
+    overLimitBias: 0
+    minSpellsBias: 0
+    fixedDeckOverride: 
 --- !u!1 &79245962
 GameObject:
   m_ObjectHideFlags: 0
@@ -309,8 +377,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 1, y: 1}
-  m_AnchoredPosition: {x: 0, y: -4.0861816}
-  m_SizeDelta: {x: -132.3433, y: -65.277}
+  m_AnchoredPosition: {x: 0, y: 0}
+  m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &214363182
 MonoBehaviour:
@@ -325,14 +393,14 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_Material: {fileID: 0}
-  m_Color: {r: 0, g: 0, b: 0, a: 0.85490197}
+  m_Color: {r: 1, g: 0.98889226, b: 0.86226416, a: 0.22745098}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_Sprite: {fileID: 8826218690101872539, guid: ab6e4f24e332fba41b9d01ef760027a5, type: 3}
+  m_Sprite: {fileID: 0}
   m_Type: 0
   m_PreserveAspect: 0
   m_FillCenter: 1
@@ -1369,7 +1437,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &1306438059
 RectTransform:
   m_ObjectHideFlags: 0
@@ -1630,7 +1698,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_Sprite: {fileID: 8766740682603709380, guid: 94ba05c0f2be3474e896574c6656df72, type: 3}
+  m_Sprite: {fileID: 5387249849670799598, guid: 6268446d45e8d824e947abfd12820e37, type: 3}
   m_Type: 0
   m_PreserveAspect: 0
   m_FillCenter: 1
@@ -1656,6 +1724,22 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 1883705599}
     m_Modifications:
+    - target: {fileID: 578924318262619992, guid: eaa7fbd175b23514d99e0d20c94cd883, type: 3}
+      propertyPath: m_SizeDelta.x
+      value: 138.16
+      objectReference: {fileID: 0}
+    - target: {fileID: 578924318262619992, guid: eaa7fbd175b23514d99e0d20c94cd883, type: 3}
+      propertyPath: m_SizeDelta.y
+      value: 69.382
+      objectReference: {fileID: 0}
+    - target: {fileID: 578924318262619992, guid: eaa7fbd175b23514d99e0d20c94cd883, type: 3}
+      propertyPath: m_AnchoredPosition.x
+      value: -69.079
+      objectReference: {fileID: 0}
+    - target: {fileID: 578924318262619992, guid: eaa7fbd175b23514d99e0d20c94cd883, type: 3}
+      propertyPath: m_AnchoredPosition.y
+      value: 34.69101
+      objectReference: {fileID: 0}
     - target: {fileID: 2433824180238037931, guid: eaa7fbd175b23514d99e0d20c94cd883, type: 3}
       propertyPath: m_Pivot.x
       value: 0.5
@@ -1682,11 +1766,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 2433824180238037931, guid: eaa7fbd175b23514d99e0d20c94cd883, type: 3}
       propertyPath: m_SizeDelta.x
-      value: 1200
+      value: 1437.0908
       objectReference: {fileID: 0}
     - target: {fileID: 2433824180238037931, guid: eaa7fbd175b23514d99e0d20c94cd883, type: 3}
       propertyPath: m_SizeDelta.y
-      value: 887.4028
+      value: 1003.3
       objectReference: {fileID: 0}
     - target: {fileID: 2433824180238037931, guid: eaa7fbd175b23514d99e0d20c94cd883, type: 3}
       propertyPath: m_LocalScale.x
@@ -1730,11 +1814,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 2433824180238037931, guid: eaa7fbd175b23514d99e0d20c94cd883, type: 3}
       propertyPath: m_AnchoredPosition.x
-      value: -250
+      value: -368.5454
       objectReference: {fileID: 0}
     - target: {fileID: 2433824180238037931, guid: eaa7fbd175b23514d99e0d20c94cd883, type: 3}
       propertyPath: m_AnchoredPosition.y
-      value: -56.2986
+      value: 1.6377
       objectReference: {fileID: 0}
     - target: {fileID: 2433824180238037931, guid: eaa7fbd175b23514d99e0d20c94cd883, type: 3}
       propertyPath: m_LocalEulerAnglesHint.x
@@ -1748,6 +1832,22 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 4050218265398360904, guid: eaa7fbd175b23514d99e0d20c94cd883, type: 3}
+      propertyPath: m_SizeDelta.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4050218265398360904, guid: eaa7fbd175b23514d99e0d20c94cd883, type: 3}
+      propertyPath: m_SizeDelta.y
+      value: -0.000061035
+      objectReference: {fileID: 0}
+    - target: {fileID: 4050218265398360904, guid: eaa7fbd175b23514d99e0d20c94cd883, type: 3}
+      propertyPath: m_AnchoredPosition.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4050218265398360904, guid: eaa7fbd175b23514d99e0d20c94cd883, type: 3}
+      propertyPath: m_AnchoredPosition.y
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 4721660910425213139, guid: eaa7fbd175b23514d99e0d20c94cd883, type: 3}
       propertyPath: m_Type
       value: 0
@@ -1755,6 +1855,14 @@ PrefabInstance:
     - target: {fileID: 4721660910425213139, guid: eaa7fbd175b23514d99e0d20c94cd883, type: 3}
       propertyPath: m_Sprite
       value: 
+      objectReference: {fileID: 0}
+    - target: {fileID: 6774049437983332537, guid: eaa7fbd175b23514d99e0d20c94cd883, type: 3}
+      propertyPath: m_CellSize.x
+      value: 200.4
+      objectReference: {fileID: 0}
+    - target: {fileID: 6774049437983332537, guid: eaa7fbd175b23514d99e0d20c94cd883, type: 3}
+      propertyPath: m_CellSize.y
+      value: 292.8
       objectReference: {fileID: 0}
     - target: {fileID: 9133958559903210000, guid: eaa7fbd175b23514d99e0d20c94cd883, type: 3}
       propertyPath: m_IsActive
@@ -1976,7 +2084,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &2139869322
 RectTransform:
   m_ObjectHideFlags: 0

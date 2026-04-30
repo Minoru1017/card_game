@@ -4,6 +4,10 @@ public class Card
     public string cardName;
     /// <summary>Optional English name from CardList.csv; gameplay UI still uses <see cref="cardName"/>.</summary>
     public string cardNameEnglish = string.Empty;
+    /// <summary>Optional per-card artwork resource path (under Assets/Resources).</summary>
+    public string artworkResourcePath = string.Empty;
+    /// <summary>Optional resolved card artwork sprite.</summary>
+    public UnityEngine.Sprite artworkSprite;
 
     /// <summary>Name shown in battle simulation debug readouts (English when available).</summary>
     public string DebugDisplayName =>
@@ -13,6 +17,12 @@ public class Card
     {
         this.id = _id;
         this.cardName = _cardName;
+    }
+
+    public void SetArtwork(string resourcePath, UnityEngine.Sprite sprite)
+    {
+        artworkResourcePath = string.IsNullOrWhiteSpace(resourcePath) ? string.Empty : resourcePath.Trim();
+        artworkSprite = sprite;
     }
 }
 

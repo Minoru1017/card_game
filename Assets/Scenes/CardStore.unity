@@ -260,6 +260,85 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   cardData: {fileID: 4900000, guid: b81f004996a29974597b9ef7f5ba8e82, type: 3}
+  artworkOverrides:
+  - id: 2
+    artworkResourcePath: 
+    artworkSprite: {fileID: -1594932792720625945, guid: 58bcba648277b4f4abe4b786587091b8, type: 3}
+  - id: -3
+    artworkResourcePath: 
+    artworkSprite: {fileID: -8881082873504947782, guid: 7f3298e9a39abe446931ffde653070f0, type: 3}
+  - id: 0
+    artworkResourcePath: 
+    artworkSprite: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+  - id: 1
+    artworkResourcePath: 
+    artworkSprite: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+  - id: 3
+    artworkResourcePath: 
+    artworkSprite: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+  - id: 4
+    artworkResourcePath: 
+    artworkSprite: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+  - id: 5
+    artworkResourcePath: 
+    artworkSprite: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+  - id: 6
+    artworkResourcePath: 
+    artworkSprite: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+  - id: 7
+    artworkResourcePath: 
+    artworkSprite: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+  - id: 8
+    artworkResourcePath: 
+    artworkSprite: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+  - id: 9
+    artworkResourcePath: 
+    artworkSprite: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+  - id: 10
+    artworkResourcePath: 
+    artworkSprite: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+  - id: 11
+    artworkResourcePath: 
+    artworkSprite: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+  - id: 12
+    artworkResourcePath: 
+    artworkSprite: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+  - id: 13
+    artworkResourcePath: 
+    artworkSprite: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+  - id: 14
+    artworkResourcePath: 
+    artworkSprite: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+  - id: 15
+    artworkResourcePath: 
+    artworkSprite: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+  - id: 16
+    artworkResourcePath: 
+    artworkSprite: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+  - id: 17
+    artworkResourcePath: 
+    artworkSprite: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+  - id: 18
+    artworkResourcePath: 
+    artworkSprite: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+  - id: 19
+    artworkResourcePath: 
+    artworkSprite: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+  - id: 20
+    artworkResourcePath: 
+    artworkSprite: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+  - id: 21
+    artworkResourcePath: 
+    artworkSprite: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+  - id: 22
+    artworkResourcePath: 
+    artworkSprite: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+  - id: -1
+    artworkResourcePath: 
+    artworkSprite: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+  - id: -2
+    artworkResourcePath: 
+    artworkSprite: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
 --- !u!114 &395094352
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -272,6 +351,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 01598fcef14431349b3f6f7e8a2c8c0b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  packCost: 2
+  cardsPerPack: 5
+  openTimeoutSeconds: 15
   cardPrefab: {fileID: 7214545359648620762, guid: c8cb3fb8fe9c36c4a8867e34cd48d546, type: 3}
   cardPool: {fileID: 653062673}
   cardStore: {fileID: 395094351}
@@ -1114,9 +1196,78 @@ MonoBehaviour:
   buildbeckSceneName: Buildbeck
   cardStoreSceneName: CardStore
   playerData: {fileID: 0}
+  cardStore: {fileID: 0}
   enterBattleButton: {fileID: 0}
   noDeckHintLegacyText: {fileID: 0}
   noDeckHintTMPText: {fileID: 0}
+  previewUseFixedEnemyDeck: 1
+  previewFixedEnemyDeckCardIds: 0100000002000000030000000400000005000000060000000700000008000000090000000a0000000b0000000c0000000e00000010000000120000001300000016000000fffffffffefffffffdffffff
+  previewEnemyOverLimitAllowance: 6
+  previewMinEnemySpellsInDeck: 2
+  runtimeRoundedUiSprite: {fileID: 0}
+  selectedDifficultyTier: 2
+  difficultyButtonsExpanded: 1
+  difficultyProfiles:
+  - tier: 0
+    labelZh: "\u5165\u9580"
+    locked: 0
+    deckStrengthIndex: 8
+    spellRatioIndex: 8
+    overLimitToleranceIndex: 5
+    useFixedDeck: 1
+    revealRatio: 1
+    scoreMultiplier: 0.72
+    overLimitBias: -1
+    minSpellsBias: -1
+    fixedDeckOverride: 
+  - tier: 1
+    labelZh: "\u7C21\u55AE"
+    locked: 0
+    deckStrengthIndex: 24
+    spellRatioIndex: 18
+    overLimitToleranceIndex: 20
+    useFixedDeck: 1
+    revealRatio: 0.68
+    scoreMultiplier: 0.82
+    overLimitBias: -1
+    minSpellsBias: -1
+    fixedDeckOverride: 
+  - tier: 2
+    labelZh: "\u666E\u901A"
+    locked: 0
+    deckStrengthIndex: 50
+    spellRatioIndex: 45
+    overLimitToleranceIndex: 45
+    useFixedDeck: 1
+    revealRatio: 0.5
+    scoreMultiplier: 1
+    overLimitBias: 0
+    minSpellsBias: 0
+    fixedDeckOverride: 
+  - tier: 3
+    labelZh: "\u56F0\u96E3"
+    locked: 0
+    deckStrengthIndex: 70
+    spellRatioIndex: 65
+    overLimitToleranceIndex: 70
+    useFixedDeck: 1
+    revealRatio: 0.42
+    scoreMultiplier: 1.14
+    overLimitBias: 0
+    minSpellsBias: 0
+    fixedDeckOverride: 
+  - tier: 4
+    labelZh: "\u9B54\u738B"
+    locked: 1
+    deckStrengthIndex: 85
+    spellRatioIndex: 80
+    overLimitToleranceIndex: 90
+    useFixedDeck: 1
+    revealRatio: 0.35
+    scoreMultiplier: 1.28
+    overLimitBias: 0
+    minSpellsBias: 0
+    fixedDeckOverride: 
 --- !u!1 &1798016884
 GameObject:
   m_ObjectHideFlags: 0

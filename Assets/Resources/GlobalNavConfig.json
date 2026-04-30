@@ -1,0 +1,8 @@
+{
+  "homeSceneName": "hall",
+  "hideInSceneNameContains": [
+    "battle"
+  ],
+  "triggerSize": 128.0,
+  "triggerTopRightMargin": 28.0
+}

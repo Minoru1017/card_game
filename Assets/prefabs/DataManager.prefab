@@ -48,10 +48,12 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   CardStore: {fileID: 3456576651310989609}
   playerCoins: 0
-  playerCards: 
-  playerDeck: 
+  deckSlotCount: 3
+  selectedDeckSlot: 0
   totalCoins: 0
-  playerData: {fileID: 4900000, guid: e079b76ec5dd3e9489e9a224c4661223, type: 3}
+  activePlayerSlot: 1
+  activePlayerSlotName: "\u73A9\u5BB61"
+  coinsText: {fileID: 0}
 --- !u!114 &3456576651310989609
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -65,6 +67,85 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   cardData: {fileID: 4900000, guid: b81f004996a29974597b9ef7f5ba8e82, type: 3}
+  artworkOverrides:
+  - id: 2
+    artworkResourcePath: 
+    artworkSprite: {fileID: -1594932792720625945, guid: 58bcba648277b4f4abe4b786587091b8, type: 3}
+  - id: -3
+    artworkResourcePath: 
+    artworkSprite: {fileID: -8881082873504947782, guid: 7f3298e9a39abe446931ffde653070f0, type: 3}
+  - id: 0
+    artworkResourcePath: 
+    artworkSprite: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+  - id: 1
+    artworkResourcePath: 
+    artworkSprite: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+  - id: 3
+    artworkResourcePath: 
+    artworkSprite: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+  - id: 4
+    artworkResourcePath: 
+    artworkSprite: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+  - id: 5
+    artworkResourcePath: 
+    artworkSprite: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+  - id: 6
+    artworkResourcePath: 
+    artworkSprite: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+  - id: 7
+    artworkResourcePath: 
+    artworkSprite: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+  - id: 8
+    artworkResourcePath: 
+    artworkSprite: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+  - id: 9
+    artworkResourcePath: 
+    artworkSprite: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+  - id: 10
+    artworkResourcePath: 
+    artworkSprite: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+  - id: 11
+    artworkResourcePath: 
+    artworkSprite: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+  - id: 12
+    artworkResourcePath: 
+    artworkSprite: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+  - id: 13
+    artworkResourcePath: 
+    artworkSprite: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+  - id: 14
+    artworkResourcePath: 
+    artworkSprite: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+  - id: 15
+    artworkResourcePath: 
+    artworkSprite: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+  - id: 16
+    artworkResourcePath: 
+    artworkSprite: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+  - id: 17
+    artworkResourcePath: 
+    artworkSprite: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+  - id: 18
+    artworkResourcePath: 
+    artworkSprite: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+  - id: 19
+    artworkResourcePath: 
+    artworkSprite: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+  - id: 20
+    artworkResourcePath: 
+    artworkSprite: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+  - id: 21
+    artworkResourcePath: 
+    artworkSprite: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+  - id: 22
+    artworkResourcePath: 
+    artworkSprite: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+  - id: -1
+    artworkResourcePath: 
+    artworkSprite: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+  - id: -2
+    artworkResourcePath: 
+    artworkSprite: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
 --- !u!114 &8760143160996283857
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -77,8 +158,23 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a806108f0d3c0664d80c9c2d95768e55, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  maxDeckCards: 30
+  deckHintText: {fileID: 0}
+  deckHintLegacyText: {fileID: 0}
+  deckHintPanel: {fileID: 0}
   deckPanel: {fileID: 0}
   libraryPanel: {fileID: 0}
+  deckSlotButton1: {fileID: 0}
+  deckSlotButton2: {fileID: 0}
+  deckSlotButton3: {fileID: 0}
   deckCardPrefab: {fileID: 8615206782087840715, guid: cc997b6bc279ed1428cc086ce460ec22, type: 3}
   librarycardPrefab: {fileID: 4089889603758645227, guid: a67c33adb4dd7564598306f3c830d8d4, type: 3}
   DataManager: {fileID: 5614242837407821449}
+  showDeck: 1
+  enableInteraction: 1
+  namePlateHeightWidthRatio: 1
+  deckStatSquareScale: 1.28
+  statUnderlaySquareScale: 0.64
+  attackStatOffsetX: -30
+  healthStatOffsetX: 30
+  statOffsetY: 0

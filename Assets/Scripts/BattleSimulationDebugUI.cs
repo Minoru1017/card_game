@@ -7,6 +7,30 @@ using UnityEngine.UI;
 
 public partial class BattleSimulationDebugUI : MonoBehaviour
 {
+    // MASTER INDEX (merged legacy + 2026-04-15 updates)
+    // A) Core debug UI lifecycle (legacy):
+    //    - Start()/Update() orchestration, panel visibility, input lock, pause flow.
+    // B) Card/field HUD and battle overlays (legacy):
+    //    - Hand/field refresh loops, spell/attack presentation layers, result overlays.
+    // C) Weather runtime dispatcher:
+    //    - UpdateWeatherScreenEffects()
+    // D) Weather animation loops:
+    //    - AnimateFireRainFx()
+    //    - AnimateHolyLightFx()
+    //    - AnimateFogFx()   // Tsunami visual
+    //    - AnimateGaleFx()
+    // E) Weather UI panels:
+    //    - OnWeatherForecastStarted()
+    //    - CoShowWeatherForecastOverlay()
+    //    - RefreshActiveWeatherEffectPanelText()
+    // F) Weather scene layer construction:
+    //    - CreateWeatherScreenFx()
+    //    - CreateWeatherFxLayer()
+    //    - CreateHolyLightEdge()
+    //    - AddHolyLightEdgeLayer()
+    //    - AddFogEdgeLayer()
+    //    - AddGaleNightLayer()
+
     [Header("Debug panel (Play Mode)")]
     [Tooltip("When off, the keyboard chord does not toggle the floating debug window.")]
     [SerializeField] private bool debugPanelHotkeyEnabled = true;
@@ -15,6 +39,13 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
     [SerializeField] private KeyCode debugPanelHotkeyKey2 = KeyCode.E;
     [Tooltip("When checked, the debug panel starts visible when entering Play Mode.")]
     [SerializeField] private bool debugPanelVisibleOnPlay;
+    [Header("Hero Damage Feedback")]
+    [Tooltip("When enabled, player hero damage triggers a short edge-vignette darkening effect.")]
+    [SerializeField] private bool enableHeroDamageMonochromeFlash = true;
+    [Range(0.08f, 0.12f)]
+    [SerializeField] private float heroDamageMonochromeFlashSeconds = 0.1f;
+    [Range(0.12f, 0.4f)]
+    [SerializeField] private float heroDamageMonochromeRecoverSeconds = 0.22f;
 
     private BattleSimulationManager battleManager;
     private GameObject battleCardPrefab;
@@ -26,6 +57,59 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
     private CanvasGroup openingRollGroup;
     private TextMeshProUGUI openingRollDiceText;
     private TextMeshProUGUI openingRollFirstText;
+    private TextMeshProUGUI weatherBadgeTmp;
+    private RectTransform weatherForecastOverlayRt;
+    private CanvasGroup weatherForecastOverlayCg;
+    private TextMeshProUGUI weatherForecastTitleTmp;
+    private TextMeshProUGUI weatherForecastBodyTmp;
+    private Coroutine weatherForecastOverlayRoutine;
+    private TextMeshProUGUI weatherHintTmp;
+    private TextMeshProUGUI weatherRemainTmp;
+    private Button activeWeatherEffectButton;
+    private RectTransform activeWeatherEffectPanelRt;
+    private TextMeshProUGUI activeWeatherEffectPanelSummaryTmp;
+    private TextMeshProUGUI activeWeatherEffectPanelTextTmp;
+    private RectTransform weatherScreenFxRoot;
+    private RectTransform weatherFireRainFxRt;
+    private RectTransform weatherHolyLightFxRt;
+    private RectTransform weatherFogFxRt;
+    private RectTransform weatherGaleFxRt;
+    private readonly List<Image> weatherHolyLightEdgeImgs = new List<Image>();
+    private readonly List<float> weatherHolyLightEdgeBaseAlphas = new List<float>();
+    private Image weatherHolyLightTopEdgeImg;
+    private Image weatherHolyLightBottomEdgeImg;
+    private Image weatherHolyLightLeftEdgeImg;
+    private Image weatherHolyLightRightEdgeImg;
+    private readonly List<Image> weatherHolyLightDustImages = new List<Image>();
+    private readonly List<RectTransform> weatherHolyLightDustRects = new List<RectTransform>();
+    private readonly List<float> weatherHolyLightDustSpeeds = new List<float>();
+    private readonly List<float> weatherHolyLightDustPhases = new List<float>();
+    private readonly List<Color> weatherHolyLightDustBaseColors = new List<Color>();
+    private readonly List<RectTransform> weatherFireRainStreaks = new List<RectTransform>();
+    private readonly List<float> weatherFireRainStreakSpeeds = new List<float>();
+    private readonly List<Image> weatherFireRainStreakImages = new List<Image>();
+    private readonly List<float> weatherFireRainStreakPhases = new List<float>();
+    private readonly List<RectTransform> weatherFogBands = new List<RectTransform>();
+    private readonly List<Image> weatherFogBandImages = new List<Image>();
+    private readonly List<float> weatherFogBandSpeeds = new List<float>();
+    private readonly List<float> weatherFogBandPhases = new List<float>();
+    private readonly List<Image> weatherFogEdgeImgs = new List<Image>();
+    private readonly List<float> weatherFogEdgeBaseAlphas = new List<float>();
+    private readonly List<RectTransform> weatherFogFoamDots = new List<RectTransform>();
+    private readonly List<Image> weatherFogFoamDotImages = new List<Image>();
+    private readonly List<float> weatherFogFoamDotSpeeds = new List<float>();
+    private RectTransform weatherFogBoatRt;
+    private Image weatherFogBoatHullImg;
+    private float weatherFogBoatBaseY;
+    private readonly List<Image> weatherGaleNightEdgeImgs = new List<Image>();
+    private readonly List<float> weatherGaleNightEdgeBaseAlphas = new List<float>();
+    private readonly List<RectTransform> weatherGaleLeafRects = new List<RectTransform>();
+    private readonly List<Image> weatherGaleLeafImgs = new List<Image>();
+    private readonly List<float> weatherGaleLeafSpeeds = new List<float>();
+    private readonly List<float> weatherGaleLeafPhases = new List<float>();
+    private readonly List<RectTransform> weatherGaleWindLineRects = new List<RectTransform>();
+    private readonly List<Image> weatherGaleWindLineImgs = new List<Image>();
+    private readonly List<float> weatherGaleWindLineSpeeds = new List<float>();
     private Image[] openingPlayerDicePips;
     private Image[] openingEnemyDicePips;
     private Coroutine openingRollRoutine;
@@ -150,6 +234,9 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
     private float handAreaYCurrent;
     private float handAreaTargetY = float.NaN;
     private Coroutine handAreaTweenRoutine;
+    private Coroutine playerHeroDamagedFxRoutine;
+    private RectTransform heroDamageMonochromeFlashRt;
+    private CanvasGroup heroDamageMonochromeFlashCg;
     private Coroutine playerOpeningHandFlyRoutine;
     private int playerOpeningHandFlySessionDone = int.MinValue;
     private Coroutine enemyOpeningHandFlyRoutine;
@@ -194,6 +281,8 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         battleManager.SpellCastHandAnchorCommitted += OnSpellCastHandAnchorCommitted;
         battleManager.FireballVisualRequested += OnFireballVisualRequested;
         battleManager.LinGazePeriodicStrikeVisualRequested += OnLinGazePeriodicStrikeVisualRequested;
+        battleManager.WeatherForecastStarted += OnWeatherForecastStarted;
+        battleManager.WeatherForecastFinished += OnWeatherForecastFinished;
         battleManager.TurnBannerRequested += OnTurnBannerRequested;
         battleManager.PlayerCommittedHandCardToFieldFromHand += OnPlayerCommittedHandCardToFieldFromHand;
         battleManager.PlayerPressedEndTurnForPromptUi += OnPlayerPressedEndTurnForPromptUi;
@@ -288,10 +377,467 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         SyncTurnBannerWithBattleState();
     }
 
+    private void OnWeatherForecastStarted(string weatherName, string effectText)
+    {
+        if (weatherForecastOverlayRt == null) return;
+        if (weatherForecastOverlayRoutine != null)
+        {
+            StopCoroutine(weatherForecastOverlayRoutine);
+            weatherForecastOverlayRoutine = null;
+        }
+        if (activeWeatherEffectButton != null) activeWeatherEffectButton.gameObject.SetActive(true);
+        weatherForecastOverlayRoutine = StartCoroutine(CoShowWeatherForecastOverlay(weatherName, effectText));
+    }
+
+    private string SafeWeatherText(string input)
+    {
+        if (string.IsNullOrEmpty(input)) return string.Empty;
+        return input
+            .Replace("：", ": ")
+            .Replace("｜", "|")
+            .Replace("，", ", ")
+            .Replace("。", "")
+            .Replace("（", "(")
+            .Replace("）", ")")
+            .Replace("＋", "+")
+            .Replace("－", "-");
+    }
+
+    private void OnWeatherForecastFinished()
+    {
+        if (weatherForecastOverlayRoutine != null)
+        {
+            StopCoroutine(weatherForecastOverlayRoutine);
+            weatherForecastOverlayRoutine = null;
+        }
+        if (weatherForecastOverlayRt == null) return;
+        weatherForecastOverlayRoutine = StartCoroutine(CoHideWeatherForecastOverlay());
+    }
+
+    private IEnumerator CoShowWeatherForecastOverlay(string weatherName, string effectText)
+    {
+        if (weatherForecastOverlayRt == null) yield break;
+        weatherForecastOverlayRt.gameObject.SetActive(true);
+        weatherForecastOverlayRt.SetAsLastSibling();
+        int remain = battleManager != null ? battleManager.GetCurrentWeatherRemainingRoundsForUi() : 0;
+        string finalTitle = "天氣預報: " + weatherName + (remain > 0 ? " (剩餘 " + remain + " 回合)" : string.Empty);
+        if (weatherForecastTitleTmp != null)
+            weatherForecastTitleTmp.text = SafeWeatherText("天氣預報抽選中...");
+        if (weatherForecastBodyTmp != null)
+            weatherForecastBodyTmp.text = SafeWeatherText(
+                "即將生效的卡牌效果\n" +
+                effectText +
+                "\n\n下一次預報提示: " + (battleManager != null ? battleManager.GetNextWeatherForecastHintForUi() : "-"));
+        if (weatherForecastOverlayCg != null) weatherForecastOverlayCg.alpha = 0f;
+
+        float t = 0f;
+        const float fade = 0.18f;
+        while (t < fade)
+        {
+            t += Time.unscaledDeltaTime;
+            float p = Mathf.Clamp01(t / fade);
+            if (weatherForecastOverlayCg != null) weatherForecastOverlayCg.alpha = p;
+            yield return null;
+        }
+        if (weatherForecastOverlayCg != null) weatherForecastOverlayCg.alpha = 1f;
+        yield return StartCoroutine(CoPlayWeatherForecastRollAnimation(weatherName, finalTitle));
+        weatherForecastOverlayRoutine = null;
+    }
+
+    private IEnumerator CoPlayWeatherForecastRollAnimation(string weatherName, string finalTitle)
+    {
+        if (weatherForecastTitleTmp == null)
+            yield break;
+        string[] pool = new[] { "緋焰時雨", "月華聖祈", "蒼潮夜湧", "朔風森詠" };
+        int start = Random.Range(0, pool.Length);
+        float elapsed = 0f;
+        const float total = 0.92f;
+        const float step = 0.07f;
+        float tick = 0f;
+        int idx = start;
+        while (elapsed < total)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            tick += Time.unscaledDeltaTime;
+            if (tick >= step)
+            {
+                tick = 0f;
+                weatherForecastTitleTmp.text = SafeWeatherText("天氣預報抽選: " + pool[idx]);
+                idx = (idx + 1) % pool.Length;
+            }
+            yield return null;
+        }
+        weatherForecastTitleTmp.text = SafeWeatherText(finalTitle);
+        if (!string.IsNullOrEmpty(weatherName))
+            yield return new WaitForSecondsRealtime(0.08f);
+    }
+
+    private IEnumerator CoHideWeatherForecastOverlay()
+    {
+        if (weatherForecastOverlayRt == null) yield break;
+        if (!weatherForecastOverlayRt.gameObject.activeSelf)
+        {
+            weatherForecastOverlayRoutine = null;
+            yield break;
+        }
+
+        float t = 0f;
+        const float fade = 0.18f;
+        float startAlpha = weatherForecastOverlayCg != null ? weatherForecastOverlayCg.alpha : 1f;
+        while (t < fade)
+        {
+            t += Time.unscaledDeltaTime;
+            float p = Mathf.Clamp01(t / fade);
+            if (weatherForecastOverlayCg != null) weatherForecastOverlayCg.alpha = Mathf.Lerp(startAlpha, 0f, p);
+            yield return null;
+        }
+
+        if (weatherForecastOverlayCg != null) weatherForecastOverlayCg.alpha = 0f;
+        weatherForecastOverlayRt.gameObject.SetActive(false);
+        weatherForecastOverlayRoutine = null;
+    }
+
+    private void ToggleActiveWeatherEffectPanel()
+    {
+        if (activeWeatherEffectPanelRt == null) return;
+        bool next = !activeWeatherEffectPanelRt.gameObject.activeSelf;
+        activeWeatherEffectPanelRt.gameObject.SetActive(next);
+        if (!next) return;
+        activeWeatherEffectPanelRt.SetAsLastSibling();
+        RefreshActiveWeatherEffectPanelText();
+    }
+
+    private void RefreshActiveWeatherEffectPanelText()
+    {
+        if (battleManager == null) return;
+        string weather = battleManager.GetCurrentWeatherLabelForUi();
+        int remain = battleManager.GetCurrentWeatherRemainingRoundsForUi();
+        string status = remain > 0 ? "作用中" : "未作用";
+        string queued = battleManager.GetQueuedWeatherForNextRoundLabelForUi();
+        string detail = BuildAllWeatherHudText(weather);
+        if (activeWeatherEffectPanelSummaryTmp != null)
+        {
+            activeWeatherEffectPanelSummaryTmp.text = SafeWeatherText(
+                "<size=132%><b>場地效果摘要</b></size>\n\n" +
+                "<size=108%>名稱</size>\n<size=118%><b>" + weather + "</b></size>\n\n" +
+                "<size=108%>剩餘回合</size>\n<size=118%><b>" + remain + "</b></size>\n\n" +
+                "<size=108%>狀態</size>\n<size=118%><b>" + status + "</b></size>");
+        }
+        if (activeWeatherEffectPanelTextTmp != null)
+        {
+            activeWeatherEffectPanelTextTmp.text = SafeWeatherText(
+                "<size=132%><b>場地效果總覽</b></size>\n\n" +
+                "<size=108%><b>下一回合將套用</b>: " + queued + "</size>\n\n" +
+                "<size=100%>" + detail + "</size>");
+        }
+    }
+
+    private string BuildAllWeatherHudText(string activeWeatherLabel)
+    {
+        return
+            FormatWeatherLine("緋焰時雨", activeWeatherLabel == "緋焰時雨", "回合結束雙方場上怪獸各受 5 點傷害") + "\n\n" +
+            FormatWeatherLine("月華聖祈", activeWeatherLabel == "月華聖祈", "所有治療效果增加 10") + "\n\n" +
+            FormatWeatherLine("蒼潮夜湧", activeWeatherLabel == "蒼潮夜湧", "直接攻擊英雄傷害減少 50%") + "\n\n" +
+            FormatWeatherLine("朔風森詠", activeWeatherLabel == "朔風森詠", "雙方首張法術效果增加 20%");
+    }
+
+    private static string FormatWeatherLine(string name, bool active, string effect)
+    {
+        if (active)
+            return "<color=#8F5A16><b>● " + name + " (生效中)</b></color>\n<color=#3A2A1A><b>" + effect + "</b></color>";
+        return "<color=#4A5A39><b>○ " + name + "</b></color>\n<color=#2F271E>" + effect + "</color>";
+    }
+
+    private void UpdateWeatherScreenEffects()
+    {
+        if (battleManager == null || weatherScreenFxRoot == null) return;
+
+        string weather = battleManager.GetCurrentWeatherLabelForUi();
+        bool active = battleManager.GetCurrentWeatherRemainingRoundsForUi() > 0;
+        bool showFire = active && weather == "緋焰時雨";
+        bool showHoly = active && weather == "月華聖祈";
+        bool showFog = active && weather == "蒼潮夜湧";
+        bool showGale = active && weather == "朔風森詠";
+
+        if (weatherFireRainFxRt != null) weatherFireRainFxRt.gameObject.SetActive(showFire);
+        if (weatherHolyLightFxRt != null) weatherHolyLightFxRt.gameObject.SetActive(showHoly);
+        if (weatherFogFxRt != null) weatherFogFxRt.gameObject.SetActive(showFog);
+        if (weatherGaleFxRt != null) weatherGaleFxRt.gameObject.SetActive(showGale);
+        if (!showFire && !showHoly && !showFog && !showGale) return;
+
+        float dt = Time.unscaledDeltaTime;
+        if (showFire) AnimateFireRainFx(dt);
+        if (showHoly) AnimateHolyLightFx();
+        if (showFog) AnimateFogFx(dt);
+        if (showGale) AnimateGaleFx(dt);
+    }
+
+    private void AnimateHolyLightFx()
+    {
+        float edgePulseFactor = 0.84f + Mathf.Sin(Time.unscaledTime * 0.82f) * 0.14f;
+        for (int i = 0; i < weatherHolyLightEdgeImgs.Count; i++)
+        {
+            Image edgeImg = weatherHolyLightEdgeImgs[i];
+            if (edgeImg == null) continue;
+            float baseAlpha = i < weatherHolyLightEdgeBaseAlphas.Count ? weatherHolyLightEdgeBaseAlphas[i] : 0.08f;
+            Color ec = edgeImg.color;
+            ec.a = Mathf.Clamp01(baseAlpha * edgePulseFactor);
+            edgeImg.color = ec;
+        }
+
+        float dt = Time.unscaledDeltaTime;
+        for (int i = 0; i < weatherHolyLightDustRects.Count; i++)
+        {
+            RectTransform dustRt = weatherHolyLightDustRects[i];
+            if (dustRt == null) continue;
+            float sp = i < weatherHolyLightDustSpeeds.Count ? weatherHolyLightDustSpeeds[i] : 13f;
+            float phase = i < weatherHolyLightDustPhases.Count ? weatherHolyLightDustPhases[i] : 0f;
+            Vector2 p = dustRt.anchoredPosition;
+            p.y += sp * dt;
+            p.x += Mathf.Sin(Time.unscaledTime * 1.15f + phase) * 14f * dt;
+            if (p.y > 330f)
+            {
+                p.y = Random.Range(-260f, -120f);
+                p.x = Random.Range(-420f, 420f);
+                if (i < weatherHolyLightDustPhases.Count)
+                    weatherHolyLightDustPhases[i] = Random.Range(0f, Mathf.PI * 2f);
+            }
+            dustRt.anchoredPosition = p;
+
+            if (i < weatherHolyLightDustImages.Count)
+            {
+                Image dustImg = weatherHolyLightDustImages[i];
+                if (dustImg != null)
+                {
+                    Color baseColor = i < weatherHolyLightDustBaseColors.Count
+                        ? weatherHolyLightDustBaseColors[i]
+                        : dustImg.color;
+                    float tintPulse = 0.5f + Mathf.Sin(Time.unscaledTime * 0.95f + phase) * 0.5f;
+                    Color shimmer = Color.Lerp(baseColor, new Color(0.95f, 0.96f, 1f, baseColor.a), 0.14f * tintPulse);
+                    Color dc = shimmer;
+                    dc.a = Mathf.Clamp01(baseColor.a + Mathf.Sin(Time.unscaledTime * 1.35f + phase) * 0.045f);
+                    dustImg.color = dc;
+                }
+            }
+            float scalePulse = 0.92f + Mathf.Sin(Time.unscaledTime * 1.05f + phase) * 0.12f;
+            dustRt.localScale = new Vector3(scalePulse, scalePulse, 1f);
+        }
+    }
+
+    private void AnimateFireRainFx(float dt)
+    {
+        if (weatherFireRainFxRt == null || weatherFireRainStreaks.Count == 0) return;
+        float h = Mathf.Max(300f, weatherFireRainFxRt.rect.height);
+        float w = Mathf.Max(500f, weatherFireRainFxRt.rect.width);
+        float top = h * 0.5f + 80f;
+        float bottom = -h * 0.5f - 80f;
+        float left = -w * 0.5f - 50f;
+        float right = w * 0.5f + 50f;
+        for (int i = 0; i < weatherFireRainStreaks.Count; i++)
+        {
+            RectTransform rt = weatherFireRainStreaks[i];
+            float sp = weatherFireRainStreakSpeeds[i];
+            float phase = i < weatherFireRainStreakPhases.Count ? weatherFireRainStreakPhases[i] : 0f;
+            Vector2 p = rt.anchoredPosition;
+            p.x -= sp * 0.42f * dt;
+            p.x += Mathf.Sin(Time.unscaledTime * 3.2f + phase) * 26f * dt;
+            p.y -= sp * dt;
+            if (p.y < bottom || p.x < left)
+            {
+                p.y = top + Random.Range(0f, 120f);
+                p.x = Random.Range(left + 120f, right);
+                if (i < weatherFireRainStreakPhases.Count)
+                    weatherFireRainStreakPhases[i] = Random.Range(0f, Mathf.PI * 2f);
+            }
+            rt.anchoredPosition = p;
+
+            if (i < weatherFireRainStreakImages.Count)
+            {
+                Image img = weatherFireRainStreakImages[i];
+                if (img != null)
+                {
+                    float pulse = 0.2f + Mathf.Sin(Time.unscaledTime * 7.5f + phase) * 0.08f;
+                    Color c = img.color;
+                    c.a = Mathf.Clamp01(pulse);
+                    img.color = c;
+                }
+            }
+        }
+    }
+
+    private void AnimateFogFx(float dt)
+    {
+        float edgePulse = 0.88f + Mathf.Sin(Time.unscaledTime * 0.72f) * 0.14f;
+        for (int i = 0; i < weatherFogEdgeImgs.Count; i++)
+        {
+            Image edge = weatherFogEdgeImgs[i];
+            if (edge == null) continue;
+            float baseAlpha = i < weatherFogEdgeBaseAlphas.Count ? weatherFogEdgeBaseAlphas[i] : 0.08f;
+            Color c = edge.color;
+            c.a = Mathf.Clamp01(baseAlpha * edgePulse);
+            edge.color = c;
+        }
+
+        if (weatherFogFxRt == null) return;
+        float w = Mathf.Max(560f, weatherFogFxRt.rect.width);
+        float left = -w * 0.5f - 180f;
+        float right = w * 0.5f + 180f;
+        for (int i = 0; i < weatherFogBands.Count; i++)
+        {
+            RectTransform bandRt = weatherFogBands[i];
+            if (bandRt == null) continue;
+            float sp = i < weatherFogBandSpeeds.Count ? weatherFogBandSpeeds[i] : 14f;
+            float phase = i < weatherFogBandPhases.Count ? weatherFogBandPhases[i] : 0f;
+            Vector2 p = bandRt.anchoredPosition;
+            p.x -= sp * dt;
+            p.y += Mathf.Sin(Time.unscaledTime * 0.95f + phase) * 8f * dt;
+            if (p.x < left)
+            {
+                p.x = right + Random.Range(-20f, 40f);
+                p.y = Random.Range(-300f, 300f);
+                if (i < weatherFogBandPhases.Count)
+                    weatherFogBandPhases[i] = Random.Range(0f, Mathf.PI * 2f);
+            }
+            bandRt.anchoredPosition = p;
+
+            if (i < weatherFogBandImages.Count)
+            {
+                Image img = weatherFogBandImages[i];
+                if (img != null)
+                {
+                    Color bc = img.color;
+                    bc.a = Mathf.Clamp01(0.09f + Mathf.Sin(Time.unscaledTime * 1.2f + phase) * 0.04f);
+                    img.color = bc;
+                }
+            }
+        }
+
+        for (int i = 0; i < weatherFogFoamDots.Count; i++)
+        {
+            RectTransform foamRt = weatherFogFoamDots[i];
+            if (foamRt == null) continue;
+            float sp = i < weatherFogFoamDotSpeeds.Count ? weatherFogFoamDotSpeeds[i] : 30f;
+            Vector2 p = foamRt.anchoredPosition;
+            p.x -= sp * dt;
+            p.y += Mathf.Sin(Time.unscaledTime * 2.1f + i * 0.8f) * 10f * dt;
+            if (p.x < left)
+            {
+                p.x = right + Random.Range(0f, 60f);
+                p.y = Random.Range(-240f, 240f);
+            }
+            foamRt.anchoredPosition = p;
+            if (i < weatherFogFoamDotImages.Count)
+            {
+                Image img = weatherFogFoamDotImages[i];
+                if (img != null)
+                {
+                    Color c = img.color;
+                    c.a = Mathf.Clamp01(0.10f + Mathf.Sin(Time.unscaledTime * 2.6f + i * 0.65f) * 0.05f);
+                    img.color = c;
+                }
+            }
+        }
+
+        if (weatherFogBoatRt != null)
+        {
+            Vector2 bp = weatherFogBoatRt.anchoredPosition;
+            bp.x -= 22f * dt;
+            bp.y = weatherFogBoatBaseY + Mathf.Sin(Time.unscaledTime * 1.35f) * 7.5f;
+            if (bp.x < left + 120f) bp.x = right - 140f;
+            weatherFogBoatRt.anchoredPosition = bp;
+            weatherFogBoatRt.localRotation = Quaternion.Euler(0f, 0f, Mathf.Sin(Time.unscaledTime * 1.8f) * 5.5f);
+            if (weatherFogBoatHullImg != null)
+            {
+                Color hc = weatherFogBoatHullImg.color;
+                hc.a = Mathf.Clamp01(0.28f + Mathf.Sin(Time.unscaledTime * 1.1f) * 0.06f);
+                weatherFogBoatHullImg.color = hc;
+            }
+        }
+    }
+
+    private void AnimateGaleFx(float dt)
+    {
+        float edgePulse = 0.92f + Mathf.Sin(Time.unscaledTime * 1.25f) * 0.15f;
+        for (int i = 0; i < weatherGaleNightEdgeImgs.Count; i++)
+        {
+            Image img = weatherGaleNightEdgeImgs[i];
+            if (img == null) continue;
+            float baseAlpha = i < weatherGaleNightEdgeBaseAlphas.Count ? weatherGaleNightEdgeBaseAlphas[i] : 0.08f;
+            Color c = img.color;
+            c.a = Mathf.Clamp01(baseAlpha * edgePulse);
+            img.color = c;
+        }
+
+        if (weatherGaleFxRt == null) return;
+        float w = Mathf.Max(620f, weatherGaleFxRt.rect.width);
+        float h = Mathf.Max(380f, weatherGaleFxRt.rect.height);
+        float left = -w * 0.5f - 180f;
+        float right = w * 0.5f + 180f;
+        float top = h * 0.5f + 120f;
+        float bottom = -h * 0.5f - 120f;
+
+        for (int i = 0; i < weatherGaleLeafRects.Count; i++)
+        {
+            RectTransform rt = weatherGaleLeafRects[i];
+            if (rt == null) continue;
+            float sp = i < weatherGaleLeafSpeeds.Count ? weatherGaleLeafSpeeds[i] : 90f;
+            float phase = i < weatherGaleLeafPhases.Count ? weatherGaleLeafPhases[i] : 0f;
+            Vector2 p = rt.anchoredPosition;
+            p.x -= sp * dt;
+            p.y += Mathf.Sin(Time.unscaledTime * 4.2f + phase) * 20f * dt;
+            if (p.x < left || p.y < bottom || p.y > top)
+            {
+                p.x = right + Random.Range(20f, 120f);
+                p.y = Random.Range(bottom + 60f, top - 30f);
+                if (i < weatherGaleLeafPhases.Count) weatherGaleLeafPhases[i] = Random.Range(0f, Mathf.PI * 2f);
+            }
+            rt.anchoredPosition = p;
+            rt.localRotation = Quaternion.Euler(0f, 0f, Mathf.Sin(Time.unscaledTime * 8f + phase) * 30f);
+            if (i < weatherGaleLeafImgs.Count)
+            {
+                Image img = weatherGaleLeafImgs[i];
+                if (img != null)
+                {
+                    Color c = img.color;
+                    c.a = Mathf.Clamp01(0.28f + Mathf.Sin(Time.unscaledTime * 3.1f + phase) * 0.12f);
+                    img.color = c;
+                }
+            }
+        }
+
+        for (int i = 0; i < weatherGaleWindLineRects.Count; i++)
+        {
+            RectTransform rt = weatherGaleWindLineRects[i];
+            if (rt == null) continue;
+            float sp = i < weatherGaleWindLineSpeeds.Count ? weatherGaleWindLineSpeeds[i] : 140f;
+            Vector2 p = rt.anchoredPosition;
+            p.x -= sp * dt;
+            if (p.x < left) p.x = right + Random.Range(40f, 120f);
+            rt.anchoredPosition = p;
+            if (i < weatherGaleWindLineImgs.Count)
+            {
+                Image img = weatherGaleWindLineImgs[i];
+                if (img != null)
+                {
+                    Color c = img.color;
+                    c.a = Mathf.Clamp01(0.1f + Mathf.Sin(Time.unscaledTime * 5f + i * 0.4f) * 0.05f);
+                    img.color = c;
+                }
+            }
+        }
+
+    }
+
     private void ToggleDebugUiRoot()
     {
         if (debugUiRoot == null) return;
         debugUiRoot.SetActive(!debugUiRoot.activeSelf);
+    }
+
+    private void CloseDebugUiRoot()
+    {
+        if (debugUiRoot == null) return;
+        debugUiRoot.SetActive(false);
     }
 
     private void Update()
@@ -387,7 +933,13 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
                 string toastLine = string.IsNullOrEmpty(toast)
                     ? string.Empty
                     : "\n<color=#AAFFCC>▶ " + toast + "</color>";
-                fieldText.text = battleManager.GetPlayerFieldText() + "\n" + battleManager.GetEnemyFieldText() + toastLine;
+                string aiQuantLine =
+                    "\n<color=#FFD580>" + battleManager.GetEnemyAiQuantifiedTextForPlayerView() + "</color>";
+                fieldText.text =
+                    battleManager.GetPlayerFieldText() + "\n" +
+                    battleManager.GetEnemyFieldText() +
+                    aiQuantLine +
+                    toastLine;
             }
         }
         TickDiscardSelectionUi();
@@ -395,6 +947,23 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         {
             roundText.text = "Round " + battleManager.GetCurrentRound();
             if (debugPanelVisible) roundText.transform.SetAsLastSibling();
+        }
+        if (weatherBadgeTmp != null)
+        {
+            weatherBadgeTmp.text = "天氣：" + battleManager.GetCurrentWeatherLabelForUi();
+        }
+        if (weatherRemainTmp != null)
+        {
+            weatherRemainTmp.text = "效果剩餘回合：" + battleManager.GetCurrentWeatherRemainingRoundsForUi();
+        }
+        if (weatherHintTmp != null)
+        {
+            weatherHintTmp.text = "下一次天氣預報：" + battleManager.GetNextWeatherForecastHintForUi();
+        }
+        UpdateWeatherScreenEffects();
+        if (activeWeatherEffectPanelRt != null && activeWeatherEffectPanelRt.gameObject.activeSelf)
+        {
+            RefreshActiveWeatherEffectPanelText();
         }
         int signature = ComputeHandSignature();
         int fieldSignature = ComputeFieldSignature();
@@ -597,6 +1166,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         }
         int p = battleManager.GetPlayerHeroHp();
         int e = battleManager.GetEnemyHeroHp();
+        bool playerHeroDamaged = lastShownPlayerHeroHp != int.MinValue && p < lastShownPlayerHeroHp;
         if (p == lastShownPlayerHeroHp && e == lastShownEnemyHeroHp) return;
         lastShownPlayerHeroHp = p;
         lastShownEnemyHeroHp = e;
@@ -612,6 +1182,48 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
             enemyHeroHpText.text =
                 "<size=" + t + "><color=#E8FFFFFF>敵方英雄</color></size>\n<b>" + e + "</b>";
         }
+
+        if (playerHeroDamaged && playerHeroDamagedFxRoutine == null && !BattleAutoSimPlugin.IsRunning)
+            playerHeroDamagedFxRoutine = StartCoroutine(CoPlayPlayerHeroDamagedFeedback());
+    }
+
+    private IEnumerator CoPlayPlayerHeroDamagedFeedback()
+    {
+        float hitDur = battleManager != null ? Mathf.Max(0.1f, battleManager.hitShakeDuration * 0.9f) : 0.22f;
+        float heroShakeStrength = 26f;
+        float handShakeStrength = 36f;
+
+        RectTransform heroRt = playerHeroHpText != null ? playerHeroHpText.rectTransform : null;
+        if (heroRt != null) StartCoroutine(PlayHitShake(heroRt, hitDur, heroShakeStrength));
+        if (handArea != null) StartCoroutine(PlayHitShake(handArea, hitDur * 0.95f, handShakeStrength));
+        if (playerHeroHpText != null) StartCoroutine(PlayDamageFlash(playerHeroHpText.gameObject, hitDur));
+        if (enableHeroDamageMonochromeFlash) StartCoroutine(CoPlayHeroDamageMonochromeFlash());
+
+        yield return new WaitForSecondsRealtime(hitDur + 0.06f);
+        playerHeroDamagedFxRoutine = null;
+    }
+
+    private IEnumerator CoPlayHeroDamageMonochromeFlash()
+    {
+        if (heroDamageMonochromeFlashCg == null || heroDamageMonochromeFlashRt == null) yield break;
+
+        float flash = Mathf.Clamp(heroDamageMonochromeFlashSeconds, 0.08f, 0.12f);
+        float recover = Mathf.Clamp(heroDamageMonochromeRecoverSeconds, 0.12f, 0.4f);
+        const float peakAlpha = 0.92f;
+
+        heroDamageMonochromeFlashRt.SetAsLastSibling();
+        heroDamageMonochromeFlashCg.alpha = peakAlpha;
+        if (flash > 0f) yield return new WaitForSecondsRealtime(flash);
+
+        float t = 0f;
+        while (t < recover && heroDamageMonochromeFlashCg != null)
+        {
+            t += Time.unscaledDeltaTime;
+            float p = Mathf.Clamp01(t / recover);
+            heroDamageMonochromeFlashCg.alpha = Mathf.Lerp(peakAlpha, 0f, p);
+            yield return null;
+        }
+        if (heroDamageMonochromeFlashCg != null) heroDamageMonochromeFlashCg.alpha = 0f;
     }
 
     private void CreateBattleTurnBanner(Transform canvasParent)
@@ -628,7 +1240,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         turnBannerPanelRt.sizeDelta = new Vector2(540f, 112f);
 
         Image bg = go.GetComponent<Image>();
-        bg.color = new Color(0.1f, 0.12f, 0.2f, 0.94f);
+        bg.color = new Color(0.34f, 0.4f, 0.3f, 0.95f);
         bg.raycastTarget = false;
 
         Shadow sh = go.GetComponent<Shadow>();
@@ -652,7 +1264,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         if (sharedUIFont != null) turnBannerTmp.font = sharedUIFont;
         turnBannerTmp.fontSize = 42f;
         turnBannerTmp.alignment = TextAlignmentOptions.Center;
-        turnBannerTmp.color = new Color(1f, 0.97f, 0.9f, 1f);
+        turnBannerTmp.color = new Color(0.98f, 0.96f, 0.9f, 1f);
         turnBannerTmp.raycastTarget = false;
         turnBannerTmp.enableWordWrapping = true;
         turnBannerTmp.text = string.Empty;
@@ -732,7 +1344,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
             case BattleTurnBannerKind.PlayerTurn:
                 turnBannerPlayerFromIdleTimeout = false;
                 turnBannerTmp.text = "你的回合";
-                turnBannerTmp.color = new Color(0.58f, 0.96f, 1f, 1f);
+                turnBannerTmp.color = new Color(0.63f, 0.86f, 0.62f, 1f);
                 turnBannerPanelRt.anchoredPosition = Vector2.zero;
                 turnBannerPanelRt.gameObject.SetActive(true);
                 turnBannerCg.alpha = 0f;
@@ -743,7 +1355,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
                 break;
             case BattleTurnBannerKind.EnemyTurn:
                 turnBannerTmp.text = "敵方操作中...";
-                turnBannerTmp.color = new Color(1f, 0.74f, 0.56f, 1f);
+                turnBannerTmp.color = new Color(0.88f, 0.56f, 0.45f, 1f);
                 turnBannerPanelRt.anchoredPosition = Vector2.zero;
                 turnBannerPanelRt.gameObject.SetActive(true);
                 turnBannerCg.alpha = 0f;
@@ -971,12 +1583,12 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         debugUiRoot = new GameObject("BattleDebugUIRoot");
         debugUiRoot.transform.SetParent(parent, false);
         RectTransform dbgRt = debugUiRoot.AddComponent<RectTransform>();
-        dbgRt.anchorMin = new Vector2(1f, 1f);
-        dbgRt.anchorMax = new Vector2(1f, 1f);
-        dbgRt.pivot = new Vector2(1f, 1f);
-        dbgRt.anchoredPosition = new Vector2(-14f, -14f);
-        float winW = Mathf.Min(620f * m, 860f);
-        float winH = Mathf.Min(940f * m, Mathf.Max(660f, Screen.height * 0.92f));
+        dbgRt.anchorMin = new Vector2(0.5f, 0.5f);
+        dbgRt.anchorMax = new Vector2(0.5f, 0.5f);
+        dbgRt.pivot = new Vector2(0.5f, 0.5f);
+        dbgRt.anchoredPosition = Vector2.zero;
+        float winW = Mathf.Clamp(Screen.width * 0.9f, 860f, 3000f);
+        float winH = Mathf.Clamp(Screen.height * 0.9f, 660f, 1800f);
         dbgRt.sizeDelta = new Vector2(winW, winH);
         Transform dbg = debugUiRoot.transform;
 
@@ -993,10 +1605,21 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         panelRect.sizeDelta = Vector2.zero;
 
         Image panelImage = panel.GetComponent<Image>();
-        panelImage.color = new Color(0f, 0f, 0f, 0.72f);
+        panelImage.color = new Color(0.15f, 0.11f, 0.08f, 0.6f);
         Shadow panelShadow = panel.AddComponent<Shadow>();
         panelShadow.effectColor = new Color(0f, 0f, 0f, 0.55f);
         panelShadow.effectDistance = new Vector2(4f, -4f);
+
+        Button closeDebugBtn = CreateButton(panel.transform, "CloseDebugPanelButton", "Close", new Vector2(0f, 0f), CloseDebugUiRoot, true);
+        RectTransform closeRt = closeDebugBtn.GetComponent<RectTransform>();
+        if (closeRt != null)
+        {
+            closeRt.anchorMin = new Vector2(1f, 1f);
+            closeRt.anchorMax = new Vector2(1f, 1f);
+            closeRt.pivot = new Vector2(1f, 1f);
+            closeRt.anchoredPosition = new Vector2(-14f, -14f);
+            closeRt.sizeDelta = new Vector2(170f, 54f);
+        }
 
         BindSceneEndTurnButton(parent);
         CreatePauseUI(parent);
@@ -1018,15 +1641,63 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         roundRect.anchorMin = new Vector2(0f, 1f);
         roundRect.anchorMax = new Vector2(1f, 1f);
         roundRect.pivot = new Vector2(0.5f, 1f);
-        roundRect.offsetMin = new Vector2(10f, -52f * m);
-        roundRect.offsetMax = new Vector2(-10f, -6f);
+        roundRect.offsetMin = new Vector2(10f, -58f);
+        roundRect.offsetMax = new Vector2(-10f, -8f);
         roundText = roundObj.GetComponent<Text>();
         roundText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
         roundText.fontSize = Mathf.RoundToInt(32 * m);
         roundText.alignment = TextAnchor.MiddleCenter;
-        roundText.color = new Color(1f, 0.95f, 0.55f, 1f);
+        roundText.color = new Color(0.98f, 0.9f, 0.62f, 1f);
         roundText.raycastTarget = false;
         roundText.text = "Round 1";
+
+        GameObject weatherBadgeObj = new GameObject("WeatherBadgeText", typeof(RectTransform), typeof(TextMeshProUGUI));
+        weatherBadgeObj.transform.SetParent(panel.transform, false);
+        RectTransform weatherBadgeRt = weatherBadgeObj.GetComponent<RectTransform>();
+        weatherBadgeRt.anchorMin = new Vector2(1f, 1f);
+        weatherBadgeRt.anchorMax = new Vector2(1f, 1f);
+        weatherBadgeRt.pivot = new Vector2(1f, 1f);
+        weatherBadgeRt.anchoredPosition = new Vector2(-22f, -20f);
+        weatherBadgeRt.sizeDelta = new Vector2(320f, 52f);
+        weatherBadgeTmp = weatherBadgeObj.GetComponent<TextMeshProUGUI>();
+        if (sharedUIFont != null) weatherBadgeTmp.font = sharedUIFont;
+        weatherBadgeTmp.fontSize = 28f;
+        weatherBadgeTmp.alignment = TextAlignmentOptions.Right;
+        weatherBadgeTmp.color = new Color(0.95f, 0.86f, 0.6f, 1f);
+        weatherBadgeTmp.text = "天氣：無";
+        weatherBadgeTmp.raycastTarget = false;
+
+        GameObject weatherRemainObj = new GameObject("WeatherRemainText", typeof(RectTransform), typeof(TextMeshProUGUI));
+        weatherRemainObj.transform.SetParent(panel.transform, false);
+        RectTransform weatherRemainRt = weatherRemainObj.GetComponent<RectTransform>();
+        weatherRemainRt.anchorMin = new Vector2(1f, 1f);
+        weatherRemainRt.anchorMax = new Vector2(1f, 1f);
+        weatherRemainRt.pivot = new Vector2(1f, 1f);
+        weatherRemainRt.anchoredPosition = new Vector2(-22f, -66f);
+        weatherRemainRt.sizeDelta = new Vector2(430f, 42f);
+        weatherRemainTmp = weatherRemainObj.GetComponent<TextMeshProUGUI>();
+        if (sharedUIFont != null) weatherRemainTmp.font = sharedUIFont;
+        weatherRemainTmp.fontSize = 24f;
+        weatherRemainTmp.alignment = TextAlignmentOptions.Right;
+        weatherRemainTmp.color = new Color(0.78f, 0.9f, 0.78f, 1f);
+        weatherRemainTmp.text = "效果剩餘回合：0";
+        weatherRemainTmp.raycastTarget = false;
+
+        GameObject weatherHintObj = new GameObject("WeatherHintText", typeof(RectTransform), typeof(TextMeshProUGUI));
+        weatherHintObj.transform.SetParent(panel.transform, false);
+        RectTransform weatherHintRt = weatherHintObj.GetComponent<RectTransform>();
+        weatherHintRt.anchorMin = new Vector2(1f, 1f);
+        weatherHintRt.anchorMax = new Vector2(1f, 1f);
+        weatherHintRt.pivot = new Vector2(1f, 1f);
+        weatherHintRt.anchoredPosition = new Vector2(-22f, -104f);
+        weatherHintRt.sizeDelta = new Vector2(720f, 42f);
+        weatherHintTmp = weatherHintObj.GetComponent<TextMeshProUGUI>();
+        if (sharedUIFont != null) weatherHintTmp.font = sharedUIFont;
+        weatherHintTmp.fontSize = 22f;
+        weatherHintTmp.alignment = TextAlignmentOptions.Right;
+        weatherHintTmp.color = new Color(0.72f, 0.86f, 0.7f, 1f);
+        weatherHintTmp.text = "下一次天氣預報：初始回合不觸發";
+        weatherHintTmp.raycastTarget = false;
 
         GameObject deckObj = new GameObject("DeckText", typeof(RectTransform), typeof(TextMeshProUGUI));
         deckObj.transform.SetParent(panel.transform, false);
@@ -1034,8 +1705,8 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         deckRect.anchorMin = new Vector2(0f, 1f);
         deckRect.anchorMax = new Vector2(1f, 1f);
         deckRect.pivot = new Vector2(0.5f, 1f);
-        deckRect.offsetMin = new Vector2(14f, -124f * m);
-        deckRect.offsetMax = new Vector2(-14f, -58f * m);
+        deckRect.offsetMin = new Vector2(14f, -150f);
+        deckRect.offsetMax = new Vector2(-14f, -62f);
         deckText = deckObj.GetComponent<TextMeshProUGUI>();
         deckText.fontSize = 22f * m;
         deckText.color = Color.white;
@@ -1050,7 +1721,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         openingRollPanel.anchoredPosition = Vector2.zero;
         openingRollPanel.sizeDelta = new Vector2(520f, 172f);
         Image openingRollBg = openingRollPanelObj.GetComponent<Image>();
-        openingRollBg.color = new Color(0.35f, 0.35f, 0.35f, 1f);
+        openingRollBg.color = new Color(0.45f, 0.36f, 0.3f, 1f);
         openingRollGroup = openingRollPanelObj.GetComponent<CanvasGroup>();
         openingRollGroup.alpha = 0f;
         openingRollPanelObj.SetActive(false);
@@ -1097,13 +1768,14 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         fieldRect.anchorMin = new Vector2(0f, 1f);
         fieldRect.anchorMax = new Vector2(1f, 1f);
         fieldRect.pivot = new Vector2(0.5f, 1f);
-        fieldRect.offsetMin = new Vector2(14f, -208f);
-        fieldRect.offsetMax = new Vector2(-14f, -126f);
+        fieldRect.offsetMin = new Vector2(14f, -322f);
+        fieldRect.offsetMax = new Vector2(-14f, -158f);
         fieldText = fieldObj.GetComponent<TextMeshProUGUI>();
-        fieldText.fontSize = 22f * m;
+        fieldText.fontSize = 20f * m;
         fieldText.color = Color.white;
         fieldText.raycastTarget = false;
         fieldText.richText = true;
+        fieldText.enableWordWrapping = true;
 
         CreateBattleResultText(panel.transform, true);
 
@@ -1186,6 +1858,147 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         enemySpellFieldArea.sizeDelta = new Vector2(150f, 300f);
         enemySpellFieldArea.SetAsLastSibling();
 
+        GameObject weatherOverlayObj = new GameObject("WeatherForecastOverlay", typeof(RectTransform), typeof(Image), typeof(CanvasGroup));
+        weatherOverlayObj.transform.SetParent(parent, false);
+        weatherForecastOverlayRt = weatherOverlayObj.GetComponent<RectTransform>();
+        weatherForecastOverlayRt.anchorMin = Vector2.zero;
+        weatherForecastOverlayRt.anchorMax = Vector2.one;
+        weatherForecastOverlayRt.offsetMin = Vector2.zero;
+        weatherForecastOverlayRt.offsetMax = Vector2.zero;
+        Image weatherOverlayBg = weatherOverlayObj.GetComponent<Image>();
+        weatherOverlayBg.color = new Color(0.12f, 0.08f, 0.06f, 0.62f);
+        weatherOverlayBg.raycastTarget = true;
+        weatherForecastOverlayCg = weatherOverlayObj.GetComponent<CanvasGroup>();
+        weatherForecastOverlayCg.alpha = 0f;
+        weatherForecastOverlayCg.blocksRaycasts = true;
+        weatherForecastOverlayCg.interactable = false;
+
+        GameObject weatherCardObj = new GameObject("WeatherForecastCard", typeof(RectTransform), typeof(Image));
+        weatherCardObj.transform.SetParent(weatherForecastOverlayRt, false);
+        RectTransform weatherCardRt = weatherCardObj.GetComponent<RectTransform>();
+        weatherCardRt.anchorMin = new Vector2(0.25f, 0.25f);
+        weatherCardRt.anchorMax = new Vector2(0.75f, 0.75f);
+        weatherCardRt.offsetMin = Vector2.zero;
+        weatherCardRt.offsetMax = Vector2.zero;
+        Image weatherCardBg = weatherCardObj.GetComponent<Image>();
+        weatherCardBg.color = new Color(0.94f, 0.9f, 0.82f, 0.985f);
+
+        GameObject weatherTitleObj = new GameObject("WeatherForecastTitle", typeof(RectTransform), typeof(TextMeshProUGUI));
+        weatherTitleObj.transform.SetParent(weatherCardRt, false);
+        RectTransform weatherTitleRt = weatherTitleObj.GetComponent<RectTransform>();
+        weatherTitleRt.anchorMin = new Vector2(0f, 1f);
+        weatherTitleRt.anchorMax = new Vector2(1f, 1f);
+        weatherTitleRt.pivot = new Vector2(0.5f, 1f);
+        weatherTitleRt.anchoredPosition = new Vector2(0f, -40f);
+        weatherTitleRt.sizeDelta = new Vector2(-64f, 120f);
+        weatherForecastTitleTmp = weatherTitleObj.GetComponent<TextMeshProUGUI>();
+        if (sharedUIFont != null) weatherForecastTitleTmp.font = sharedUIFont;
+        weatherForecastTitleTmp.fontSize = 62f;
+        weatherForecastTitleTmp.alignment = TextAlignmentOptions.Center;
+        weatherForecastTitleTmp.color = new Color(0.28f, 0.22f, 0.16f, 1f);
+        weatherForecastTitleTmp.text = "天氣預報：無";
+        weatherForecastTitleTmp.raycastTarget = false;
+
+        GameObject weatherBodyObj = new GameObject("WeatherForecastBody", typeof(RectTransform), typeof(TextMeshProUGUI));
+        weatherBodyObj.transform.SetParent(weatherCardRt, false);
+        RectTransform weatherBodyRt = weatherBodyObj.GetComponent<RectTransform>();
+        weatherBodyRt.anchorMin = new Vector2(0f, 0f);
+        weatherBodyRt.anchorMax = new Vector2(1f, 1f);
+        weatherBodyRt.offsetMin = new Vector2(72f, 72f);
+        weatherBodyRt.offsetMax = new Vector2(-72f, -192f);
+        weatherForecastBodyTmp = weatherBodyObj.GetComponent<TextMeshProUGUI>();
+        if (sharedUIFont != null) weatherForecastBodyTmp.font = sharedUIFont;
+        weatherForecastBodyTmp.fontSize = 44f;
+        weatherForecastBodyTmp.alignment = TextAlignmentOptions.Top;
+        weatherForecastBodyTmp.color = new Color(0.2f, 0.16f, 0.12f, 1f);
+        weatherForecastBodyTmp.enableWordWrapping = true;
+        weatherForecastBodyTmp.text = "本回合無額外天氣效果。";
+        weatherForecastBodyTmp.raycastTarget = false;
+        weatherOverlayObj.SetActive(false);
+
+        activeWeatherEffectButton = CreateButton(parent, "ActiveWeatherEffectButton", "場地效果", new Vector2(0f, 0f), ToggleActiveWeatherEffectPanel, true);
+        RectTransform activeWeatherBtnRt = activeWeatherEffectButton != null ? activeWeatherEffectButton.GetComponent<RectTransform>() : null;
+        if (activeWeatherBtnRt != null)
+        {
+            // Place to the left of the Pause button (Pause at top-right).
+            activeWeatherBtnRt.anchorMin = new Vector2(1f, 1f);
+            activeWeatherBtnRt.anchorMax = new Vector2(1f, 1f);
+            activeWeatherBtnRt.pivot = new Vector2(1f, 1f);
+            activeWeatherBtnRt.anchoredPosition = new Vector2(-174f, -22f);
+            activeWeatherBtnRt.sizeDelta = new Vector2(350f, 72f);
+        }
+        if (activeWeatherEffectButton != null)
+        {
+            TextMeshProUGUI btnLabel = activeWeatherEffectButton.GetComponentInChildren<TextMeshProUGUI>(true);
+            if (btnLabel != null) btnLabel.fontSize = 34f;
+        }
+        if (activeWeatherEffectButton != null) activeWeatherEffectButton.gameObject.SetActive(false);
+
+        GameObject activeWeatherPanelObj = new GameObject("ActiveWeatherEffectPanel", typeof(RectTransform), typeof(Image));
+        activeWeatherPanelObj.transform.SetParent(parent, false);
+        activeWeatherEffectPanelRt = activeWeatherPanelObj.GetComponent<RectTransform>();
+        // Left half-screen information panel (about 50% viewport width), shifted right.
+        activeWeatherEffectPanelRt.anchorMin = new Vector2(0.04f, 0.02f);
+        activeWeatherEffectPanelRt.anchorMax = new Vector2(0.54f, 0.98f);
+        activeWeatherEffectPanelRt.pivot = new Vector2(0f, 0.5f);
+        activeWeatherEffectPanelRt.offsetMin = new Vector2(32f, 30f);
+        activeWeatherEffectPanelRt.offsetMax = new Vector2(-22f, -30f);
+        Image activeWeatherPanelBg = activeWeatherPanelObj.GetComponent<Image>();
+        activeWeatherPanelBg.color = new Color(0.92f, 0.89f, 0.82f, 0.96f);
+        Outline activeWeatherPanelOutline = activeWeatherPanelObj.AddComponent<Outline>();
+        activeWeatherPanelOutline.effectColor = new Color(0.44f, 0.36f, 0.26f, 0.35f);
+        activeWeatherPanelOutline.effectDistance = new Vector2(2f, -2f);
+        activeWeatherPanelObj.SetActive(false);
+
+        GameObject activeWeatherSummaryObj = new GameObject("ActiveWeatherSummaryText", typeof(RectTransform), typeof(TextMeshProUGUI));
+        activeWeatherSummaryObj.transform.SetParent(activeWeatherPanelObj.transform, false);
+        RectTransform activeWeatherSummaryRt = activeWeatherSummaryObj.GetComponent<RectTransform>();
+        activeWeatherSummaryRt.anchorMin = new Vector2(0f, 0f);
+        activeWeatherSummaryRt.anchorMax = new Vector2(0.34f, 1f);
+        activeWeatherSummaryRt.offsetMin = new Vector2(42f, 38f);
+        activeWeatherSummaryRt.offsetMax = new Vector2(-24f, -38f);
+        activeWeatherEffectPanelSummaryTmp = activeWeatherSummaryObj.GetComponent<TextMeshProUGUI>();
+        if (sharedUIFont != null) activeWeatherEffectPanelSummaryTmp.font = sharedUIFont;
+        activeWeatherEffectPanelSummaryTmp.fontSize = 29f;
+        activeWeatherEffectPanelSummaryTmp.alignment = TextAlignmentOptions.TopLeft;
+        activeWeatherEffectPanelSummaryTmp.color = new Color(0.27f, 0.23f, 0.18f, 1f);
+        activeWeatherEffectPanelSummaryTmp.enableWordWrapping = true;
+        activeWeatherEffectPanelSummaryTmp.lineSpacing = 10f;
+        activeWeatherEffectPanelSummaryTmp.richText = true;
+        activeWeatherEffectPanelSummaryTmp.text = "天氣摘要";
+        activeWeatherEffectPanelSummaryTmp.raycastTarget = false;
+
+        GameObject activeWeatherDividerObj = new GameObject("ActiveWeatherDivider", typeof(RectTransform), typeof(Image));
+        activeWeatherDividerObj.transform.SetParent(activeWeatherPanelObj.transform, false);
+        RectTransform activeWeatherDividerRt = activeWeatherDividerObj.GetComponent<RectTransform>();
+        activeWeatherDividerRt.anchorMin = new Vector2(0.34f, 0f);
+        activeWeatherDividerRt.anchorMax = new Vector2(0.34f, 1f);
+        activeWeatherDividerRt.sizeDelta = new Vector2(2f, -76f);
+        Image activeWeatherDividerImg = activeWeatherDividerObj.GetComponent<Image>();
+        activeWeatherDividerImg.color = new Color(0.56f, 0.49f, 0.36f, 0.35f);
+        activeWeatherDividerImg.raycastTarget = false;
+
+        GameObject activeWeatherPanelTextObj = new GameObject("ActiveWeatherEffectPanelText", typeof(RectTransform), typeof(TextMeshProUGUI));
+        activeWeatherPanelTextObj.transform.SetParent(activeWeatherPanelObj.transform, false);
+        RectTransform activeWeatherPanelTextRt = activeWeatherPanelTextObj.GetComponent<RectTransform>();
+        activeWeatherPanelTextRt.anchorMin = new Vector2(0.34f, 0f);
+        activeWeatherPanelTextRt.anchorMax = new Vector2(1f, 1f);
+        activeWeatherPanelTextRt.offsetMin = new Vector2(34f, 38f);
+        activeWeatherPanelTextRt.offsetMax = new Vector2(-42f, -38f);
+        activeWeatherEffectPanelTextTmp = activeWeatherPanelTextObj.GetComponent<TextMeshProUGUI>();
+        if (sharedUIFont != null) activeWeatherEffectPanelTextTmp.font = sharedUIFont;
+        activeWeatherEffectPanelTextTmp.fontSize = 31f;
+        activeWeatherEffectPanelTextTmp.alignment = TextAlignmentOptions.TopLeft;
+        activeWeatherEffectPanelTextTmp.color = new Color(0.2f, 0.16f, 0.12f, 1f);
+        activeWeatherEffectPanelTextTmp.enableWordWrapping = true;
+        activeWeatherEffectPanelTextTmp.lineSpacing = 10f;
+        activeWeatherEffectPanelTextTmp.richText = true;
+        activeWeatherEffectPanelTextTmp.text = "詳細效果";
+        activeWeatherEffectPanelTextTmp.raycastTarget = false;
+
+        CreateWeatherScreenFx(parent);
+        EnsureHeroDamageMonochromeFlashOverlay(parent);
+
         RebuildHandButtons();
         RebuildEnemyHandCards();
         RefreshFieldCards();
@@ -1205,6 +2018,54 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         uiAudioSource.loop = false;
         uiAudioSource.spatialBlend = 0f;
         uiAudioSource.volume = 0.95f;
+    }
+
+    private void EnsureHeroDamageMonochromeFlashOverlay(Transform parent)
+    {
+        if (heroDamageMonochromeFlashRt != null || parent == null) return;
+
+        GameObject overlayObj = new GameObject("HeroDamageVignetteFlash", typeof(RectTransform), typeof(CanvasGroup));
+        overlayObj.transform.SetParent(parent, false);
+        heroDamageMonochromeFlashRt = overlayObj.GetComponent<RectTransform>();
+        heroDamageMonochromeFlashRt.anchorMin = Vector2.zero;
+        heroDamageMonochromeFlashRt.anchorMax = Vector2.one;
+        heroDamageMonochromeFlashRt.offsetMin = Vector2.zero;
+        heroDamageMonochromeFlashRt.offsetMax = Vector2.zero;
+        heroDamageMonochromeFlashRt.SetAsLastSibling();
+
+        // Build a non-intrusive vignette by darkening only screen edges.
+        CreateHeroDamageVignetteEdge(overlayObj.transform, "Top", new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, 0f), new Vector2(0f, 180f), new Color(0f, 0f, 0f, 0.85f));
+        CreateHeroDamageVignetteEdge(overlayObj.transform, "Bottom", new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 0f), new Vector2(0f, 180f), new Color(0f, 0f, 0f, 0.85f));
+        CreateHeroDamageVignetteEdge(overlayObj.transform, "Left", new Vector2(0f, 0f), new Vector2(0f, 1f), new Vector2(0f, 0.5f), new Vector2(0f, 0f), new Vector2(210f, 0f), new Color(0f, 0f, 0f, 0.78f));
+        CreateHeroDamageVignetteEdge(overlayObj.transform, "Right", new Vector2(1f, 0f), new Vector2(1f, 1f), new Vector2(1f, 0.5f), new Vector2(0f, 0f), new Vector2(210f, 0f), new Color(0f, 0f, 0f, 0.78f));
+
+        heroDamageMonochromeFlashCg = overlayObj.GetComponent<CanvasGroup>();
+        heroDamageMonochromeFlashCg.alpha = 0f;
+        heroDamageMonochromeFlashCg.blocksRaycasts = false;
+        heroDamageMonochromeFlashCg.interactable = false;
+    }
+
+    private static void CreateHeroDamageVignetteEdge(
+        Transform parent,
+        string edgeName,
+        Vector2 anchorMin,
+        Vector2 anchorMax,
+        Vector2 pivot,
+        Vector2 anchoredPosition,
+        Vector2 sizeDelta,
+        Color color)
+    {
+        GameObject edgeObj = new GameObject("HeroDamageVignette" + edgeName, typeof(RectTransform), typeof(Image));
+        edgeObj.transform.SetParent(parent, false);
+        RectTransform edgeRt = edgeObj.GetComponent<RectTransform>();
+        edgeRt.anchorMin = anchorMin;
+        edgeRt.anchorMax = anchorMax;
+        edgeRt.pivot = pivot;
+        edgeRt.anchoredPosition = anchoredPosition;
+        edgeRt.sizeDelta = sizeDelta;
+        Image edgeImg = edgeObj.GetComponent<Image>();
+        edgeImg.color = color;
+        edgeImg.raycastTarget = false;
     }
 
     private void PlayUIClip(AudioClip clip, float volume)
@@ -1238,6 +2099,8 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
             battleManager.SpellCastHandAnchorCommitted -= OnSpellCastHandAnchorCommitted;
             battleManager.FireballVisualRequested -= OnFireballVisualRequested;
             battleManager.LinGazePeriodicStrikeVisualRequested -= OnLinGazePeriodicStrikeVisualRequested;
+            battleManager.WeatherForecastStarted -= OnWeatherForecastStarted;
+            battleManager.WeatherForecastFinished -= OnWeatherForecastFinished;
             battleManager.TurnBannerRequested -= OnTurnBannerRequested;
             battleManager.PlayerCommittedHandCardToFieldFromHand -= OnPlayerCommittedHandCardToFieldFromHand;
             battleManager.PlayerPressedEndTurnForPromptUi -= OnPlayerPressedEndTurnForPromptUi;
@@ -1313,7 +2176,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         pausePanel.offsetMin = Vector2.zero;
         pausePanel.offsetMax = Vector2.zero;
         Image pauseBg = pausePanelObj.GetComponent<Image>();
-        pauseBg.color = new Color(0f, 0f, 0f, 0.65f);
+        pauseBg.color = new Color(0.12f, 0.08f, 0.06f, 0.62f);
 
         GameObject pauseCardObj = new GameObject("PauseCard", typeof(RectTransform), typeof(Image));
         pauseCardObj.transform.SetParent(pausePanelObj.transform, false);
@@ -1324,7 +2187,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         pauseCardRt.anchoredPosition = Vector2.zero;
         pauseCardRt.sizeDelta = new Vector2(760f, 420f);
         Image pauseCardBg = pauseCardObj.GetComponent<Image>();
-        pauseCardBg.color = new Color(0.18f, 0.18f, 0.18f, 0.95f);
+        pauseCardBg.color = new Color(0.92f, 0.88f, 0.8f, 0.96f);
 
         GameObject titleObj = new GameObject("PauseTitle", typeof(RectTransform), typeof(TextMeshProUGUI));
         titleObj.transform.SetParent(pauseCardObj.transform, false);
@@ -1338,7 +2201,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         if (sharedUIFont != null) title.font = sharedUIFont;
         title.fontSize = 68f;
         title.alignment = TextAlignmentOptions.Center;
-        title.color = Color.white;
+        title.color = new Color(0.24f, 0.2f, 0.16f, 1f);
         title.text = "Paused";
 
         Button resumeBtn = CreateButton(pauseCardObj.transform, "ResumeButton", "Resume", new Vector2(0f, 0f), TogglePause, true);
@@ -1388,6 +2251,368 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         pausePanelObj.SetActive(false);
     }
 
+    private void CreateWeatherScreenFx(Transform parent)
+    {
+        GameObject fxRootObj = new GameObject("WeatherScreenFxRoot", typeof(RectTransform), typeof(CanvasGroup));
+        fxRootObj.transform.SetParent(parent, false);
+        weatherScreenFxRoot = fxRootObj.GetComponent<RectTransform>();
+        weatherScreenFxRoot.anchorMin = Vector2.zero;
+        weatherScreenFxRoot.anchorMax = Vector2.one;
+        weatherScreenFxRoot.offsetMin = Vector2.zero;
+        weatherScreenFxRoot.offsetMax = Vector2.zero;
+        CanvasGroup fxCg = fxRootObj.GetComponent<CanvasGroup>();
+        fxCg.blocksRaycasts = false;
+        fxCg.interactable = false;
+
+        weatherFireRainFxRt = CreateWeatherFxLayer(weatherScreenFxRoot, "WeatherFireRainFx", new Color(1f, 0.36f, 0.16f, 0.03f));
+        weatherHolyLightFxRt = CreateWeatherFxLayer(weatherScreenFxRoot, "WeatherHolyLightFx", new Color(0.98f, 0.96f, 0.9f, 0.04f));
+        weatherFogFxRt = CreateWeatherFxLayer(weatherScreenFxRoot, "WeatherFogFx", new Color(0.76f, 0.82f, 0.9f, 0.11f));
+        weatherGaleFxRt = CreateWeatherFxLayer(weatherScreenFxRoot, "WeatherGaleFx", new Color(0.7f, 0.84f, 1f, 0.09f));
+
+        if (weatherHolyLightFxRt != null)
+        {
+            weatherHolyLightEdgeImgs.Clear();
+            weatherHolyLightEdgeBaseAlphas.Clear();
+            weatherHolyLightDustImages.Clear();
+            weatherHolyLightDustRects.Clear();
+            weatherHolyLightDustSpeeds.Clear();
+            weatherHolyLightDustPhases.Clear();
+            weatherHolyLightDustBaseColors.Clear();
+            weatherHolyLightTopEdgeImg = CreateHolyLightEdge(weatherHolyLightFxRt, "HolyLightTopEdgeOuter", new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, 0f), new Vector2(0f, 170f), 0.11f);
+            weatherHolyLightBottomEdgeImg = CreateHolyLightEdge(weatherHolyLightFxRt, "HolyLightBottomEdgeOuter", new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 0f), new Vector2(0f, 150f), 0.09f);
+            weatherHolyLightLeftEdgeImg = CreateHolyLightEdge(weatherHolyLightFxRt, "HolyLightLeftEdgeOuter", new Vector2(0f, 0f), new Vector2(0f, 1f), new Vector2(0f, 0.5f), new Vector2(0f, 0f), new Vector2(126f, 0f), 0.08f);
+            weatherHolyLightRightEdgeImg = CreateHolyLightEdge(weatherHolyLightFxRt, "HolyLightRightEdgeOuter", new Vector2(1f, 0f), new Vector2(1f, 1f), new Vector2(1f, 0.5f), new Vector2(0f, 0f), new Vector2(126f, 0f), 0.08f);
+            AddHolyLightEdgeLayer(weatherHolyLightTopEdgeImg, 0.11f);
+            AddHolyLightEdgeLayer(weatherHolyLightBottomEdgeImg, 0.09f);
+            AddHolyLightEdgeLayer(weatherHolyLightLeftEdgeImg, 0.08f);
+            AddHolyLightEdgeLayer(weatherHolyLightRightEdgeImg, 0.08f);
+            AddHolyLightEdgeLayer(CreateHolyLightEdge(weatherHolyLightFxRt, "HolyLightTopEdgeMid", new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, 0f), new Vector2(0f, 114f), 0.06f), 0.06f);
+            AddHolyLightEdgeLayer(CreateHolyLightEdge(weatherHolyLightFxRt, "HolyLightBottomEdgeMid", new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 0f), new Vector2(0f, 98f), 0.05f), 0.05f);
+            AddHolyLightEdgeLayer(CreateHolyLightEdge(weatherHolyLightFxRt, "HolyLightLeftEdgeMid", new Vector2(0f, 0f), new Vector2(0f, 1f), new Vector2(0f, 0.5f), new Vector2(0f, 0f), new Vector2(88f, 0f), 0.043f), 0.043f);
+            AddHolyLightEdgeLayer(CreateHolyLightEdge(weatherHolyLightFxRt, "HolyLightRightEdgeMid", new Vector2(1f, 0f), new Vector2(1f, 1f), new Vector2(1f, 0.5f), new Vector2(0f, 0f), new Vector2(88f, 0f), 0.043f), 0.043f);
+            AddHolyLightEdgeLayer(CreateHolyLightEdge(weatherHolyLightFxRt, "HolyLightTopEdgeInner", new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, 0f), new Vector2(0f, 66f), 0.02f), 0.02f);
+            AddHolyLightEdgeLayer(CreateHolyLightEdge(weatherHolyLightFxRt, "HolyLightBottomEdgeInner", new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 0f), new Vector2(0f, 56f), 0.016f), 0.016f);
+            AddHolyLightEdgeLayer(CreateHolyLightEdge(weatherHolyLightFxRt, "HolyLightLeftEdgeInner", new Vector2(0f, 0f), new Vector2(0f, 1f), new Vector2(0f, 0.5f), new Vector2(0f, 0f), new Vector2(54f, 0f), 0.015f), 0.015f);
+            AddHolyLightEdgeLayer(CreateHolyLightEdge(weatherHolyLightFxRt, "HolyLightRightEdgeInner", new Vector2(1f, 0f), new Vector2(1f, 1f), new Vector2(1f, 0.5f), new Vector2(0f, 0f), new Vector2(54f, 0f), 0.015f), 0.015f);
+
+            for (int i = 0; i < 16; i++)
+            {
+                GameObject dustObj = new GameObject("HolyLightDust_" + i, typeof(RectTransform), typeof(Image));
+                dustObj.transform.SetParent(weatherHolyLightFxRt, false);
+                RectTransform dustRt = dustObj.GetComponent<RectTransform>();
+                dustRt.anchorMin = new Vector2(0.5f, 0.5f);
+                dustRt.anchorMax = new Vector2(0.5f, 0.5f);
+                dustRt.pivot = new Vector2(0.5f, 0.5f);
+                float size = Random.Range(4.5f, 10f);
+                dustRt.sizeDelta = new Vector2(size, size);
+                dustRt.anchoredPosition = new Vector2(Random.Range(-420f, 420f), Random.Range(-260f, 300f));
+                Image dustImg = dustObj.GetComponent<Image>();
+                dustImg.sprite = GetUnitWhiteSprite();
+                bool useLavender = Random.value < 0.18f; // low ratio lavender accents
+                Color baseColor = useLavender
+                    ? new Color(0.92f, 0.9f, 0.98f, Random.Range(0.04f, 0.082f))
+                    : new Color(0.96f, 0.98f, 0.9f, Random.Range(0.045f, 0.095f));
+                dustImg.color = baseColor;
+                dustImg.raycastTarget = false;
+                weatherHolyLightDustRects.Add(dustRt);
+                weatherHolyLightDustImages.Add(dustImg);
+                weatherHolyLightDustSpeeds.Add(Random.Range(13f, 25f));
+                weatherHolyLightDustPhases.Add(Random.Range(0f, Mathf.PI * 2f));
+                weatherHolyLightDustBaseColors.Add(baseColor);
+            }
+        }
+
+        if (weatherFogFxRt != null)
+        {
+            weatherFogBands.Clear();
+            weatherFogBandImages.Clear();
+            weatherFogBandSpeeds.Clear();
+            weatherFogBandPhases.Clear();
+            weatherFogEdgeImgs.Clear();
+            weatherFogEdgeBaseAlphas.Clear();
+            weatherFogFoamDots.Clear();
+            weatherFogFoamDotImages.Clear();
+            weatherFogFoamDotSpeeds.Clear();
+            weatherFogBoatRt = null;
+            weatherFogBoatHullImg = null;
+            weatherFogBoatBaseY = -120f;
+
+            AddFogEdgeLayer(CreateHolyLightEdge(weatherFogFxRt, "TsunamiTopOuter", new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, 0f), new Vector2(0f, 150f), 0.1f), 0.1f);
+            AddFogEdgeLayer(CreateHolyLightEdge(weatherFogFxRt, "TsunamiBottomOuter", new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 0f), new Vector2(0f, 220f), 0.18f), 0.18f);
+            AddFogEdgeLayer(CreateHolyLightEdge(weatherFogFxRt, "TsunamiLeftOuter", new Vector2(0f, 0f), new Vector2(0f, 1f), new Vector2(0f, 0.5f), new Vector2(0f, 0f), new Vector2(124f, 0f), 0.11f), 0.11f);
+            AddFogEdgeLayer(CreateHolyLightEdge(weatherFogFxRt, "TsunamiRightOuter", new Vector2(1f, 0f), new Vector2(1f, 1f), new Vector2(1f, 0.5f), new Vector2(0f, 0f), new Vector2(124f, 0f), 0.11f), 0.11f);
+            AddFogEdgeLayer(CreateHolyLightEdge(weatherFogFxRt, "TsunamiBottomInner", new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 0f), new Vector2(0f, 128f), 0.11f), 0.11f);
+            AddFogEdgeLayer(CreateHolyLightEdge(weatherFogFxRt, "TsunamiSideInnerL", new Vector2(0f, 0f), new Vector2(0f, 1f), new Vector2(0f, 0.5f), new Vector2(0f, 0f), new Vector2(84f, 0f), 0.075f), 0.075f);
+            AddFogEdgeLayer(CreateHolyLightEdge(weatherFogFxRt, "TsunamiSideInnerR", new Vector2(1f, 0f), new Vector2(1f, 1f), new Vector2(1f, 0.5f), new Vector2(0f, 0f), new Vector2(84f, 0f), 0.075f), 0.075f);
+
+            for (int i = 0; i < 7; i++)
+            {
+                GameObject fogBandObj = new GameObject("TsunamiWaveBand_" + i, typeof(RectTransform), typeof(Image));
+                fogBandObj.transform.SetParent(weatherFogFxRt, false);
+                RectTransform fogBandRt = fogBandObj.GetComponent<RectTransform>();
+                fogBandRt.anchorMin = new Vector2(0.5f, 0.5f);
+                fogBandRt.anchorMax = new Vector2(0.5f, 0.5f);
+                fogBandRt.pivot = new Vector2(0.5f, 0.5f);
+                fogBandRt.sizeDelta = new Vector2(Random.Range(560f, 980f), Random.Range(70f, 140f));
+                fogBandRt.anchoredPosition = new Vector2(Random.Range(-520f, 520f), Random.Range(-300f, 300f));
+                Image fogBandImg = fogBandObj.GetComponent<Image>();
+                fogBandImg.sprite = GetUnitWhiteSprite();
+                fogBandImg.color = new Color(0.38f, 0.62f, 0.8f, Random.Range(0.08f, 0.14f));
+                fogBandImg.raycastTarget = false;
+                weatherFogBands.Add(fogBandRt);
+                weatherFogBandImages.Add(fogBandImg);
+                weatherFogBandSpeeds.Add(Random.Range(30f, 56f));
+                weatherFogBandPhases.Add(Random.Range(0f, Mathf.PI * 2f));
+            }
+
+            for (int i = 0; i < 18; i++)
+            {
+                GameObject foamDotObj = new GameObject("TsunamiFoamDot_" + i, typeof(RectTransform), typeof(Image));
+                foamDotObj.transform.SetParent(weatherFogFxRt, false);
+                RectTransform foamRt = foamDotObj.GetComponent<RectTransform>();
+                foamRt.anchorMin = new Vector2(0.5f, 0.5f);
+                foamRt.anchorMax = new Vector2(0.5f, 0.5f);
+                foamRt.pivot = new Vector2(0.5f, 0.5f);
+                float size = Random.Range(3.5f, 8f);
+                foamRt.sizeDelta = new Vector2(size, size);
+                foamRt.anchoredPosition = new Vector2(Random.Range(-560f, 560f), Random.Range(-240f, 240f));
+                Image foamImg = foamDotObj.GetComponent<Image>();
+                foamImg.sprite = GetUnitWhiteSprite();
+                foamImg.color = new Color(0.93f, 0.98f, 1f, Random.Range(0.08f, 0.16f));
+                foamImg.raycastTarget = false;
+                weatherFogFoamDots.Add(foamRt);
+                weatherFogFoamDotImages.Add(foamImg);
+                weatherFogFoamDotSpeeds.Add(Random.Range(36f, 78f));
+            }
+
+            GameObject boatObj = new GameObject("TsunamiBoatSilhouette", typeof(RectTransform));
+            boatObj.transform.SetParent(weatherFogFxRt, false);
+            weatherFogBoatRt = boatObj.GetComponent<RectTransform>();
+            weatherFogBoatRt.anchorMin = new Vector2(0.5f, 0.5f);
+            weatherFogBoatRt.anchorMax = new Vector2(0.5f, 0.5f);
+            weatherFogBoatRt.pivot = new Vector2(0.5f, 0.5f);
+            weatherFogBoatRt.sizeDelta = new Vector2(96f, 72f);
+            weatherFogBoatRt.anchoredPosition = new Vector2(340f, -120f);
+            weatherFogBoatBaseY = -120f;
+
+            GameObject hullObj = new GameObject("Hull", typeof(RectTransform), typeof(Image));
+            hullObj.transform.SetParent(boatObj.transform, false);
+            RectTransform hullRt = hullObj.GetComponent<RectTransform>();
+            hullRt.anchorMin = new Vector2(0.5f, 0.5f);
+            hullRt.anchorMax = new Vector2(0.5f, 0.5f);
+            hullRt.pivot = new Vector2(0.5f, 0.5f);
+            hullRt.sizeDelta = new Vector2(82f, 16f);
+            hullRt.anchoredPosition = new Vector2(0f, -20f);
+            weatherFogBoatHullImg = hullObj.GetComponent<Image>();
+            weatherFogBoatHullImg.sprite = GetUnitWhiteSprite();
+            weatherFogBoatHullImg.color = new Color(0.05f, 0.09f, 0.14f, 0.3f);
+            weatherFogBoatHullImg.raycastTarget = false;
+
+            GameObject mastObj = new GameObject("Mast", typeof(RectTransform), typeof(Image));
+            mastObj.transform.SetParent(boatObj.transform, false);
+            RectTransform mastRt = mastObj.GetComponent<RectTransform>();
+            mastRt.anchorMin = new Vector2(0.5f, 0.5f);
+            mastRt.anchorMax = new Vector2(0.5f, 0.5f);
+            mastRt.pivot = new Vector2(0.5f, 0f);
+            mastRt.sizeDelta = new Vector2(3f, 34f);
+            mastRt.anchoredPosition = new Vector2(-6f, -16f);
+            Image mastImg = mastObj.GetComponent<Image>();
+            mastImg.sprite = GetUnitWhiteSprite();
+            mastImg.color = new Color(0.05f, 0.09f, 0.14f, 0.32f);
+            mastImg.raycastTarget = false;
+
+            GameObject sailObj = new GameObject("Sail", typeof(RectTransform), typeof(Image));
+            sailObj.transform.SetParent(boatObj.transform, false);
+            RectTransform sailRt = sailObj.GetComponent<RectTransform>();
+            sailRt.anchorMin = new Vector2(0.5f, 0.5f);
+            sailRt.anchorMax = new Vector2(0.5f, 0.5f);
+            sailRt.pivot = new Vector2(0f, 0.5f);
+            sailRt.sizeDelta = new Vector2(26f, 22f);
+            sailRt.anchoredPosition = new Vector2(-4f, -2f);
+            Image sailImg = sailObj.GetComponent<Image>();
+            sailImg.sprite = GetUnitWhiteSprite();
+            sailImg.color = new Color(0.07f, 0.11f, 0.17f, 0.22f);
+            sailImg.raycastTarget = false;
+        }
+
+        if (weatherGaleFxRt != null)
+        {
+            weatherGaleNightEdgeImgs.Clear();
+            weatherGaleNightEdgeBaseAlphas.Clear();
+            weatherGaleLeafRects.Clear();
+            weatherGaleLeafImgs.Clear();
+            weatherGaleLeafSpeeds.Clear();
+            weatherGaleLeafPhases.Clear();
+            weatherGaleWindLineRects.Clear();
+            weatherGaleWindLineImgs.Clear();
+            weatherGaleWindLineSpeeds.Clear();
+
+            AddGaleNightLayer(CreateHolyLightEdge(weatherGaleFxRt, "GaleNightTop", new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0.5f, 1f), Vector2.zero, new Vector2(0f, 220f), 0.16f), 0.16f);
+            AddGaleNightLayer(CreateHolyLightEdge(weatherGaleFxRt, "GaleNightBottom", new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(0.5f, 0f), Vector2.zero, new Vector2(0f, 160f), 0.12f), 0.12f);
+            AddGaleNightLayer(CreateHolyLightEdge(weatherGaleFxRt, "GaleNightLeft", new Vector2(0f, 0f), new Vector2(0f, 1f), new Vector2(0f, 0.5f), Vector2.zero, new Vector2(180f, 0f), 0.15f), 0.15f);
+            AddGaleNightLayer(CreateHolyLightEdge(weatherGaleFxRt, "GaleNightRight", new Vector2(1f, 0f), new Vector2(1f, 1f), new Vector2(1f, 0.5f), Vector2.zero, new Vector2(180f, 0f), 0.15f), 0.15f);
+            AddGaleNightLayer(CreateHolyLightEdge(weatherGaleFxRt, "GaleNightTopMid", new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0.5f, 1f), Vector2.zero, new Vector2(0f, 140f), 0.1f), 0.1f);
+            AddGaleNightLayer(CreateHolyLightEdge(weatherGaleFxRt, "GaleNightBottomMid", new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(0.5f, 0f), Vector2.zero, new Vector2(0f, 110f), 0.08f), 0.08f);
+            AddGaleNightLayer(CreateHolyLightEdge(weatherGaleFxRt, "GaleNightVignetteL", new Vector2(0f, 0f), new Vector2(0f, 1f), new Vector2(0f, 0.5f), Vector2.zero, new Vector2(120f, 0f), 0.11f), 0.11f);
+            AddGaleNightLayer(CreateHolyLightEdge(weatherGaleFxRt, "GaleNightVignetteR", new Vector2(1f, 0f), new Vector2(1f, 1f), new Vector2(1f, 0.5f), Vector2.zero, new Vector2(120f, 0f), 0.11f), 0.11f);
+
+            for (int i = 0; i < 16; i++)
+            {
+                GameObject leafObj = new GameObject("GaleLeaf_" + i, typeof(RectTransform), typeof(Image));
+                leafObj.transform.SetParent(weatherGaleFxRt, false);
+                RectTransform leafRt = leafObj.GetComponent<RectTransform>();
+                leafRt.anchorMin = new Vector2(0.5f, 0.5f);
+                leafRt.anchorMax = new Vector2(0.5f, 0.5f);
+                leafRt.pivot = new Vector2(0.5f, 0.5f);
+                float s = Random.Range(8f, 16f);
+                leafRt.sizeDelta = new Vector2(s * 1.4f, s * 0.7f);
+                leafRt.anchoredPosition = new Vector2(Random.Range(-420f, 760f), Random.Range(-240f, 300f));
+                Image leafImg = leafObj.GetComponent<Image>();
+                leafImg.sprite = GetUnitWhiteSprite();
+                Color leafColor;
+                float roll = Random.value;
+                if (roll < 0.45f) leafColor = new Color(0.42f, 0.58f, 0.32f, Random.Range(0.22f, 0.42f)); // green
+                else if (roll < 0.72f) leafColor = new Color(0.63f, 0.48f, 0.24f, Random.Range(0.2f, 0.38f)); // brown
+                else if (roll < 0.9f) leafColor = new Color(0.74f, 0.38f, 0.2f, Random.Range(0.2f, 0.36f)); // orange
+                else leafColor = new Color(0.56f, 0.2f, 0.2f, Random.Range(0.18f, 0.34f)); // red
+                leafImg.color = leafColor;
+                leafImg.raycastTarget = false;
+                weatherGaleLeafRects.Add(leafRt);
+                weatherGaleLeafImgs.Add(leafImg);
+                weatherGaleLeafSpeeds.Add(Random.Range(90f, 180f));
+                weatherGaleLeafPhases.Add(Random.Range(0f, Mathf.PI * 2f));
+            }
+
+            for (int i = 0; i < 11; i++)
+            {
+                GameObject windObj = new GameObject("GaleWindLine_" + i, typeof(RectTransform), typeof(Image));
+                windObj.transform.SetParent(weatherGaleFxRt, false);
+                RectTransform windRt = windObj.GetComponent<RectTransform>();
+                windRt.anchorMin = new Vector2(0.5f, 0.5f);
+                windRt.anchorMax = new Vector2(0.5f, 0.5f);
+                windRt.pivot = new Vector2(0.5f, 0.5f);
+                windRt.sizeDelta = new Vector2(Random.Range(90f, 170f), Random.Range(2.4f, 4.2f));
+                windRt.anchoredPosition = new Vector2(Random.Range(-520f, 760f), Random.Range(-260f, 280f));
+                windRt.rotation = Quaternion.Euler(0f, 0f, Random.Range(-8f, 6f));
+                Image windImg = windObj.GetComponent<Image>();
+                windImg.sprite = GetUnitWhiteSprite();
+                windImg.color = new Color(0.75f, 0.86f, 0.92f, Random.Range(0.08f, 0.16f));
+                windImg.raycastTarget = false;
+                weatherGaleWindLineRects.Add(windRt);
+                weatherGaleWindLineImgs.Add(windImg);
+                weatherGaleWindLineSpeeds.Add(Random.Range(130f, 240f));
+            }
+        }
+
+        if (weatherFireRainFxRt != null)
+        {
+            weatherFireRainStreaks.Clear();
+            weatherFireRainStreakSpeeds.Clear();
+            weatherFireRainStreakImages.Clear();
+            weatherFireRainStreakPhases.Clear();
+            for (int i = 0; i < 26; i++)
+            {
+                GameObject dropObj = new GameObject("FireRainDrop_" + i, typeof(RectTransform), typeof(Image));
+                dropObj.transform.SetParent(weatherFireRainFxRt, false);
+                RectTransform dropRt = dropObj.GetComponent<RectTransform>();
+                dropRt.anchorMin = new Vector2(0.5f, 0.5f);
+                dropRt.anchorMax = new Vector2(0.5f, 0.5f);
+                dropRt.pivot = new Vector2(0.5f, 0.5f);
+                dropRt.sizeDelta = new Vector2(Random.Range(2.2f, 4.2f), Random.Range(42f, 86f));
+                dropRt.rotation = Quaternion.Euler(0f, 0f, 22f);
+                dropRt.anchoredPosition = new Vector2(Random.Range(-960f, 960f), Random.Range(-560f, 560f));
+                Image dropImg = dropObj.GetComponent<Image>();
+                dropImg.sprite = GetUnitWhiteSprite();
+                dropImg.color = new Color(1f, 0.56f, 0.26f, Random.Range(0.17f, 0.32f));
+                dropImg.raycastTarget = false;
+                weatherFireRainStreaks.Add(dropRt);
+                weatherFireRainStreakSpeeds.Add(Random.Range(480f, 760f));
+                weatherFireRainStreakImages.Add(dropImg);
+                weatherFireRainStreakPhases.Add(Random.Range(0f, Mathf.PI * 2f));
+            }
+        }
+
+        if (weatherFireRainFxRt != null) weatherFireRainFxRt.gameObject.SetActive(false);
+        if (weatherHolyLightFxRt != null) weatherHolyLightFxRt.gameObject.SetActive(false);
+        if (weatherFogFxRt != null) weatherFogFxRt.gameObject.SetActive(false);
+        if (weatherGaleFxRt != null) weatherGaleFxRt.gameObject.SetActive(false);
+    }
+
+    private RectTransform CreateWeatherFxLayer(Transform parent, string name, Color tint)
+    {
+        GameObject layerObj = new GameObject(name, typeof(RectTransform), typeof(Image));
+        layerObj.transform.SetParent(parent, false);
+        RectTransform layerRt = layerObj.GetComponent<RectTransform>();
+        layerRt.anchorMin = Vector2.zero;
+        layerRt.anchorMax = Vector2.one;
+        layerRt.offsetMin = Vector2.zero;
+        layerRt.offsetMax = Vector2.zero;
+        Image layerImg = layerObj.GetComponent<Image>();
+        layerImg.sprite = GetUnitWhiteSprite();
+        layerImg.color = tint;
+        layerImg.raycastTarget = false;
+        return layerRt;
+    }
+
+    private Image CreateHolyLightEdge(
+        Transform parent,
+        string name,
+        Vector2 anchorMin,
+        Vector2 anchorMax,
+        Vector2 pivot,
+        Vector2 anchoredPos,
+        Vector2 sizeDelta,
+        float alpha)
+    {
+        GameObject edgeObj = new GameObject(name, typeof(RectTransform), typeof(Image));
+        edgeObj.transform.SetParent(parent, false);
+        RectTransform edgeRt = edgeObj.GetComponent<RectTransform>();
+        edgeRt.anchorMin = anchorMin;
+        edgeRt.anchorMax = anchorMax;
+        edgeRt.pivot = pivot;
+        edgeRt.anchoredPosition = anchoredPos;
+        edgeRt.sizeDelta = sizeDelta;
+        Image edgeImg = edgeObj.GetComponent<Image>();
+        edgeImg.sprite = GetUnitWhiteSprite();
+        edgeImg.color = new Color(1f, 0.98f, 0.84f, alpha);
+        edgeImg.raycastTarget = false;
+        return edgeImg;
+    }
+
+    private void AddHolyLightEdgeLayer(Image img, float baseAlpha)
+    {
+        if (img == null) return;
+        weatherHolyLightEdgeImgs.Add(img);
+        weatherHolyLightEdgeBaseAlphas.Add(baseAlpha);
+    }
+
+    private void AddFogEdgeLayer(Image img, float baseAlpha)
+    {
+        if (img == null) return;
+        Color c = img.color;
+        c.r = 0.42f;
+        c.g = 0.63f;
+        c.b = 0.78f;
+        c.a = baseAlpha;
+        img.color = c;
+        weatherFogEdgeImgs.Add(img);
+        weatherFogEdgeBaseAlphas.Add(baseAlpha);
+    }
+
+    private void AddGaleNightLayer(Image img, float baseAlpha)
+    {
+        if (img == null) return;
+        Color c = img.color;
+        c.r = 0.08f;
+        c.g = 0.14f;
+        c.b = 0.11f;
+        c.a = baseAlpha;
+        img.color = c;
+        weatherGaleNightEdgeImgs.Add(img);
+        weatherGaleNightEdgeBaseAlphas.Add(baseAlpha);
+    }
+
+
     private void TogglePause()
     {
         SetPaused(!isGamePaused);
@@ -1406,6 +2631,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
 
     private void OnPauseRestartClicked()
     {
+        RecordQuitIfBattleUnfinished();
         SetPaused(false);
         Scene current = SceneManager.GetActiveScene();
         SceneManager.LoadScene(current.name);
@@ -1413,8 +2639,16 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
 
     private void OnPauseGiveUpClicked()
     {
+        RecordQuitIfBattleUnfinished();
         SetPaused(false);
         StartCoroutine(GiveUpAfterLoseMessage());
+    }
+
+    private void RecordQuitIfBattleUnfinished()
+    {
+        if (battleManager == null) return;
+        if (battleManager.GetBattleResult() != 0) return;
+        PlayerProfileCsvService.RecordPlayerQuit();
     }
 
     private IEnumerator GiveUpAfterLoseMessage()
@@ -2060,6 +3294,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
     private void OnSpellCastPresentationStarted(bool isPlayer, string cardName, string skillDescription)
     {
         if (uiRoot == null || battleManager == null) return;
+        SetHandButtonsInteractable();
         ForceHideSpellCastOverlay();
         spellCastOverlayRoutine = StartCoroutine(SpellCastOverlayRoutine(isPlayer, cardName, skillDescription ?? string.Empty));
     }
@@ -2105,7 +3340,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         panelRt.anchoredPosition = Vector2.zero;
         panelRt.sizeDelta = new Vector2(1080f, 640f);
         Image panelBg = panelObj.GetComponent<Image>();
-        panelBg.color = new Color(0.1f, 0.12f, 0.16f, 0.96f);
+        panelBg.color = new Color(0.93f, 0.89f, 0.82f, 0.97f);
         panelBg.raycastTarget = false;
 
         GameObject titleObj = new GameObject("SpellCastTitle", typeof(RectTransform), typeof(TextMeshProUGUI));
@@ -2121,7 +3356,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         spellCastTitleTmp.fontSize = 48f;
         spellCastTitleTmp.fontStyle = FontStyles.Bold;
         spellCastTitleTmp.alignment = TextAlignmentOptions.Center;
-        spellCastTitleTmp.color = new Color(0.98f, 0.95f, 0.88f, 1f);
+        spellCastTitleTmp.color = new Color(0.26f, 0.22f, 0.17f, 1f);
         spellCastTitleTmp.enableWordWrapping = true;
         spellCastTitleTmp.richText = true;
         spellCastTitleTmp.overflowMode = TextOverflowModes.Overflow;
@@ -2139,7 +3374,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         spellCastBodyTmp.fontSize = 34f;
         spellCastBodyTmp.lineSpacing = 4f;
         spellCastBodyTmp.alignment = TextAlignmentOptions.TopLeft;
-        spellCastBodyTmp.color = new Color(0.9f, 0.92f, 0.96f, 1f);
+        spellCastBodyTmp.color = new Color(0.24f, 0.2f, 0.16f, 1f);
         spellCastBodyTmp.enableWordWrapping = true;
         spellCastBodyTmp.overflowMode = TextOverflowModes.Overflow;
 
@@ -2293,7 +3528,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         tooltipPanel.anchoredPosition = new Vector2(280f, 0f);
 
         Image bg = panelObj.GetComponent<Image>();
-        bg.color = new Color(0f, 0f, 0f, HandTooltipBackgroundAlpha);
+        bg.color = new Color(0.14f, 0.1f, 0.08f, HandTooltipBackgroundAlpha);
 
         GameObject txtObj = new GameObject("TooltipText", typeof(RectTransform), typeof(Text));
         txtObj.transform.SetParent(panelObj.transform, false);
@@ -2309,7 +3544,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         tooltipText.lineSpacing = 1.05f;
         tooltipText.horizontalOverflow = HorizontalWrapMode.Wrap;
         tooltipText.verticalOverflow = VerticalWrapMode.Truncate;
-        tooltipText.color = Color.white;
+        tooltipText.color = new Color(0.98f, 0.95f, 0.9f, 1f);
         tooltipText.alignment = TextAnchor.UpperLeft;
 
         panelObj.SetActive(false);

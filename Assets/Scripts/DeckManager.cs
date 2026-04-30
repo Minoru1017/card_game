@@ -44,6 +44,7 @@ public class DeckManager : MonoBehaviour
     private Dictionary<int, GameObject> deckDic = new Dictionary<int, GameObject>();
     private readonly List<Button> deckSlotButtons = new List<Button>();
     private bool externalSlotButtonsBound;
+    private bool deckSlotSelectorExpanded = false;
 
     private ScrollRect _libraryPanelScrollRect;
     private ScrollRect _deckPanelScrollRect;
@@ -60,6 +61,20 @@ public class DeckManager : MonoBehaviour
     private const float DeckScrollWheelSensitivity = 26f;
     private const float DeckScrollEdgePulseScale = 1.008f;
     private const float DeckScrollEdgeFeelCooldown = 0.2f;
+
+    [Header("Deck Card Layout Tuning")]
+    [Range(0.6f, 1.6f)] public float namePlateHeightWidthRatio = 1f;
+    [Range(0.6f, 2.2f)] public float deckStatSquareScale = 1.28f;
+    [Range(0.2f, 1.2f)] public float statUnderlaySquareScale = 0.64f;
+    [Range(-120f, 120f)] public float attackStatOffsetX = -30f;
+    [Range(-120f, 120f)] public float healthStatOffsetX = 30f;
+    [Range(-120f, 120f)] public float statOffsetY = 0f;
+    private float _lastNamePlateHeightWidthRatio;
+    private float _lastDeckStatSquareScale;
+    private float _lastStatUnderlaySquareScale;
+    private float _lastAttackStatOffsetX;
+    private float _lastHealthStatOffsetX;
+    private float _lastStatOffsetY;
 
     /// <summary>重設牌組確認框等執行期 UI 的父 Canvas；避免每次 FindObjectsOfTypeAll。</summary>
     private Canvas cachedRuntimeUiCanvas;
@@ -234,6 +249,7 @@ public class DeckManager : MonoBehaviour
         defaultLibraryCardPrefab = librarycardPrefab;
         CaptureRuntimeTemplatesIfNeeded();
         EnsureDeckUIRefs();
+        AlignLibraryBottomToGoButtonTop();
 
         AttachWheelScroll(libraryPanel);
         AttachWheelScroll(deckPanel);
@@ -253,9 +269,80 @@ public class DeckManager : MonoBehaviour
     void Update()
     {
         BindExternalSlotButtonsIfNeeded();
+        TryApplyDeckLayoutLiveTuning();
         if (backpackInspectRoot != null && backpackInspectRoot.activeSelf && Input.GetKeyDown(KeyCode.Escape))
             HideBackpackCardInspect();
         TickBackpackInspectSwipeInput();
+    }
+
+    private void TryApplyDeckLayoutLiveTuning()
+    {
+        if (!HasDeckLayoutTuningChanged()) return;
+        CacheDeckLayoutTuningValues();
+        ApplyDeckLayoutToExistingCards();
+    }
+
+    private bool HasDeckLayoutTuningChanged()
+    {
+        return
+            !Mathf.Approximately(_lastNamePlateHeightWidthRatio, namePlateHeightWidthRatio) ||
+            !Mathf.Approximately(_lastDeckStatSquareScale, deckStatSquareScale) ||
+            !Mathf.Approximately(_lastStatUnderlaySquareScale, statUnderlaySquareScale) ||
+            !Mathf.Approximately(_lastAttackStatOffsetX, attackStatOffsetX) ||
+            !Mathf.Approximately(_lastHealthStatOffsetX, healthStatOffsetX) ||
+            !Mathf.Approximately(_lastStatOffsetY, statOffsetY);
+    }
+
+    private void CacheDeckLayoutTuningValues()
+    {
+        _lastNamePlateHeightWidthRatio = namePlateHeightWidthRatio;
+        _lastDeckStatSquareScale = deckStatSquareScale;
+        _lastStatUnderlaySquareScale = statUnderlaySquareScale;
+        _lastAttackStatOffsetX = attackStatOffsetX;
+        _lastHealthStatOffsetX = healthStatOffsetX;
+        _lastStatOffsetY = statOffsetY;
+    }
+
+    private void ApplyDeckLayoutToExistingCards()
+    {
+        if (deckPanel == null) return;
+        for (int i = 0; i < deckPanel.childCount; i++)
+        {
+            Transform child = deckPanel.GetChild(i);
+            if (child == null) continue;
+            CardDisplay display = child.GetComponentInChildren<CardDisplay>(true);
+            if (display == null) continue;
+
+            Card c = display.card;
+            EnsureDeckBottomSquareAndStatsLayout(display, c);
+
+            if (c is SpellCard)
+            {
+                RemoveDeckStatBars(display);
+            }
+            else
+            {
+                EnsureDeckAttackValueRedBar(display);
+                EnsureDeckHealthValueGreenBar(display);
+            }
+        }
+    }
+
+    private static void RemoveDeckStatBars(CardDisplay display)
+    {
+        if (display == null) return;
+        Transform atkParent = display.attackText != null ? display.attackText.transform.parent : null;
+        Transform hpParent = display.healthText != null ? display.healthText.transform.parent : null;
+        if (atkParent != null)
+        {
+            Transform atkBar = atkParent.Find("AtkValueRedBar");
+            if (atkBar != null) Destroy(atkBar.gameObject);
+        }
+        if (hpParent != null)
+        {
+            Transform hpBar = hpParent.Find("HpValueGreenBar");
+            if (hpBar != null) Destroy(hpBar.gameObject);
+        }
     }
 
     public void SelectDeckSlot(int slotIndex)
@@ -642,9 +729,208 @@ public class DeckManager : MonoBehaviour
         {
             Card c = CardStore.GetCardById(id);
             if (c != null) display.SetCard(c);
+            if (state == CardState.Deck)
+            {
+                EnsureDeckBottomSquareAndStatsLayout(display, c);
+                // Spell cards in deck panel should not render ATK/HP color plates.
+                if (!(c is SpellCard))
+                {
+                    EnsureDeckAttackValueRedBar(display);
+                    EnsureDeckHealthValueGreenBar(display);
+                }
+            }
         }
 
         targetDic[id] = newCard;
+    }
+
+    private void EnsureDeckBottomSquareAndStatsLayout(CardDisplay display, Card card)
+    {
+        if (display == null) return;
+        RectTransform namePlateRt = FindDeepChildByName(display.transform, "BP_1") as RectTransform;
+        if (namePlateRt != null)
+            EnlargeNamePlate(namePlateRt);
+
+        RectTransform statSquareRt = FindDeepChildByName(display.transform, "BP_2.1") as RectTransform;
+        if (statSquareRt == null)
+            statSquareRt = namePlateRt;
+        if (statSquareRt == null) return;
+
+        float baseSize = statSquareRt.rect.height > 1f ? statSquareRt.rect.height : 58f;
+        float squareSize = baseSize * deckStatSquareScale;
+        ForceRectTransformToSquare(statSquareRt, squareSize);
+
+        // Only monster cards render ATK/HP values; keep spell cards unchanged here.
+        if (card is SpellCard) return;
+        RectTransform cornerBaseRt = namePlateRt != null ? namePlateRt : statSquareRt;
+        PositionDeckStatTextInBottomSquare(display.attackText, cornerBaseRt, true);
+        PositionDeckStatTextInBottomSquare(display.healthText, cornerBaseRt, false);
+    }
+
+    private static void ForceRectTransformToSquare(RectTransform rt, float squareSize)
+    {
+        if (rt == null) return;
+        RectTransform parentRt = rt.parent as RectTransform;
+        if (parentRt == null) return;
+
+        // Preserve current center, then convert from stretch to fixed-size square.
+        Vector3[] corners = new Vector3[4];
+        rt.GetWorldCorners(corners);
+        Vector3 centerWorld = (corners[0] + corners[2]) * 0.5f;
+        Vector2 parentLocalCenter = parentRt.InverseTransformPoint(centerWorld);
+
+        rt.anchorMin = new Vector2(0.5f, 0.5f);
+        rt.anchorMax = new Vector2(0.5f, 0.5f);
+        rt.pivot = new Vector2(0.5f, 0.5f);
+        rt.anchoredPosition = parentLocalCenter;
+        rt.sizeDelta = new Vector2(squareSize, squareSize);
+    }
+
+    private void EnlargeNamePlate(RectTransform rt)
+    {
+        if (rt == null) return;
+        Vector2 size = rt.sizeDelta;
+        // Expand BP_1 height until it matches current width (square visual).
+        float currentWidth = rt.rect.width;
+        if (currentWidth < 1f)
+        {
+            RectTransform parentRt = rt.parent as RectTransform;
+            if (parentRt != null) currentWidth = parentRt.rect.width;
+        }
+        if (currentWidth < 1f) currentWidth = 100.1f;
+        size.y = currentWidth * namePlateHeightWidthRatio;
+        rt.sizeDelta = size;
+    }
+
+    private void PositionDeckStatTextInBottomSquare(TextMeshProUGUI statText, RectTransform squareRt, bool isAttack)
+    {
+        if (statText == null || squareRt == null) return;
+        RectTransform statRt = statText.rectTransform;
+        RectTransform statParentRt = statRt.parent as RectTransform;
+        if (statParentRt == null) return;
+
+        float localX = isAttack ? attackStatOffsetX : healthStatOffsetX;
+        float localY = statOffsetY;
+        Vector3 world = squareRt.TransformPoint(new Vector3(localX, localY, 0f));
+        Vector2 parentLocal = statParentRt.InverseTransformPoint(world);
+
+        statRt.anchorMin = new Vector2(0.5f, 0.5f);
+        statRt.anchorMax = new Vector2(0.5f, 0.5f);
+        statRt.pivot = new Vector2(0.5f, 0.5f);
+        statRt.anchoredPosition = parentLocal;
+    }
+
+    private void EnsureDeckAttackValueRedBar(CardDisplay display)
+    {
+        if (display == null || display.attackText == null) return;
+        RectTransform attackRt = display.attackText.rectTransform;
+        if (attackRt == null) return;
+        Transform parent = attackRt.parent;
+        if (parent == null) return;
+
+        const string BarName = "AtkValueRedBar";
+        Transform existing = parent.Find(BarName);
+        RectTransform barRt;
+        Image barImg;
+
+        if (existing != null)
+        {
+            barRt = existing as RectTransform;
+            barImg = existing.GetComponent<Image>();
+        }
+        else
+        {
+            GameObject barObj = new GameObject(BarName, typeof(RectTransform), typeof(Image));
+            barObj.transform.SetParent(parent, false);
+            barRt = barObj.GetComponent<RectTransform>();
+            barImg = barObj.GetComponent<Image>();
+        }
+
+        if (barRt == null || barImg == null) return;
+
+        RectTransform deckBottomPlateRt = FindDeepChildByName(display.transform, "BP_1") as RectTransform;
+        if (deckBottomPlateRt == null)
+            deckBottomPlateRt = FindDeepChildByName(display.transform, "BP_2.1") as RectTransform;
+        float bottomPlateHeight = (deckBottomPlateRt != null && deckBottomPlateRt.rect.height > 1f)
+            ? deckBottomPlateRt.rect.height
+            : 58f;
+
+        // Small square underlay for ATK value.
+        const float rightOffset = 0f;
+        float barSize = bottomPlateHeight * statUnderlaySquareScale;
+
+        // Align plate center to ATK value center.
+        barRt.anchorMin = attackRt.anchorMin;
+        barRt.anchorMax = attackRt.anchorMax;
+        barRt.pivot = attackRt.pivot;
+        barRt.sizeDelta = new Vector2(barSize, barSize);
+        // Re-apply center alignment after final size update.
+        barRt.anchoredPosition = attackRt.anchoredPosition + new Vector2(rightOffset, 0f);
+        barRt.localScale = Vector3.one;
+        barRt.localRotation = Quaternion.identity;
+
+        // ATK uses red plate.
+        barImg.color = new Color(0.82f, 0.12f, 0.12f, 0.95f);
+        barImg.raycastTarget = false;
+
+        // Keep bar beneath ATK value text by sibling order in same parent.
+        int attackSibling = attackRt.GetSiblingIndex();
+        barRt.SetSiblingIndex(Mathf.Max(0, attackSibling));
+    }
+
+    private void EnsureDeckHealthValueGreenBar(CardDisplay display)
+    {
+        if (display == null || display.healthText == null) return;
+        RectTransform healthRt = display.healthText.rectTransform;
+        if (healthRt == null) return;
+        Transform parent = healthRt.parent;
+        if (parent == null) return;
+
+        const string BarName = "HpValueGreenBar";
+        Transform existing = parent.Find(BarName);
+        RectTransform barRt;
+        Image barImg;
+
+        if (existing != null)
+        {
+            barRt = existing as RectTransform;
+            barImg = existing.GetComponent<Image>();
+        }
+        else
+        {
+            GameObject barObj = new GameObject(BarName, typeof(RectTransform), typeof(Image));
+            barObj.transform.SetParent(parent, false);
+            barRt = barObj.GetComponent<RectTransform>();
+            barImg = barObj.GetComponent<Image>();
+        }
+
+        if (barRt == null || barImg == null) return;
+
+        RectTransform deckBottomPlateRt = FindDeepChildByName(display.transform, "BP_1") as RectTransform;
+        if (deckBottomPlateRt == null)
+            deckBottomPlateRt = FindDeepChildByName(display.transform, "BP_2.1") as RectTransform;
+        float bottomPlateHeight = (deckBottomPlateRt != null && deckBottomPlateRt.rect.height > 1f)
+            ? deckBottomPlateRt.rect.height
+            : 58f;
+
+        // Small square underlay for HP value.
+        const float rightOffset = 0f;
+        float barSize = bottomPlateHeight * statUnderlaySquareScale;
+
+        barRt.anchorMin = healthRt.anchorMin;
+        barRt.anchorMax = healthRt.anchorMax;
+        barRt.pivot = healthRt.pivot;
+        barRt.sizeDelta = new Vector2(barSize, barSize);
+        barRt.anchoredPosition = healthRt.anchoredPosition + new Vector2(rightOffset, 0f);
+        barRt.localScale = Vector3.one;
+        barRt.localRotation = Quaternion.identity;
+
+        // HP uses green plate.
+        barImg.color = new Color(0.17f, 0.65f, 0.24f, 0.95f);
+        barImg.raycastTarget = false;
+
+        int healthSibling = healthRt.GetSiblingIndex();
+        barRt.SetSiblingIndex(Mathf.Max(0, healthSibling));
     }
 
     private void EnsureCoreRefs()
@@ -704,6 +990,65 @@ public class DeckManager : MonoBehaviour
         if (deckCardPrefab == null) deckCardPrefab = librarycardPrefab;
     }
 
+    private void AlignLibraryBottomToGoButtonTop()
+    {
+        RectTransform libraryGridRt = libraryPanel as RectTransform;
+        if (libraryGridRt == null) return;
+        RectTransform libraryRootRt = libraryGridRt.parent as RectTransform;
+        if (libraryRootRt == null) return;
+        RectTransform goButtonRt = ResolveGoButtonRectTransform();
+        if (goButtonRt == null) return;
+
+        Canvas canvas = GetCachedRuntimeUiCanvas();
+        RectTransform canvasRt = canvas != null ? canvas.transform as RectTransform : null;
+        if (canvasRt == null) return;
+
+        Vector3[] corners = new Vector3[4];
+        libraryRootRt.GetWorldCorners(corners);
+        float libTopY = canvasRt.InverseTransformPoint(corners[1]).y;
+        goButtonRt.GetWorldCorners(corners);
+        float goTopY = canvasRt.InverseTransformPoint(corners[1]).y;
+
+        float newHeight = Mathf.Max(120f, libTopY - goTopY);
+        float newCenterY = goTopY + (newHeight * 0.5f);
+
+        // Buildbeck uses fixed anchors (0.5/0.5). Resize by top+bottom target.
+        Vector2 size = libraryRootRt.sizeDelta;
+        size.y = newHeight;
+        libraryRootRt.sizeDelta = size;
+
+        Vector2 anchored = libraryRootRt.anchoredPosition;
+        anchored.y = newCenterY;
+        libraryRootRt.anchoredPosition = anchored;
+    }
+
+    private static RectTransform ResolveGoButtonRectTransform()
+    {
+        GameObject named = GameObject.Find("進入對戰");
+        if (named != null)
+        {
+            RectTransform rt = named.GetComponent<RectTransform>();
+            if (rt != null) return rt;
+        }
+
+        Button[] buttons = Object.FindObjectsByType<Button>(FindObjectsSortMode.None);
+        for (int i = 0; i < buttons.Length; i++)
+        {
+            Button btn = buttons[i];
+            if (btn == null) continue;
+
+            TMP_Text tmp = btn.GetComponentInChildren<TMP_Text>(true);
+            if (tmp != null && (tmp.text.Contains("GO") || tmp.text.Contains("進入對戰")))
+                return btn.GetComponent<RectTransform>();
+
+            Text txt = btn.GetComponentInChildren<Text>(true);
+            if (txt != null && (txt.text.Contains("GO") || txt.text.Contains("進入對戰")))
+                return btn.GetComponent<RectTransform>();
+        }
+
+        return null;
+    }
+
     private GameObject FindCardTemplateInPanel(Transform panel)
     {
         if (panel == null) return null;
@@ -729,14 +1074,23 @@ public class DeckManager : MonoBehaviour
             Image bg = btn.GetComponent<Image>();
             if (bg != null)
             {
-                // Match Persistent scene "商店" button tone.
-                bg.color = active ? new Color(1f, 0.86939186f, 0.5226415f, 1f) : new Color(0.78f, 0.78f, 0.78f, 0.98f);
+                // Selected: white background. Unselected: scene wine-red background.
+                bg.color = active ? Color.white : new Color(0.4431373f, 0.28235295f, 0.24705884f, 1f);
             }
 
-            Text label = btn.GetComponentInChildren<Text>(true);
-            if (label != null)
+            // Buttons in this scene use TMP labels, but keep legacy Text compatibility.
+            TMP_Text tmpLabel = btn.GetComponentInChildren<TMP_Text>(true);
+            if (tmpLabel != null)
             {
-                label.color = active ? Color.white : Color.black;
+                tmpLabel.color = active ? Color.black : Color.white;
+            }
+            else
+            {
+                Text label = btn.GetComponentInChildren<Text>(true);
+                if (label != null)
+                {
+                    label.color = active ? Color.black : Color.white;
+                }
             }
         }
     }
@@ -771,29 +1125,167 @@ public class DeckManager : MonoBehaviour
             SetSlotButtonLabel(deckSlotButton3, 3);
         }
 
+        EnsureDeckSlotButtonsVerticalNestedLayout();
         externalSlotButtonsBound = true;
         RefreshDeckSlotTabVisual();
+    }
+
+    private void EnsureDeckSlotButtonsVerticalNestedLayout()
+    {
+        if (deckSlotButtons.Count <= 1) return;
+        RectTransform firstRt = deckSlotButtons[0] != null ? deckSlotButtons[0].transform as RectTransform : null;
+        if (firstRt == null) return;
+        RectTransform originalParent = firstRt.parent as RectTransform;
+        if (originalParent == null) return;
+
+        const string RootName = "DeckSlotSelectorGroup";
+        const string ToggleName = "DeckSlotSelectorToggle";
+        const string NestName = "DeckSlotButtonsNest";
+
+        Transform existingRoot = originalParent.Find(RootName);
+        GameObject rootObj = existingRoot != null
+            ? existingRoot.gameObject
+            : new GameObject(RootName, typeof(RectTransform), typeof(VerticalLayoutGroup), typeof(ContentSizeFitter));
+        if (existingRoot == null)
+            rootObj.transform.SetParent(originalParent, false);
+
+        RectTransform rootRt = rootObj.GetComponent<RectTransform>();
+        VerticalLayoutGroup rootLayout = rootObj.GetComponent<VerticalLayoutGroup>();
+        ContentSizeFitter rootFitter = rootObj.GetComponent<ContentSizeFitter>();
+        if (rootRt == null || rootLayout == null || rootFitter == null) return;
+
+        rootRt.anchorMin = firstRt.anchorMin;
+        rootRt.anchorMax = firstRt.anchorMax;
+        // Keep top edge fixed so toggle position won't jump after expand/collapse.
+        rootRt.pivot = new Vector2(firstRt.pivot.x, 1f);
+        rootRt.anchoredPosition = firstRt.anchoredPosition;
+        rootRt.localScale = Vector3.one;
+        rootRt.localRotation = Quaternion.identity;
+
+        rootLayout.childAlignment = TextAnchor.UpperCenter;
+        rootLayout.childControlWidth = false;
+        rootLayout.childControlHeight = false;
+        rootLayout.childForceExpandWidth = false;
+        rootLayout.childForceExpandHeight = false;
+        rootLayout.spacing = 8f;
+        rootFitter.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
+        rootFitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+
+        Transform toggleT = rootObj.transform.Find(ToggleName);
+        Button toggleBtn;
+        RectTransform toggleRt;
+        TextMeshProUGUI toggleLabelTmp = null;
+        if (toggleT != null)
+        {
+            toggleBtn = toggleT.GetComponent<Button>();
+            toggleRt = toggleT as RectTransform;
+            if (toggleT != null) toggleLabelTmp = toggleT.GetComponentInChildren<TextMeshProUGUI>(true);
+        }
+        else
+        {
+            GameObject toggleObj = new GameObject(ToggleName, typeof(RectTransform), typeof(Image), typeof(Button));
+            toggleObj.transform.SetParent(rootObj.transform, false);
+            toggleBtn = toggleObj.GetComponent<Button>();
+            toggleRt = toggleObj.GetComponent<RectTransform>();
+            Image toggleBg = toggleObj.GetComponent<Image>();
+            if (toggleBg != null) toggleBg.color = new Color(0.4431373f, 0.28235295f, 0.24705884f, 1f);
+
+            GameObject labelObj = new GameObject("Label", typeof(RectTransform), typeof(TextMeshProUGUI));
+            labelObj.transform.SetParent(toggleObj.transform, false);
+            RectTransform labelRt = labelObj.GetComponent<RectTransform>();
+            labelRt.anchorMin = Vector2.zero;
+            labelRt.anchorMax = Vector2.one;
+            labelRt.offsetMin = Vector2.zero;
+            labelRt.offsetMax = Vector2.zero;
+
+            TextMeshProUGUI labelTmp = labelObj.GetComponent<TextMeshProUGUI>();
+            labelTmp.alignment = TextAlignmentOptions.Center;
+            labelTmp.fontSize = 32f;
+            labelTmp.color = Color.white;
+            labelTmp.text = "牌組選擇";
+            toggleLabelTmp = labelTmp;
+        }
+
+        if (toggleBtn == null || toggleRt == null) return;
+        TMP_Text sampleSlotLabel = deckSlotButtons[0] != null ? deckSlotButtons[0].GetComponentInChildren<TMP_Text>(true) : null;
+        if (toggleLabelTmp != null)
+        {
+            if (sampleSlotLabel != null)
+            {
+                toggleLabelTmp.font = sampleSlotLabel.font;
+                toggleLabelTmp.fontMaterial = sampleSlotLabel.fontMaterial;
+                toggleLabelTmp.isRightToLeftText = sampleSlotLabel.isRightToLeftText;
+                toggleLabelTmp.fontSize = Mathf.Max(18f, sampleSlotLabel.fontSize * 0.82f);
+            }
+            else if (toggleLabelTmp.fontSize > 24f)
+            {
+                toggleLabelTmp.fontSize = 24f;
+            }
+        }
+        toggleRt.sizeDelta = new Vector2(
+            firstRt.rect.width > 1f ? firstRt.rect.width : 180f,
+            firstRt.rect.height > 1f ? firstRt.rect.height : 64f);
+        toggleBtn.onClick.RemoveAllListeners();
+
+        Transform existingNest = rootObj.transform.Find(NestName);
+        GameObject nestObj = existingNest != null
+            ? existingNest.gameObject
+            : new GameObject(NestName, typeof(RectTransform), typeof(VerticalLayoutGroup), typeof(ContentSizeFitter));
+        if (existingNest == null)
+            nestObj.transform.SetParent(rootObj.transform, false);
+
+        RectTransform nestRt = nestObj.GetComponent<RectTransform>();
+        VerticalLayoutGroup vlg = nestObj.GetComponent<VerticalLayoutGroup>();
+        ContentSizeFitter fitter = nestObj.GetComponent<ContentSizeFitter>();
+        if (nestRt == null || vlg == null || fitter == null) return;
+        vlg.childAlignment = TextAnchor.UpperCenter;
+        vlg.childControlWidth = false;
+        vlg.childControlHeight = false;
+        vlg.childForceExpandWidth = false;
+        vlg.childForceExpandHeight = false;
+        vlg.spacing = 10f;
+        fitter.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
+        fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+
+        for (int i = 0; i < deckSlotButtons.Count; i++)
+        {
+            Button btn = deckSlotButtons[i];
+            if (btn == null) continue;
+            RectTransform btnRt = btn.transform as RectTransform;
+            if (btnRt == null) continue;
+            btnRt.SetParent(nestRt, false);
+
+            LayoutElement le = btn.GetComponent<LayoutElement>();
+            if (le == null) le = btn.gameObject.AddComponent<LayoutElement>();
+            if (btnRt.rect.width > 1f) le.preferredWidth = btnRt.rect.width;
+            if (btnRt.rect.height > 1f) le.preferredHeight = btnRt.rect.height;
+        }
+
+        if (toggleLabelTmp != null)
+            toggleLabelTmp.text = deckSlotSelectorExpanded ? "牌組選擇▼" : "牌組選擇►";
+        nestObj.SetActive(deckSlotSelectorExpanded);
+        toggleBtn.onClick.AddListener(() =>
+        {
+            deckSlotSelectorExpanded = !deckSlotSelectorExpanded;
+            if (nestObj != null) nestObj.SetActive(deckSlotSelectorExpanded);
+            if (toggleLabelTmp != null)
+                toggleLabelTmp.text = deckSlotSelectorExpanded ? "牌組選擇▼" : "牌組選擇►";
+        });
     }
 
     private void SetSlotButtonLabel(Button button, int index)
     {
         if (button == null) return;
-        Text txt = button.GetComponentInChildren<Text>(true);
-        if (txt != null) txt.text = "牌組" + ToFullWidthNumber(index);
-    }
-
-    private string ToFullWidthNumber(int number)
-    {
-        string s = number.ToString();
-        char[] chars = s.ToCharArray();
-        for (int i = 0; i < chars.Length; i++)
+        string labelText = "牌組" + index.ToString();
+        TMP_Text tmp = button.GetComponentInChildren<TMP_Text>(true);
+        if (tmp != null)
         {
-            if (chars[i] >= '0' && chars[i] <= '9')
-            {
-                chars[i] = (char)('０' + (chars[i] - '0'));
-            }
+            tmp.text = labelText;
+            return;
         }
-        return new string(chars);
+
+        Text txt = button.GetComponentInChildren<Text>(true);
+        if (txt != null) txt.text = labelText;
     }
 
     public int GetLibraryCardCount(int id)
@@ -984,6 +1476,7 @@ public class DeckManager : MonoBehaviour
         if (sr.verticalScrollbar != null)
         {
             sr.verticalScrollbarVisibility = ScrollRect.ScrollbarVisibility.Permanent;
+            ApplyInvisibleScrollbarStyle(sr.verticalScrollbar);
             return;
         }
 
@@ -1001,7 +1494,8 @@ public class DeckManager : MonoBehaviour
         barObj.transform.SetAsLastSibling();
 
         Image barBg = barObj.GetComponent<Image>();
-        barBg.color = new Color(0f, 0f, 0f, 0.35f);
+        barBg.color = new Color(0f, 0f, 0f, 0f);
+        barBg.raycastTarget = true;
 
         GameObject handleObj = new GameObject("Handle", typeof(RectTransform), typeof(Image));
         handleObj.transform.SetParent(barObj.transform, false);
@@ -1012,7 +1506,8 @@ public class DeckManager : MonoBehaviour
         handleRect.offsetMax = new Vector2(-2f, -2f);
 
         Image handleImage = handleObj.GetComponent<Image>();
-        handleImage.color = new Color(1f, 1f, 1f, 0.9f);
+        handleImage.color = new Color(1f, 1f, 1f, 0f);
+        handleImage.raycastTarget = true;
 
         Scrollbar sb = barObj.GetComponent<Scrollbar>();
         sb.direction = Scrollbar.Direction.BottomToTop;
@@ -1024,6 +1519,28 @@ public class DeckManager : MonoBehaviour
         sr.verticalScrollbar = sb;
         sr.verticalScrollbarVisibility = ScrollRect.ScrollbarVisibility.Permanent;
         sr.verticalScrollbarSpacing = 0f;
+        ApplyInvisibleScrollbarStyle(sb);
+    }
+
+    private static void ApplyInvisibleScrollbarStyle(Scrollbar scrollbar)
+    {
+        if (scrollbar == null) return;
+        Image bg = scrollbar.GetComponent<Image>();
+        if (bg != null)
+        {
+            bg.color = new Color(0f, 0f, 0f, 0f);
+            bg.raycastTarget = true;
+        }
+
+        if (scrollbar.handleRect != null)
+        {
+            Image handle = scrollbar.handleRect.GetComponent<Image>();
+            if (handle != null)
+            {
+                handle.color = new Color(1f, 1f, 1f, 0f);
+                handle.raycastTarget = true;
+            }
+        }
     }
 
     private void RefreshScrollablePanels()
@@ -1581,7 +2098,7 @@ public class DeckManager : MonoBehaviour
             backpackInspectCardInstance = null;
         }
 
-        Sprite portrait = TryLoadInspectPortraitSprite(card.id);
+        Sprite portrait = card.artworkSprite != null ? card.artworkSprite : TryLoadInspectPortraitSprite(card.id);
         if (portrait != null && backpackInspectArtImage != null)
         {
             backpackInspectArtImage.sprite = portrait;

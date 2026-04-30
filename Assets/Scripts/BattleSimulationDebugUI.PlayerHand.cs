@@ -178,7 +178,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
 
         bool handLocked = IsPlayerHandCardLockedByFieldRule(card);
         Image image = cardObj.GetComponent<Image>();
-        image.color = handLocked ? new Color(0.72f, 0.72f, 0.76f, 0.9f) : new Color(1f, 1f, 1f, 0.93f);
+        image.color = handLocked ? new Color(0.62f, 0.58f, 0.53f, 0.9f) : new Color(0.97f, 0.94f, 0.88f, 0.96f);
 
         Button button = cardObj.GetComponent<Button>();
         button.onClick.AddListener(() =>
@@ -199,7 +199,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         TextMeshProUGUI cardLabel = txtObj.GetComponent<TextMeshProUGUI>();
         cardLabel.text = battleManager != null ? battleManager.GetCardHandPreviewText(card) : string.Empty;
         cardLabel.fontSize = 16f * GetHandCardTextScale();
-        cardLabel.color = handLocked ? new Color(0.45f, 0.45f, 0.48f, 1f) : Color.black;
+        cardLabel.color = handLocked ? new Color(0.42f, 0.37f, 0.33f, 1f) : new Color(0.2f, 0.16f, 0.12f, 1f);
         cardLabel.enableWordWrapping = true;
         cardLabel.alignment = TextAlignmentOptions.TopLeft;
 
@@ -317,7 +317,10 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         GameObject handCardRoot = cardObj;
         System.Func<bool> suppressWhenHandCardDimmed = () =>
             IsPlayerHandCardRootVisuallyDimmed(handCardRoot) ||
-            (battleManager != null && battleManager.IsPlayerInDiscardSelection());
+            (battleManager != null && battleManager.IsPlayerInDiscardSelection()) ||
+            (battleManager != null && battleManager.IsSpellCastPresentationActive()) ||
+            isPlayingCardAnimation ||
+            (spellCastOverlayRoot != null && spellCastOverlayRoot.gameObject.activeSelf);
 
         ZoomUI[] zooms = cardObj.GetComponentsInChildren<ZoomUI>(true);
         for (int zi = 0; zi < zooms.Length; zi++)
@@ -417,7 +420,9 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
     }
     private void SetHandButtonsInteractable()
     {
-        bool canPlay = battleManager.IsPlayerTurn() && !isPlayingCardAnimation;
+        bool debugPanelOpen = debugUiRoot != null && debugUiRoot.activeSelf;
+        bool spellPresenting = battleManager != null && battleManager.IsSpellCastPresentationActive();
+        bool canPlay = battleManager.IsPlayerTurn() && !isPlayingCardAnimation && !spellPresenting && !debugPanelOpen;
         bool inDiscardSelection = battleManager.IsPlayerInDiscardSelection();
         for (int i = 0; i < handArea.childCount; i++)
         {
@@ -432,7 +437,11 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
             GameObject handRoot = t.gameObject;
             System.Func<bool> suppressWhenDimmed = () =>
                 IsPlayerHandCardRootVisuallyDimmed(handRoot) ||
-                (battleManager != null && battleManager.IsPlayerInDiscardSelection());
+                (battleManager != null && battleManager.IsPlayerInDiscardSelection()) ||
+                (battleManager != null && battleManager.IsSpellCastPresentationActive()) ||
+                isPlayingCardAnimation ||
+                (spellCastOverlayRoot != null && spellCastOverlayRoot.gameObject.activeSelf) ||
+                (debugUiRoot != null && debugUiRoot.activeSelf);
 
             BattleHandHoverPreview hoverPreview = t.GetComponent<BattleHandHoverPreview>();
             if (hoverPreview != null)
