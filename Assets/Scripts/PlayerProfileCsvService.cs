@@ -567,7 +567,8 @@ public static class PlayerProfileCsvService
             {
                 if (kv.Value > 0) total += kv.Value;
             }
-            parts.Add("牌組" + (slot + 1) + ":" + total + "張");
+            string deckLabel = playerData.GetDeckSlotDisplayName(slot);
+            parts.Add(deckLabel + ":" + total + "張");
         }
         return parts.Count > 0 ? string.Join(" | ", parts) : "尚無牌組資料";
     }

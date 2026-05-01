@@ -6,8 +6,9 @@ using UnityEngine.Events;
 using TMPro;
 using UnityEngine.UI;
 using UnityEngine.EventSystems;
+using UnityEngine.SceneManagement;
 
-public class DeckManager : MonoBehaviour
+public partial class DeckManager : MonoBehaviour
 {
     public int maxDeckCards = 30;
     public TextMeshProUGUI deckHintText;
@@ -17,6 +18,8 @@ public class DeckManager : MonoBehaviour
     private Font hintDynamicFont;
     private TMP_FontAsset hintTMPFont;
     private GameObject resetConfirmPanel;
+    private GameObject deckNameEditPanel;
+    private TMP_InputField deckNameEditInput;
 
     public Transform deckPanel;
     public Transform libraryPanel;
@@ -24,6 +27,29 @@ public class DeckManager : MonoBehaviour
     public Button deckSlotButton1;
     public Button deckSlotButton2;
     public Button deckSlotButton3;
+    public Button deckSlotButton4;
+    public Button deckSlotButton5;
+
+    [Header("Buildbeck — Save Deck")]
+    [Tooltip("儲存牌組：拖入含 Image 美術與 Button 的 UI。可放在 Deck Grid 底下（ClearPanels 會保留含此按鈕的子樹）。請從 Hierarchy 拖入場景實例，勿拖 Project 裡的 Prefab 資產。")]
+    public Button saveDeckButton;
+
+    [Tooltip("清除／解散牌組：拖入 Button。會走 OnClickResetDeckButton（先確認對話框再清空當前槽牌組）。可與儲存鍵同列；ClearPanels 會保留含此按鈕的子樹。")]
+    public Button disbandDeckButton;
+
+    [Tooltip("編輯「目前選中」牌組槽的顯示名稱（彈窗輸入）。可選；亦可由場景物件命名自動綁定。")]
+    public Button editDeckNameButton;
+
+    [Tooltip("顯示「目前選中槽」的牌組名稱（與編輯／換槽同步）。拖入 TextMeshProUGUI（或任一 TMP_Text）。")]
+    public TMP_Text currentDeckDisplayNameText;
+
+    [Tooltip("若顯示區使用舊版 Unity UI Text，拖於此（與上一欄二選一即可）。")]
+    public Text currentDeckDisplayNameLegacyText;
+
+    [Header("Buildbeck — Deck list area")]
+    [Range(0.55f, 0.99f)]
+    [Tooltip("Buildbeck 專用：牌組 ScrollRect 視窗右側錨點（螢幕寬 0–1）。略小可讓右側留白給解散／儲存鈕，避免被牌組區壓住；C 弧仍由 Deck Arc 參數控制。")]
+    public float buildbeckDeckViewportRightEdgeNormalized = 0.88f;
 
     public GameObject deckCardPrefab;
     public GameObject librarycardPrefab;
@@ -52,16 +78,36 @@ public class DeckManager : MonoBehaviour
     private float _deckScrollLastNormY = -1f;
     private Coroutine _libraryScrollEdgePulseCo;
     private Coroutine _deckScrollEdgePulseCo;
+    private DeckArcPresenter _deckArcPresenter;
     private int _libraryScrollPulseGeneration;
     private int _deckScrollPulseGeneration;
     private float _scrollEdgeFeelCooldownUntilUnscaled;
+    private bool _deckScrollPointerHeld;
+    private bool _deckScrollUserSessionActive;
+    /// <summary>While true, deck arc layout and deck force-rebuild are skipped so remove + shift animation can own anchored positions.</summary>
+    private bool _deckCardRemoveAnimationActive;
+    private Coroutine _sceneBuildbeckReloadCo;
+    private bool _buildbeckDiagLogged;
+    private DeckDataController _deckDataController;
+    private DeckListView _deckListView;
+    private DeckArcController _deckArcController;
+    private DeckSlotNavigator _deckSlotNavigator;
+    private SceneLoader _cachedSceneLoader;
+    private Canvas _cachedHintCanvas;
+    private TextMeshProUGUI _cachedAnyTmpForFontProbe;
 
     private const float DeckScrollElasticity = 0.12f;
     private const float DeckScrollDecelerationRate = 0.22f;
     private const float DeckScrollWheelSensitivity = 26f;
     private const float DeckScrollEdgePulseScale = 1.008f;
     private const float DeckScrollEdgeFeelCooldown = 0.2f;
-
+    private const float DeckArcUserScrollSessionVelocityCutoff = 18f;
+    private const float DeckArcUserScrollMinKDuringDrag = 0.12f;
+    private const int DeckArcVisibleSlotMin = 3;
+    private const int DeckArcVisibleSlotMax = 13;
+    private RectTransform deckSlotGuideDotsRoot;
+    private readonly List<Image> deckSlotGuideDots = new List<Image>(5);
+    private int deckSlotGuideDotsBuiltCount;
     [Header("Deck Card Layout Tuning")]
     [Range(0.6f, 1.6f)] public float namePlateHeightWidthRatio = 1f;
     [Range(0.6f, 2.2f)] public float deckStatSquareScale = 1.28f;
@@ -75,6 +121,78 @@ public class DeckManager : MonoBehaviour
     private float _lastAttackStatOffsetX;
     private float _lastHealthStatOffsetX;
     private float _lastStatOffsetY;
+    private int _lastDeckListCellSpacingY;
+    private int _lastDeckListContentScalePercent;
+    private int _lastDeckListStatHalfGapLevel;
+    private float _lastDeckArcParentOffsetX;
+    private float _lastDeckArcParentOffsetY;
+    private float _lastBuildbeckDeckViewportRightEdge = float.NaN;
+    private float _deckListParentAnchoredYBaseline;
+    private bool _deckListParentAnchoredYBaselineCaptured;
+    private const float NewLayoutNamePlateRatio = 1f;
+    private const float NewLayoutDeckStatSquareScale = 1.0f;
+    private const float NewLayoutStatCircleScale = 0.42f;
+    private const float NewLayoutAttackOffsetX = -134f;
+    private const float NewLayoutHealthOffsetX = 134f;
+    private const float NewLayoutStatOffsetY = 0f;
+    private const float NewLayoutDeckCellWidth = 430f;
+    private const float NewLayoutDeckCellHeight = 140f;
+    private const bool NewLayoutEnableDeckArc = true;
+    private static readonly Vector2 NewLayoutDeckViewportAnchorMin = new Vector2(0.46f, 0.14f);
+    private static readonly Vector2 NewLayoutDeckViewportAnchorMax = new Vector2(0.99f, 0.87f);
+    private static readonly Vector2 NewLayoutDeckViewportOffsetMin = new Vector2(-36f, 0f);
+    private static readonly Vector2 NewLayoutDeckViewportOffsetMax = new Vector2(0f, 0f);
+    private const float NewLayoutStatBadgeMinSize = 56f;
+    private const float NewLayoutStatBadgeSizeByFontRatio = 2.35f;
+    private const float NewLayoutStatBadgeYOffset = 20f;
+    private const string AtkBadgeName = "AtkValueCircle";
+    private const string HpBadgeName = "HpValueCircle";
+    [Header("Deck List Layout")]
+    [Range(-35, 32)]
+    [Tooltip("Vertical gap between deck rows (Grid spacing). Integer only. Negative values pull rows closer / overlap.")]
+    public int deckListCellSpacingY = 6;
+    [Range(50, 200)]
+    [Tooltip("Uniform scale of the whole deck card list (ScrollRect content), as percent. 100 = 100% size. Parent-style control of list size.")]
+    public int deckListContentScalePercent = 100;
+    private const float DeckListStatHalfGapPxMin = 115f;
+    private const float DeckListStatHalfGapPxMax = 186f;
+    private const int DeckListStatHalfGapLevelMin = 1;
+    private const int DeckListStatHalfGapLevelMax = 50;
+    [Range(1, 50)]
+    [Tooltip("Deck list ATK/HP half-gap step (integer 1–50). Maps to pixel half-gap from 115 to 186 (ATK −px, HP +px).")]
+    public int deckListStatHalfGapLevel = 25;
+    [Header("Deck Arc Slot Layout")]
+    [Range(3, 13)]
+    [Tooltip("Visible arc slot count (odd only: 3,5,7,9,11,13). Even values are corrected to the next odd.")]
+    public int deckArcVisibleSlotCount = 7;
+    [Range(80f, 2500f)]
+    [Tooltip("True arc circle radius R (pixels). Must be ≥ chord half-width L.")]
+    public float deckArcCircleRadius = 520f;
+    [Range(40f, 1200f)]
+    [Tooltip("Chord half-width L (pixels): half the vertical span from center slot to wing along the straight list.")]
+    public float deckArcChordHalfWidth = 260f;
+    [Range(0.15f, 1f)]
+    [Tooltip("Scales arc offsets (both X and Y) from the circle geometry.")]
+    public float deckArcShapeStrength = 0.5f;
+    [Range(0f, 3f)]
+    [Tooltip("Extend C-arc active zone vertically (in slot units). Larger value pushes arc/linear handoff outside visible deck area.")]
+    public float deckArcVisibleRangePaddingSlots = 1.15f;
+    [Range(0f, 0.45f)]
+    [Tooltip("Base smooth time for horizontal C-arc at low scroll speed (seconds). Velocity blend applies while the user drags or coasts the deck list after a drag; 0 = snap.")]
+    public float deckArcHorizontalSmoothTime = 0.12f;
+    [Range(400f, 8000f)]
+    [Tooltip("|ScrollRect content velocity.y| at which arc smoothing is most aggressive (shortest smooth time, highest max speed).")]
+    public float deckArcScrollVelocityRef = 2200f;
+    [Header("Deck Arc Parent Offset")]
+    [Range(-400f, 400f)]
+    [Tooltip("Deck viewport parent shift on X (pixels). Adds to fixed layout offsets.")]
+    public float deckArcParentOffsetX = 72f;
+    [Range(-400f, 400f)]
+    [Tooltip("Deck card-list parent (deckPanel.parent) anchoredPosition.y offset (pixels). Uses parent Y, not viewport stretch offsets.")]
+    public float deckArcParentOffsetY = 0f;
+    [Tooltip("X offset fine-tune by slot id. Index 0 = Slot#1, Index 1 = Slot#2 ...")]
+    public List<float> deckArcSlotXOffsetById = new List<float>();
+    private bool runtimeLayoutDefaultsApplied;
 
     /// <summary>重設牌組確認框等執行期 UI 的父 Canvas；避免每次 FindObjectsOfTypeAll。</summary>
     private Canvas cachedRuntimeUiCanvas;
@@ -124,13 +242,14 @@ public class DeckManager : MonoBehaviour
     private void TryResolveLibraryPanelByName()
     {
         if (libraryPanel != null) return;
-        GameObject lib = GameObject.Find("Library Grid");
+        Scene scene = SceneManager.GetActiveScene();
+        GameObject lib = SceneSearchUtil.FindSceneObject(scene, "Library Grid");
         if (lib != null)
         {
             libraryPanel = lib.transform;
             return;
         }
-        lib = GameObject.Find("Library");
+        lib = SceneSearchUtil.FindSceneObject(scene, "Library");
         if (lib != null)
             libraryPanel = lib.transform;
     }
@@ -154,7 +273,7 @@ public class DeckManager : MonoBehaviour
     private void TryResolveDeckPanelByName()
     {
         if (deckPanel != null) return;
-        GameObject dk = GameObject.Find("Deck Grid");
+        GameObject dk = SceneSearchUtil.FindSceneObject(SceneManager.GetActiveScene(), "Deck Grid");
         if (dk != null)
             deckPanel = dk.transform;
     }
@@ -207,16 +326,260 @@ public class DeckManager : MonoBehaviour
 
         if (primary != null && primary != this)
             DestroyImmediate(gameObject);
+        else
+            deckArcVisibleSlotCount = NormalizeDeckArcVisibleSlotCount(deckArcVisibleSlotCount);
+    }
+
+    private void OnValidate()
+    {
+        deckArcVisibleSlotCount = NormalizeDeckArcVisibleSlotCount(deckArcVisibleSlotCount);
+        deckArcChordHalfWidth = Mathf.Max(1f, deckArcChordHalfWidth);
+        deckArcCircleRadius = Mathf.Max(deckArcCircleRadius, deckArcChordHalfWidth + 0.5f);
+    }
+
+    private static int NormalizeDeckArcVisibleSlotCount(int value)
+    {
+        int v = Mathf.Clamp(value, DeckArcVisibleSlotMin, DeckArcVisibleSlotMax);
+        if ((v & 1) == 0)
+            v = Mathf.Min(v + 1, DeckArcVisibleSlotMax);
+        return v;
+    }
+
+    private DeckDataController DataController => _deckDataController ??= new DeckDataController(this);
+    private DeckListView ListViewController => _deckListView ??= new DeckListView(this);
+    private DeckArcController ArcController => _deckArcController ??= new DeckArcController(this);
+    private DeckSlotNavigator SlotNavigator => _deckSlotNavigator ??= new DeckSlotNavigator(this);
+
+    private SceneLoader GetCachedSceneLoader()
+    {
+        if (_cachedSceneLoader == null)
+            _cachedSceneLoader = Object.FindFirstObjectByType<SceneLoader>();
+        return _cachedSceneLoader;
+    }
+
+    private Canvas ResolvePrimaryUiCanvas()
+    {
+        if (deckPanel != null)
+        {
+            Canvas deckCanvas = deckPanel.GetComponentInParent<Canvas>(true);
+            if (deckCanvas != null) return deckCanvas;
+        }
+        if (libraryPanel != null)
+        {
+            Canvas libCanvas = libraryPanel.GetComponentInParent<Canvas>(true);
+            if (libCanvas != null) return libCanvas;
+        }
+        if (_cachedHintCanvas != null) return _cachedHintCanvas;
+        _cachedHintCanvas = Object.FindFirstObjectByType<Canvas>();
+        return _cachedHintCanvas;
     }
 
     private void OnDestroy()
     {
+        SceneManager.sceneLoaded -= OnSceneLoadedEnsureBuildbeckDeckUi;
         UnwireDeckScrollEdgeFeel(_libraryPanelScrollRect, OnLibraryPanelScrollFeel);
         UnwireDeckScrollEdgeFeel(_deckPanelScrollRect, OnDeckPanelScrollFeel);
         if (_libraryScrollEdgePulseCo != null) StopCoroutine(_libraryScrollEdgePulseCo);
         if (_deckScrollEdgePulseCo != null) StopCoroutine(_deckScrollEdgePulseCo);
         _libraryScrollEdgePulseCo = null;
         _deckScrollEdgePulseCo = null;
+    }
+
+    private void OnEnable()
+    {
+        SceneManager.sceneLoaded -= OnSceneLoadedEnsureBuildbeckDeckUi;
+        SceneManager.sceneLoaded += OnSceneLoadedEnsureBuildbeckDeckUi;
+    }
+
+    private void OnDisable()
+    {
+        SceneManager.sceneLoaded -= OnSceneLoadedEnsureBuildbeckDeckUi;
+    }
+
+    private void OnSceneLoadedEnsureBuildbeckDeckUi(Scene scene, LoadSceneMode mode)
+    {
+        RequestBuildbeckUiReload();
+    }
+
+    public void TriggerBuildbeckUiReload()
+    {
+        RequestBuildbeckUiReload();
+    }
+
+    private void RequestBuildbeckUiReload()
+    {
+        if (!IsBuildbeckSceneActive())
+        {
+            _buildbeckDiagLogged = false;
+            CleanupDeckSlotGuideDots();
+            return;
+        }
+
+        EnsureCoreRefs();
+        if (DataManager != null)
+        {
+            DeckManager primary = DataManager.GetComponent<DeckManager>();
+            if (primary != null && primary != this) return;
+        }
+
+        // Debounce: avoid restarting reload while one is already running (causes visible UI flicker).
+        if (_sceneBuildbeckReloadCo != null) return;
+        _sceneBuildbeckReloadCo = StartCoroutine(CoReloadBuildbeckDeckUiAfterSceneLoad());
+    }
+
+    private IEnumerator CoReloadBuildbeckDeckUiAfterSceneLoad()
+    {
+        // Wait 1-2 frames so Buildbeck scaffold/binder can create/wire nodes first.
+        yield return null;
+        yield return null;
+
+        if (IsBuildbeckSceneActive())
+            BuildbeckSceneAutoScaffold.EnsureScaffoldNow();
+
+        EnsureCoreRefs();
+        if (PlayerData != null) PlayerData.LoadPlayerData();
+
+        EnsureDeckUIRefs();
+        BindExternalSlotButtonsIfNeeded();
+        EnsureDeckSlotGuideDots();
+        RefreshDeckSlotTabVisual();
+
+        if (IsBuildbeckSceneActive())
+        {
+            RequestBuildbeckUiReload();
+            yield break;
+        }
+
+        ClearPanels();
+        UpdateLibrary();
+        if (showDeck) UpdateDeck();
+        RefreshScrollablePanels();
+        ForcePanelsScrollToTop();
+        ForceRebuildPanelsLayout();
+        LogBuildbeckUiDiagOnce();
+        _sceneBuildbeckReloadCo = null;
+    }
+
+    private static bool IsBuildbeckSceneActive()
+    {
+        Scene s = SceneManager.GetActiveScene();
+        return s.IsValid() && s.name.Equals("Buildbeck", System.StringComparison.OrdinalIgnoreCase);
+    }
+
+    private Canvas ResolveDeckUiCanvas()
+    {
+        if (deckPanel != null)
+        {
+            Canvas onDeck = deckPanel.GetComponentInParent<Canvas>(true);
+            if (onDeck != null) return onDeck;
+        }
+        return GetCachedRuntimeUiCanvas();
+    }
+
+    private void CleanupDeckSlotGuideDots()
+    {
+        if (deckSlotGuideDotsRoot != null)
+            Destroy(deckSlotGuideDotsRoot.gameObject);
+        deckSlotGuideDotsRoot = null;
+        deckSlotGuideDots.Clear();
+        deckSlotGuideDotsBuiltCount = 0;
+    }
+
+    private static void EnsureHierarchyActive(Transform leaf)
+    {
+        Transform t = leaf;
+        while (t != null)
+        {
+            if (!t.gameObject.activeSelf)
+                t.gameObject.SetActive(true);
+            t = t.parent;
+        }
+    }
+
+    /// <summary>
+    /// Buildbeck: draw disband UI above the deck ScrollRect viewport (sibling order), or use a child Canvas override when hierarchies differ.
+    /// </summary>
+    /// <param name="disband">If null, resolves via <see cref="BuildbeckLayoutAutoBinder.ResolveDisbandDeckButton"/>.</param>
+    public void EnsureDisbandDeckButtonDrawOrder(Button disband)
+    {
+        if (!IsBuildbeckSceneActive() || deckPanel == null) return;
+
+        Button b = disband != null ? disband : BuildbeckLayoutAutoBinder.ResolveDisbandDeckButton(this);
+        if (b == null) return;
+
+        RectTransform deckViewportRt = deckPanel.parent as RectTransform;
+        if (deckViewportRt == null) return;
+
+        Transform vpParent = deckViewportRt.parent;
+        if (vpParent == null) return;
+
+        Transform walk = b.transform;
+        while (walk.parent != null && walk.parent != vpParent)
+            walk = walk.parent;
+
+        if (walk.parent == vpParent)
+        {
+            int vIdx = deckViewportRt.GetSiblingIndex();
+            int idx = Mathf.Clamp(vIdx + 1, 0, Mathf.Max(0, vpParent.childCount - 1));
+            if (walk.GetSiblingIndex() != idx)
+                walk.SetSiblingIndex(idx);
+            return;
+        }
+
+        EnsureDisbandOverlaySortingCanvas(b.gameObject);
+    }
+
+    private static void EnsureDisbandOverlaySortingCanvas(GameObject disbandRoot)
+    {
+        if (disbandRoot == null) return;
+        Canvas refCanvas = null;
+        Transform walkParent = disbandRoot.transform.parent;
+        while (walkParent != null)
+        {
+            refCanvas = walkParent.GetComponent<Canvas>();
+            if (refCanvas != null) break;
+            walkParent = walkParent.parent;
+        }
+
+        int baseOrder = refCanvas != null ? refCanvas.sortingOrder : 0;
+        Canvas c = disbandRoot.GetComponent<Canvas>();
+        if (c == null) c = disbandRoot.AddComponent<Canvas>();
+        c.overrideSorting = true;
+        c.sortingOrder = baseOrder + 30;
+        if (disbandRoot.GetComponent<GraphicRaycaster>() == null)
+            disbandRoot.AddComponent<GraphicRaycaster>();
+    }
+
+    private void LogBuildbeckUiDiagOnce()
+    {
+        if (_buildbeckDiagLogged) return;
+        _buildbeckDiagLogged = true;
+
+        Scene s = SceneManager.GetActiveScene();
+        Canvas deckCanvas = deckPanel != null ? deckPanel.GetComponentInParent<Canvas>(true) : null;
+        RectTransform deckParent = deckPanel != null ? deckPanel.parent as RectTransform : null;
+        RectTransform libParent = libraryPanel != null ? libraryPanel.parent as RectTransform : null;
+
+        string msg =
+            "[BuildbeckDiag] scene=" + s.name +
+            " | dataManager=" + (DataManager != null ? DataManager.name : "null") +
+            " | playerData=" + (PlayerData != null ? "ok" : "null") +
+            " | libraryPanel=" + (libraryPanel != null ? libraryPanel.name : "null") +
+            " activeSelf=" + (libraryPanel != null && libraryPanel.gameObject.activeSelf) +
+            " inHierarchy=" + (libraryPanel != null && libraryPanel.gameObject.activeInHierarchy) +
+            " parent=" + (libParent != null ? libParent.name : "null") +
+            " | deckPanel=" + (deckPanel != null ? deckPanel.name : "null") +
+            " activeSelf=" + (deckPanel != null && deckPanel.gameObject.activeSelf) +
+            " inHierarchy=" + (deckPanel != null && deckPanel.gameObject.activeInHierarchy) +
+            " parent=" + (deckParent != null ? deckParent.name : "null") +
+            " | deckCanvas=" + (deckCanvas != null ? deckCanvas.name : "null") +
+            " canvasEnabled=" + (deckCanvas != null && deckCanvas.enabled) +
+            " canvasActive=" + (deckCanvas != null && deckCanvas.gameObject.activeInHierarchy) +
+            " sortOrder=" + (deckCanvas != null ? deckCanvas.sortingOrder : -999) +
+            " | libChildren=" + (libraryPanel != null ? libraryPanel.childCount : -1) +
+            " deckChildren=" + (deckPanel != null ? deckPanel.childCount : -1);
+
+        Debug.Log(msg);
     }
 
     private static void UnwireDeckScrollEdgeFeel(ScrollRect sr, UnityAction<Vector2> handler)
@@ -240,7 +603,13 @@ public class DeckManager : MonoBehaviour
                 yield break;
         }
 
+        EnsureMinimumDeckSlotCount();
+        AutoSelectFirstNonEmptyDeckSlotIfNeeded();
+
         EnsureDeckUIRefs();
+        ApplyNewLayoutRuntimeDefaults();
+        ApplyDeckParentLayoutOffsets();
+        EnsureDeckPanelSingleColumnLayout();
 
         yield return null; // �� PlayerData Awake/Start �]��
 
@@ -249,11 +618,14 @@ public class DeckManager : MonoBehaviour
         defaultLibraryCardPrefab = librarycardPrefab;
         CaptureRuntimeTemplatesIfNeeded();
         EnsureDeckUIRefs();
-        AlignLibraryBottomToGoButtonTop();
+        ApplyNewLayoutRuntimeDefaults();
+        ApplyDeckParentLayoutOffsets();
+        EnsureDeckPanelSingleColumnLayout();
 
         AttachWheelScroll(libraryPanel);
         AttachWheelScroll(deckPanel);
         BindExternalSlotButtonsIfNeeded();
+        EnsureDeckSlotGuideDots();
         RefreshDeckSlotTabVisual();
 
         ClearPanels();
@@ -264,22 +636,117 @@ public class DeckManager : MonoBehaviour
         
     }
 
+    private void AutoSelectFirstNonEmptyDeckSlotIfNeeded()
+    {
+        EnsureCoreRefs();
+        if (PlayerData == null) return;
+        if (PlayerData.deckSlotCount <= 1) return;
+        if (PlayerData.GetSelectedDeckTotalCount() > 0) return;
+
+        for (int slot = 0; slot < PlayerData.deckSlotCount; slot++)
+        {
+            if (slot == PlayerData.selectedDeckSlot) continue;
+            int total = 0;
+            var map = PlayerData.GetDeckMap(slot);
+            foreach (var kv in map)
+            {
+                if (kv.Value > 0) total += kv.Value;
+            }
+
+            if (total <= 0) continue;
+
+            PlayerData.SetSelectedDeckSlot(slot);
+            PlayerData.SavePlayerData();
+            return;
+        }
+
+        // All slots are empty -> fallback to slot 1 (index 0).
+        PlayerData.SetSelectedDeckSlot(0);
+        PlayerData.SavePlayerData();
+    }
+
+    private void EnsureMinimumDeckSlotCount()
+    {
+        EnsureCoreRefs();
+        if (PlayerData == null) return;
+        if (PlayerData.deckSlotCount >= 5) return;
+        PlayerData.deckSlotCount = 5;
+        PlayerData.SavePlayerData();
+    }
+
 
     // Update is called once per frame
     void Update()
     {
-        BindExternalSlotButtonsIfNeeded();
-        TryApplyDeckLayoutLiveTuning();
+        TickDeckScrollUserSessionEnd();
+        SlotNavigator.UpdateFrame();
         if (backpackInspectRoot != null && backpackInspectRoot.activeSelf && Input.GetKeyDown(KeyCode.Escape))
             HideBackpackCardInspect();
         TickBackpackInspectSwipeInput();
     }
 
+    private void LateUpdate()
+    {
+        ArcController.LateUpdateArc();
+    }
+
+    private bool DeckArcSmoothUsesLateUpdate()
+    {
+        return NewLayoutEnableDeckArc && deckArcHorizontalSmoothTime > 0f;
+    }
+
+    private void RequestDeckArcLayoutUnlessDeferredToLateUpdate(RectTransform content, bool oncePerFrame)
+    {
+        if (DeckArcSmoothUsesLateUpdate()) return;
+        RequestDeckArcLayout(content, oncePerFrame);
+    }
+
     private void TryApplyDeckLayoutLiveTuning()
     {
+        ApplyNewLayoutRuntimeDefaults();
         if (!HasDeckLayoutTuningChanged()) return;
+        bool spacingChanged = _lastDeckListCellSpacingY != deckListCellSpacingY;
+        bool scaleChanged = _lastDeckListContentScalePercent != deckListContentScalePercent;
+        bool parentOffsetChanged =
+            !Mathf.Approximately(_lastDeckArcParentOffsetX, deckArcParentOffsetX) ||
+            !Mathf.Approximately(_lastDeckArcParentOffsetY, deckArcParentOffsetY);
+        bool buildbeckDeckWidthChanged = IsBuildbeckSceneActive() &&
+            (float.IsNaN(_lastBuildbeckDeckViewportRightEdge) ||
+             !Mathf.Approximately(_lastBuildbeckDeckViewportRightEdge, buildbeckDeckViewportRightEdgeNormalized));
         CacheDeckLayoutTuningValues();
+        if (parentOffsetChanged || buildbeckDeckWidthChanged)
+            ApplyDeckParentLayoutOffsets();
+        if (spacingChanged || scaleChanged)
+        {
+            if (scaleChanged)
+                ApplyDeckListContentScale();
+            EnsureDeckPanelSingleColumnLayout();
+            RefreshScrollablePanels();
+            RectTransform deckRt = deckPanel as RectTransform;
+            if (deckRt != null)
+            {
+                LayoutRebuilder.ForceRebuildLayoutImmediate(deckRt);
+                RequestDeckArcLayoutUnlessDeferredToLateUpdate(deckRt, false);
+            }
+        }
         ApplyDeckLayoutToExistingCards();
+    }
+
+    private void ApplyNewLayoutRuntimeDefaults()
+    {
+        // Ignore legacy scene serialized tuning and force new layout baseline.
+        namePlateHeightWidthRatio = NewLayoutNamePlateRatio;
+        deckStatSquareScale = NewLayoutDeckStatSquareScale;
+        statUnderlaySquareScale = NewLayoutStatCircleScale;
+        attackStatOffsetX = NewLayoutAttackOffsetX;
+        healthStatOffsetX = NewLayoutHealthOffsetX;
+        statOffsetY = NewLayoutStatOffsetY;
+
+        if (!runtimeLayoutDefaultsApplied)
+        {
+            CacheDeckLayoutTuningValues();
+            runtimeLayoutDefaultsApplied = true;
+        }
     }
 
     private bool HasDeckLayoutTuningChanged()
@@ -290,7 +757,14 @@ public class DeckManager : MonoBehaviour
             !Mathf.Approximately(_lastStatUnderlaySquareScale, statUnderlaySquareScale) ||
             !Mathf.Approximately(_lastAttackStatOffsetX, attackStatOffsetX) ||
             !Mathf.Approximately(_lastHealthStatOffsetX, healthStatOffsetX) ||
-            !Mathf.Approximately(_lastStatOffsetY, statOffsetY);
+            !Mathf.Approximately(_lastStatOffsetY, statOffsetY) ||
+            _lastDeckListCellSpacingY != deckListCellSpacingY ||
+            _lastDeckListContentScalePercent != deckListContentScalePercent ||
+            _lastDeckListStatHalfGapLevel != deckListStatHalfGapLevel ||
+            !Mathf.Approximately(_lastDeckArcParentOffsetX, deckArcParentOffsetX) ||
+            !Mathf.Approximately(_lastDeckArcParentOffsetY, deckArcParentOffsetY) ||
+            (IsBuildbeckSceneActive() && (float.IsNaN(_lastBuildbeckDeckViewportRightEdge) ||
+             !Mathf.Approximately(_lastBuildbeckDeckViewportRightEdge, buildbeckDeckViewportRightEdgeNormalized)));
     }
 
     private void CacheDeckLayoutTuningValues()
@@ -301,6 +775,12 @@ public class DeckManager : MonoBehaviour
         _lastAttackStatOffsetX = attackStatOffsetX;
         _lastHealthStatOffsetX = healthStatOffsetX;
         _lastStatOffsetY = statOffsetY;
+        _lastDeckListCellSpacingY = deckListCellSpacingY;
+        _lastDeckListContentScalePercent = deckListContentScalePercent;
+        _lastDeckListStatHalfGapLevel = deckListStatHalfGapLevel;
+        _lastDeckArcParentOffsetX = deckArcParentOffsetX;
+        _lastDeckArcParentOffsetY = deckArcParentOffsetY;
+        _lastBuildbeckDeckViewportRightEdge = buildbeckDeckViewportRightEdgeNormalized;
     }
 
     private void ApplyDeckLayoutToExistingCards()
@@ -337,11 +817,15 @@ public class DeckManager : MonoBehaviour
         {
             Transform atkBar = atkParent.Find("AtkValueRedBar");
             if (atkBar != null) Destroy(atkBar.gameObject);
+            Transform atkCircle = atkParent.Find("AtkValueCircle");
+            if (atkCircle != null) Destroy(atkCircle.gameObject);
         }
         if (hpParent != null)
         {
             Transform hpBar = hpParent.Find("HpValueGreenBar");
             if (hpBar != null) Destroy(hpBar.gameObject);
+            Transform hpCircle = hpParent.Find("HpValueCircle");
+            if (hpCircle != null) Destroy(hpCircle.gameObject);
         }
     }
 
@@ -360,13 +844,15 @@ public class DeckManager : MonoBehaviour
         ForceRebuildPanelsLayout();
         RefreshDeckSlotTabVisual();
 
-        SceneLoader loader = Object.FindFirstObjectByType<SceneLoader>();
+        SceneLoader loader = GetCachedSceneLoader();
         if (loader != null) loader.RefreshEnterBattleState();
     }
 
     public void SelectDeckSlot0() { SelectDeckSlot(0); }
     public void SelectDeckSlot1() { SelectDeckSlot(1); }
     public void SelectDeckSlot2() { SelectDeckSlot(2); }
+    public void SelectDeckSlot3() { SelectDeckSlot(3); }
+    public void SelectDeckSlot4() { SelectDeckSlot(4); }
 
     // Bind this to the "保存牌組" button.
     public void OnClickSaveDeckButton()
@@ -385,108 +871,28 @@ public class DeckManager : MonoBehaviour
 
         PlayerData.SavePlayerData();
         ShowDeckHint("牌組已保存");
-        SceneLoader loader = Object.FindFirstObjectByType<SceneLoader>();
+        SceneLoader loader = GetCachedSceneLoader();
         if (loader != null) loader.RefreshEnterBattleState();
     }
 
     public void ClearPanels()
     {
-        if (libraryPanel != null)
-            foreach (Transform t in libraryPanel) Destroy(t.gameObject);
-
-        if (deckPanel != null)
-            foreach (Transform t in deckPanel) Destroy(t.gameObject);
-
-        libraryDic.Clear();
-        deckDic.Clear();
+        DataController.ClearPanels();
     }
 
     public void UpdateLibrary()
     {
-        EnsureCoreRefs();
-        EnsureDeckUIRefs();
-        if (PlayerData == null) return;
-        foreach (var kv in PlayerData.playerCollection)
-        {
-            if (kv.Value > 0)
-                CreateCard(kv.Key, CardState.Library);
-        }
+        DataController.UpdateLibrary();
     }
 
     public void UpdateDeck()
     {
-        EnsureCoreRefs();
-        EnsureDeckUIRefs();
-        if (PlayerData == null) return;
-        foreach (var kv in PlayerData.GetDeckMap(PlayerData.selectedDeckSlot))
-        {
-            if (kv.Value > 0)
-                CreateCard(kv.Key, CardState.Deck);
-        }
+        DataController.UpdateDeck();
     }
 
     public void UpdataCard(CardState state, int id)
     {
-        if (state == CardState.Deck)
-        {
-            if (!deckDic.ContainsKey(id))
-            {
-                return;
-            }
-
-            PlayerData.AddSelectedDeckCount(id, -1);
-            PlayerData.AddCollection(id, 1);
-
-            if (PlayerData.GetSelectedDeckCount(id) <= 0)
-            {
-                GameObject removingObj = deckDic[id];
-                deckDic.Remove(id);
-                StartCoroutine(AnimateDeckCardRemove(removingObj));
-            }
-            else
-            {
-                deckDic[id].GetComponent<CardCounter>().SetCounter(PlayerData.GetSelectedDeckCount(id));
-            }
-
-            if (libraryDic.ContainsKey(id))
-                libraryDic[id].GetComponent<CardCounter>().SetCounter(PlayerData.GetCollectionCount(id));
-            else
-                CreateCard(id, CardState.Library);
-        }
-        else if (state == CardState.Library)
-        {
-            if (!libraryDic.ContainsKey(id))
-            {
-                return;
-            }
-
-            if (PlayerData.GetSelectedDeckTotalCount() >= maxDeckCards)
-            {
-                ShowDeckHint("\u724C\u7D44\u4E0A\u9650\u70BA30\u5F35\u724C");
-                return;
-            }
-
-            PlayerData.AddSelectedDeckCount(id, 1);
-            PlayerData.AddCollection(id, -1);
-
-            if (deckDic.ContainsKey(id))
-                deckDic[id].GetComponent<CardCounter>().SetCounter(PlayerData.GetSelectedDeckCount(id));
-            else
-                CreateCard(id, CardState.Deck);
-
-            if (PlayerData.GetCollectionCount(id) <= 0)
-            {
-                Destroy(libraryDic[id]);
-                libraryDic.Remove(id);
-            }
-            else
-            {
-                libraryDic[id].GetComponent<CardCounter>().SetCounter(PlayerData.GetCollectionCount(id));
-            }
-        }
-        PlayerData.SavePlayerData();
-        RefreshScrollablePanels();
-        ForceRebuildPanelsLayout();
+        DataController.UpdataCard(state, id);
     }
 
     private void ShowDeckHint(string message)
@@ -534,7 +940,7 @@ public class DeckManager : MonoBehaviour
 
         if (deckHintText == null)
         {
-            Canvas canvas = Object.FindFirstObjectByType<Canvas>();
+            Canvas canvas = ResolvePrimaryUiCanvas();
             if (canvas != null)
             {
                 GameObject obj = new GameObject("DeckHintTMPText", typeof(RectTransform), typeof(TextMeshProUGUI));
@@ -563,7 +969,12 @@ public class DeckManager : MonoBehaviour
         CardDisplay fromLibrary = librarycardPrefab != null ? librarycardPrefab.GetComponentInChildren<CardDisplay>(true) : null;
         if (fromLibrary != null && fromLibrary.nameText != null && fromLibrary.nameText.font != null) return fromLibrary.nameText.font;
 
-        TextMeshProUGUI anyTMP = Object.FindFirstObjectByType<TextMeshProUGUI>();
+        TextMeshProUGUI anyTMP = _cachedAnyTmpForFontProbe;
+        if (anyTMP == null)
+        {
+            anyTMP = Object.FindFirstObjectByType<TextMeshProUGUI>();
+            _cachedAnyTmpForFontProbe = anyTMP;
+        }
         if (anyTMP != null && anyTMP.font != null) return anyTMP.font;
         return TMP_Settings.defaultFontAsset;
     }
@@ -572,7 +983,7 @@ public class DeckManager : MonoBehaviour
     {
         if (deckHintLegacyText == null)
         {
-            Canvas canvas = Object.FindFirstObjectByType<Canvas>();
+            Canvas canvas = ResolvePrimaryUiCanvas();
             if (canvas != null)
             {
                 GameObject obj = new GameObject("DeckHintLegacyText", typeof(RectTransform), typeof(Text));
@@ -603,7 +1014,7 @@ public class DeckManager : MonoBehaviour
     private void EnsureHintPanelReady()
     {
         if (deckHintPanel != null) return;
-        Canvas canvas = Object.FindFirstObjectByType<Canvas>();
+        Canvas canvas = ResolvePrimaryUiCanvas();
         if (canvas == null) return;
 
         GameObject obj = new GameObject("DeckHintPanel", typeof(RectTransform), typeof(Image));
@@ -747,131 +1158,100 @@ public class DeckManager : MonoBehaviour
     private void EnsureDeckBottomSquareAndStatsLayout(CardDisplay display, Card card)
     {
         if (display == null) return;
-        RectTransform namePlateRt = FindDeepChildByName(display.transform, "BP_1") as RectTransform;
-        if (namePlateRt != null)
-            EnlargeNamePlate(namePlateRt);
+        ApplyDeckNameTextStyle(display);
 
-        RectTransform statSquareRt = FindDeepChildByName(display.transform, "BP_2.1") as RectTransform;
-        if (statSquareRt == null)
-            statSquareRt = namePlateRt;
-        if (statSquareRt == null) return;
-
-        float baseSize = statSquareRt.rect.height > 1f ? statSquareRt.rect.height : 58f;
-        float squareSize = baseSize * deckStatSquareScale;
-        ForceRectTransformToSquare(statSquareRt, squareSize);
-
-        // Only monster cards render ATK/HP values; keep spell cards unchanged here.
-        if (card is SpellCard) return;
-        RectTransform cornerBaseRt = namePlateRt != null ? namePlateRt : statSquareRt;
-        PositionDeckStatTextInBottomSquare(display.attackText, cornerBaseRt, true);
-        PositionDeckStatTextInBottomSquare(display.healthText, cornerBaseRt, false);
-    }
-
-    private static void ForceRectTransformToSquare(RectTransform rt, float squareSize)
-    {
-        if (rt == null) return;
-        RectTransform parentRt = rt.parent as RectTransform;
-        if (parentRt == null) return;
-
-        // Preserve current center, then convert from stretch to fixed-size square.
-        Vector3[] corners = new Vector3[4];
-        rt.GetWorldCorners(corners);
-        Vector3 centerWorld = (corners[0] + corners[2]) * 0.5f;
-        Vector2 parentLocalCenter = parentRt.InverseTransformPoint(centerWorld);
-
-        rt.anchorMin = new Vector2(0.5f, 0.5f);
-        rt.anchorMax = new Vector2(0.5f, 0.5f);
-        rt.pivot = new Vector2(0.5f, 0.5f);
-        rt.anchoredPosition = parentLocalCenter;
-        rt.sizeDelta = new Vector2(squareSize, squareSize);
-    }
-
-    private void EnlargeNamePlate(RectTransform rt)
-    {
-        if (rt == null) return;
-        Vector2 size = rt.sizeDelta;
-        // Expand BP_1 height until it matches current width (square visual).
-        float currentWidth = rt.rect.width;
-        if (currentWidth < 1f)
+        // New layout rule: spell cards don't render ATK/HP badges.
+        if (card is SpellCard)
         {
-            RectTransform parentRt = rt.parent as RectTransform;
-            if (parentRt != null) currentWidth = parentRt.rect.width;
+            if (display.attackText != null) display.attackText.gameObject.SetActive(false);
+            if (display.healthText != null) display.healthText.gameObject.SetActive(false);
+            RemoveDeckStatBars(display);
+            return;
         }
-        if (currentWidth < 1f) currentWidth = 100.1f;
-        size.y = currentWidth * namePlateHeightWidthRatio;
-        rt.sizeDelta = size;
+
+        if (display.attackText != null) display.attackText.gameObject.SetActive(true);
+        if (display.healthText != null) display.healthText.gameObject.SetActive(true);
     }
 
-    private void PositionDeckStatTextInBottomSquare(TextMeshProUGUI statText, RectTransform squareRt, bool isAttack)
+    private static void ApplyDeckNameTextStyle(CardDisplay display)
     {
-        if (statText == null || squareRt == null) return;
-        RectTransform statRt = statText.rectTransform;
-        RectTransform statParentRt = statRt.parent as RectTransform;
-        if (statParentRt == null) return;
+        if (display == null || display.nameText == null) return;
+        display.nameText.fontSize = Mathf.Clamp(display.nameText.fontSize, 20f, 30f);
+        display.nameText.alignment = TextAlignmentOptions.Center;
+        display.nameText.color = new Color(0.16f, 0.16f, 0.16f, 1f);
+    }
 
-        float localX = isAttack ? attackStatOffsetX : healthStatOffsetX;
-        float localY = statOffsetY;
-        Vector3 world = squareRt.TransformPoint(new Vector3(localX, localY, 0f));
-        Vector2 parentLocal = statParentRt.InverseTransformPoint(world);
+    private static float GetSharedStatBadgeSize(TextMeshProUGUI statText)
+    {
+        float fontSize = statText != null ? Mathf.Max(1f, statText.fontSize) : 24f;
+        // Use one shared sizing rule for ATK/HP; large enough for up to 3 digits.
+        return Mathf.Max(NewLayoutStatBadgeMinSize, fontSize * NewLayoutStatBadgeSizeByFontRatio);
+    }
 
-        statRt.anchorMin = new Vector2(0.5f, 0.5f);
-        statRt.anchorMax = new Vector2(0.5f, 0.5f);
-        statRt.pivot = new Vector2(0.5f, 0.5f);
-        statRt.anchoredPosition = parentLocal;
+    private float GetDeckListStatHalfGapPixels()
+    {
+        int L = Mathf.Clamp(deckListStatHalfGapLevel, DeckListStatHalfGapLevelMin, DeckListStatHalfGapLevelMax);
+        int span = DeckListStatHalfGapLevelMax - DeckListStatHalfGapLevelMin;
+        if (span <= 0) return DeckListStatHalfGapPxMin;
+        return Mathf.Lerp(DeckListStatHalfGapPxMin, DeckListStatHalfGapPxMax, (L - DeckListStatHalfGapLevelMin) / (float)span);
     }
 
     private void EnsureDeckAttackValueRedBar(CardDisplay display)
     {
         if (display == null || display.attackText == null) return;
+        RectTransform cardRt = display.GetComponent<RectTransform>();
+        if (cardRt == null) return;
         RectTransform attackRt = display.attackText.rectTransform;
         if (attackRt == null) return;
-        Transform parent = attackRt.parent;
-        if (parent == null) return;
 
-        const string BarName = "AtkValueRedBar";
-        Transform existing = parent.Find(BarName);
+        Transform existingBar = FindDeepChildByName(display.transform, AtkBadgeName);
         RectTransform barRt;
         Image barImg;
 
-        if (existing != null)
+        if (existingBar != null)
         {
-            barRt = existing as RectTransform;
-            barImg = existing.GetComponent<Image>();
+            barRt = existingBar as RectTransform;
+            barImg = existingBar.GetComponent<Image>();
         }
         else
         {
-            GameObject barObj = new GameObject(BarName, typeof(RectTransform), typeof(Image));
-            barObj.transform.SetParent(parent, false);
+            GameObject barObj = new GameObject(AtkBadgeName, typeof(RectTransform), typeof(Image));
+            barObj.transform.SetParent(cardRt, false);
             barRt = barObj.GetComponent<RectTransform>();
             barImg = barObj.GetComponent<Image>();
         }
 
         if (barRt == null || barImg == null) return;
 
-        RectTransform deckBottomPlateRt = FindDeepChildByName(display.transform, "BP_1") as RectTransform;
-        if (deckBottomPlateRt == null)
-            deckBottomPlateRt = FindDeepChildByName(display.transform, "BP_2.1") as RectTransform;
-        float bottomPlateHeight = (deckBottomPlateRt != null && deckBottomPlateRt.rect.height > 1f)
-            ? deckBottomPlateRt.rect.height
-            : 58f;
+        if (attackRt.parent != cardRt)
+            attackRt.SetParent(cardRt, false);
+        if (barRt.parent != cardRt)
+            barRt.SetParent(cardRt, false);
 
-        // Small square underlay for ATK value.
-        const float rightOffset = 0f;
-        float barSize = bottomPlateHeight * statUnderlaySquareScale;
+        attackRt.anchorMin = new Vector2(0.5f, 0.5f);
+        attackRt.anchorMax = new Vector2(0.5f, 0.5f);
+        attackRt.pivot = new Vector2(0.5f, 0.5f);
+        float halfGapPx = GetDeckListStatHalfGapPixels();
+        attackRt.anchoredPosition = new Vector2(-halfGapPx, NewLayoutStatBadgeYOffset);
+        float badgeSize = GetSharedStatBadgeSize(display.attackText);
+        attackRt.sizeDelta = new Vector2(badgeSize, badgeSize);
 
-        // Align plate center to ATK value center.
         barRt.anchorMin = attackRt.anchorMin;
         barRt.anchorMax = attackRt.anchorMax;
         barRt.pivot = attackRt.pivot;
-        barRt.sizeDelta = new Vector2(barSize, barSize);
-        // Re-apply center alignment after final size update.
-        barRt.anchoredPosition = attackRt.anchoredPosition + new Vector2(rightOffset, 0f);
+        barRt.sizeDelta = new Vector2(badgeSize, badgeSize);
+        barRt.anchoredPosition = attackRt.anchoredPosition;
         barRt.localScale = Vector3.one;
         barRt.localRotation = Quaternion.identity;
 
-        // ATK uses red plate.
-        barImg.color = new Color(0.82f, 0.12f, 0.12f, 0.95f);
+        // ATK uses white circle style from new layout.
+        barImg.color = new Color(1f, 1f, 1f, 0.95f);
+        barImg.type = Image.Type.Simple;
         barImg.raycastTarget = false;
+        display.attackText.alignment = TextAlignmentOptions.Center;
+        display.attackText.color = new Color(0.12f, 0.12f, 0.12f, 1f);
+        display.attackText.fontSize = 24f;
+        attackRt.sizeDelta = new Vector2(badgeSize, badgeSize);
 
         // Keep bar beneath ATK value text by sibling order in same parent.
         int attackSibling = attackRt.GetSiblingIndex();
@@ -881,53 +1261,59 @@ public class DeckManager : MonoBehaviour
     private void EnsureDeckHealthValueGreenBar(CardDisplay display)
     {
         if (display == null || display.healthText == null) return;
+        RectTransform cardRt = display.GetComponent<RectTransform>();
+        if (cardRt == null) return;
         RectTransform healthRt = display.healthText.rectTransform;
         if (healthRt == null) return;
-        Transform parent = healthRt.parent;
-        if (parent == null) return;
 
-        const string BarName = "HpValueGreenBar";
-        Transform existing = parent.Find(BarName);
+        Transform existingBar = FindDeepChildByName(display.transform, HpBadgeName);
         RectTransform barRt;
         Image barImg;
 
-        if (existing != null)
+        if (existingBar != null)
         {
-            barRt = existing as RectTransform;
-            barImg = existing.GetComponent<Image>();
+            barRt = existingBar as RectTransform;
+            barImg = existingBar.GetComponent<Image>();
         }
         else
         {
-            GameObject barObj = new GameObject(BarName, typeof(RectTransform), typeof(Image));
-            barObj.transform.SetParent(parent, false);
+            GameObject barObj = new GameObject(HpBadgeName, typeof(RectTransform), typeof(Image));
+            barObj.transform.SetParent(cardRt, false);
             barRt = barObj.GetComponent<RectTransform>();
             barImg = barObj.GetComponent<Image>();
         }
 
         if (barRt == null || barImg == null) return;
 
-        RectTransform deckBottomPlateRt = FindDeepChildByName(display.transform, "BP_1") as RectTransform;
-        if (deckBottomPlateRt == null)
-            deckBottomPlateRt = FindDeepChildByName(display.transform, "BP_2.1") as RectTransform;
-        float bottomPlateHeight = (deckBottomPlateRt != null && deckBottomPlateRt.rect.height > 1f)
-            ? deckBottomPlateRt.rect.height
-            : 58f;
+        if (healthRt.parent != cardRt)
+            healthRt.SetParent(cardRt, false);
+        if (barRt.parent != cardRt)
+            barRt.SetParent(cardRt, false);
 
-        // Small square underlay for HP value.
-        const float rightOffset = 0f;
-        float barSize = bottomPlateHeight * statUnderlaySquareScale;
+        healthRt.anchorMin = new Vector2(0.5f, 0.5f);
+        healthRt.anchorMax = new Vector2(0.5f, 0.5f);
+        healthRt.pivot = new Vector2(0.5f, 0.5f);
+        float halfGapPx = GetDeckListStatHalfGapPixels();
+        healthRt.anchoredPosition = new Vector2(halfGapPx, NewLayoutStatBadgeYOffset);
+        float badgeSize = GetSharedStatBadgeSize(display.healthText);
+        healthRt.sizeDelta = new Vector2(badgeSize, badgeSize);
 
         barRt.anchorMin = healthRt.anchorMin;
         barRt.anchorMax = healthRt.anchorMax;
         barRt.pivot = healthRt.pivot;
-        barRt.sizeDelta = new Vector2(barSize, barSize);
-        barRt.anchoredPosition = healthRt.anchoredPosition + new Vector2(rightOffset, 0f);
+        barRt.sizeDelta = new Vector2(badgeSize, badgeSize);
+        barRt.anchoredPosition = healthRt.anchoredPosition;
         barRt.localScale = Vector3.one;
         barRt.localRotation = Quaternion.identity;
 
-        // HP uses green plate.
-        barImg.color = new Color(0.17f, 0.65f, 0.24f, 0.95f);
+        // HP uses white circle style from new layout.
+        barImg.color = new Color(1f, 1f, 1f, 0.95f);
+        barImg.type = Image.Type.Simple;
         barImg.raycastTarget = false;
+        display.healthText.alignment = TextAlignmentOptions.Center;
+        display.healthText.color = new Color(0.12f, 0.12f, 0.12f, 1f);
+        display.healthText.fontSize = 24f;
+        healthRt.sizeDelta = new Vector2(badgeSize, badgeSize);
 
         int healthSibling = healthRt.GetSiblingIndex();
         barRt.SetSiblingIndex(Mathf.Max(0, healthSibling));
@@ -937,7 +1323,8 @@ public class DeckManager : MonoBehaviour
     {
         if (DataManager == null)
         {
-            GameObject dm = GameObject.Find("DataManager");
+            GameObject dm = SceneSearchUtil.FindSceneObject(SceneManager.GetActiveScene(), "DataManager");
+            if (dm == null) dm = GameObject.Find("DataManager");
             if (dm != null) DataManager = dm;
         }
 
@@ -957,37 +1344,87 @@ public class DeckManager : MonoBehaviour
 
     private void EnsureDeckUIRefs()
     {
-        if (libraryPanel == null)
+        ListViewController.EnsureDeckUIRefs();
+    }
+
+    private void ApplyDeckListContentScale()
+    {
+        if (deckPanel == null) return;
+        int p = Mathf.Clamp(deckListContentScalePercent, 50, 200);
+        float s = p / 100f;
+        deckPanel.localScale = new Vector3(s, s, 1f);
+    }
+
+    private void EnsureDeckArcPresenter()
+    {
+        if (_deckArcPresenter != null) return;
+        _deckArcPresenter = GetComponent<DeckArcPresenter>();
+        if (_deckArcPresenter == null)
+            _deckArcPresenter = gameObject.AddComponent<DeckArcPresenter>();
+    }
+
+    private void EnsureDeckPanelSingleColumnLayout()
+    {
+        if (deckPanel == null) return;
+
+        GridLayoutGroup grid = deckPanel.GetComponent<GridLayoutGroup>();
+        if (grid == null) return;
+
+        grid.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
+        grid.constraintCount = 1;
+        grid.childAlignment = TextAnchor.UpperCenter;
+        grid.cellSize = new Vector2(NewLayoutDeckCellWidth, NewLayoutDeckCellHeight);
+        grid.spacing = new Vector2(0f, deckListCellSpacingY);
+        // Grid handles list layout + spacing in container (including Y distribution).
+        grid.enabled = true;
+    }
+
+    private Vector2 ResolveDeckViewportAnchorMaxForScene()
+    {
+        Vector2 baseMax = NewLayoutDeckViewportAnchorMax;
+        if (!IsBuildbeckSceneActive())
+            return baseMax;
+        float right = Mathf.Clamp(buildbeckDeckViewportRightEdgeNormalized, 0.55f, 0.999f);
+        return new Vector2(right, baseMax.y);
+    }
+
+    private void ApplyDeckViewportForNewLayout()
+    {
+        RectTransform viewport = null;
+        if (_deckPanelScrollRect != null && _deckPanelScrollRect.viewport != null)
+            viewport = _deckPanelScrollRect.viewport;
+        else if (deckPanel != null)
+            viewport = deckPanel.parent as RectTransform;
+        if (viewport == null) return;
+
+        viewport.anchorMin = NewLayoutDeckViewportAnchorMin;
+        viewport.anchorMax = ResolveDeckViewportAnchorMaxForScene();
+        // Horizontal shift via viewport stretch offsets; vertical tuning uses deckPanel.parent anchoredPosition.y.
+        Vector2 parentShift = new Vector2(deckArcParentOffsetX, 0f);
+        viewport.offsetMin = NewLayoutDeckViewportOffsetMin + parentShift;
+        viewport.offsetMax = NewLayoutDeckViewportOffsetMax + parentShift;
+    }
+
+    private void ApplyDeckListParentVerticalOffset()
+    {
+        if (deckPanel == null) return;
+        RectTransform parentRt = deckPanel.parent as RectTransform;
+        if (parentRt == null) return;
+        if (!_deckListParentAnchoredYBaselineCaptured)
         {
-            TryResolveLibraryPanelByName();
-            TryResolveLibraryPanelUnderCanvas();
+            _deckListParentAnchoredYBaseline = parentRt.anchoredPosition.y;
+            _deckListParentAnchoredYBaselineCaptured = true;
         }
 
-        if (deckPanel == null)
-        {
-            TryResolveDeckPanelByName();
-            TryResolveDeckPanelUnderCanvas();
-        }
+        Vector2 ap = parentRt.anchoredPosition;
+        ap.y = _deckListParentAnchoredYBaseline + deckArcParentOffsetY;
+        parentRt.anchoredPosition = ap;
+    }
 
-        // Try to recover missing prefabs from scene templates before fallback chain.
-        if (librarycardPrefab == null)
-        {
-            GameObject fromLib = FindCardTemplateInPanel(libraryPanel);
-            if (fromLib != null) librarycardPrefab = fromLib;
-        }
-        if (deckCardPrefab == null)
-        {
-            GameObject fromDeck = FindCardTemplateInPanel(deckPanel);
-            if (fromDeck != null) deckCardPrefab = fromDeck;
-        }
-
-        // Keep prefab refs stable; never overwrite with runtime scene cards.
-        if (deckCardPrefab == null && defaultDeckCardPrefab != null) deckCardPrefab = defaultDeckCardPrefab;
-        if (librarycardPrefab == null && defaultLibraryCardPrefab != null) librarycardPrefab = defaultLibraryCardPrefab;
-        if (librarycardPrefab == null && runtimeLibraryTemplate != null) librarycardPrefab = runtimeLibraryTemplate;
-        if (deckCardPrefab == null && runtimeDeckTemplate != null) deckCardPrefab = runtimeDeckTemplate;
-        if (librarycardPrefab == null) librarycardPrefab = deckCardPrefab;
-        if (deckCardPrefab == null) deckCardPrefab = librarycardPrefab;
+    private void ApplyDeckParentLayoutOffsets()
+    {
+        ApplyDeckViewportForNewLayout();
+        ApplyDeckListParentVerticalOffset();
     }
 
     private void AlignLibraryBottomToGoButtonTop()
@@ -1070,6 +1507,7 @@ public class DeckManager : MonoBehaviour
         {
             Button btn = deckSlotButtons[i];
             if (btn == null) continue;
+            SetSlotButtonLabel(btn, i + 1);
             bool active = i == PlayerData.selectedDeckSlot;
             Image bg = btn.GetComponent<Image>();
             if (bg != null)
@@ -1093,13 +1531,159 @@ public class DeckManager : MonoBehaviour
                 }
             }
         }
+        UpdateDeckSlotGuideDotsVisual();
+        RefreshCurrentDeckDisplayName();
+    }
+
+    /// <summary>Updates <see cref="currentDeckDisplayNameText"/> / legacy Text from <see cref="PlayerData"/>.</summary>
+    public void RefreshCurrentDeckDisplayName()
+    {
+        EnsureCoreRefs();
+        if (PlayerData == null) return;
+        string name = PlayerData.GetDeckSlotDisplayName(PlayerData.selectedDeckSlot);
+        if (currentDeckDisplayNameText != null)
+            currentDeckDisplayNameText.text = name;
+        if (currentDeckDisplayNameLegacyText != null)
+            currentDeckDisplayNameLegacyText.text = name;
+    }
+
+    private void SwitchDeckSlotByDelta(int direction)
+    {
+        if (direction == 0) return;
+        EnsureCoreRefs();
+        if (PlayerData == null || PlayerData.deckSlotCount <= 0) return;
+
+        int n = Mathf.Max(1, PlayerData.deckSlotCount);
+        int next = ((PlayerData.selectedDeckSlot + direction) % n + n) % n;
+        if (next == PlayerData.selectedDeckSlot) return;
+        SelectDeckSlot(next);
+    }
+
+    private void EnsureDeckSlotGuideDots()
+    {
+        if (!IsBuildbeckSceneActive())
+        {
+            CleanupDeckSlotGuideDots();
+            return;
+        }
+
+        int dotCount = Mathf.Max(5, PlayerData != null ? PlayerData.deckSlotCount : 5);
+        if (deckSlotGuideDotsRoot != null && deckSlotGuideDotsBuiltCount == dotCount) return;
+
+        Canvas canvas = ResolveDeckUiCanvas();
+        if (canvas == null) return;
+
+        Transform existing = FindDeepChildByName(canvas.transform, "DeckSlotGuideDots");
+        if (existing != null)
+        {
+            deckSlotGuideDotsRoot = existing as RectTransform;
+        }
+        else
+        {
+            GameObject rootPf = Resources.Load<GameObject>(BuildbeckUiResourcePaths.GuideDotsRoot);
+            if (rootPf != null)
+            {
+                GameObject rootObj = Instantiate(rootPf, canvas.transform, false);
+                rootObj.name = "DeckSlotGuideDots";
+                deckSlotGuideDotsRoot = rootObj.GetComponent<RectTransform>();
+            }
+            else
+            {
+                GameObject rootObj = BuildbeckUiHierarchyBuilder.CreateDeckSlotGuideDotsRoot(canvas.transform);
+                deckSlotGuideDotsRoot = rootObj.GetComponent<RectTransform>();
+            }
+        }
+
+        for (int i = deckSlotGuideDotsRoot.childCount - 1; i >= 0; i--)
+        {
+            Transform child = deckSlotGuideDotsRoot.GetChild(i);
+            if (child != null) Destroy(child.gameObject);
+        }
+
+        // Top button -> previous slot.
+        Button prevBtn = InstantiateDeckSlotGuideNavButton(deckSlotGuideDotsRoot, "DeckSlotPrevButton", "˄");
+        if (prevBtn != null)
+        {
+            prevBtn.onClick.RemoveAllListeners();
+            prevBtn.onClick.AddListener(() => SwitchDeckSlotByDelta(-1));
+        }
+
+        deckSlotGuideDots.Clear();
+        GameObject dotPf = Resources.Load<GameObject>(BuildbeckUiResourcePaths.GuideDot);
+        for (int i = 0; i < dotCount; i++)
+        {
+            GameObject dotObj;
+            if (dotPf != null)
+            {
+                dotObj = Instantiate(dotPf, deckSlotGuideDotsRoot, false);
+                dotObj.name = $"Dot_{i + 1}";
+            }
+            else
+            {
+                dotObj = BuildbeckUiHierarchyBuilder.CreateDeckSlotGuideDot(deckSlotGuideDotsRoot, i + 1);
+            }
+
+            Image dot = dotObj.GetComponent<Image>();
+            if (dot != null)
+                deckSlotGuideDots.Add(dot);
+        }
+
+        // Bottom button -> next slot.
+        Button nextBtn = InstantiateDeckSlotGuideNavButton(deckSlotGuideDotsRoot, "DeckSlotNextButton", "˅");
+        if (nextBtn != null)
+        {
+            nextBtn.onClick.RemoveAllListeners();
+            nextBtn.onClick.AddListener(() => SwitchDeckSlotByDelta(1));
+        }
+
+        deckSlotGuideDotsBuiltCount = dotCount;
+        UpdateDeckSlotGuideDotsVisual();
+    }
+
+    private void UpdateDeckSlotGuideDotsVisual()
+    {
+        if (deckSlotGuideDots.Count <= 0) return;
+        if (PlayerData == null) return;
+
+        int activeIndex = Mathf.Clamp(PlayerData.selectedDeckSlot, 0, deckSlotGuideDots.Count - 1);
+        for (int i = 0; i < deckSlotGuideDots.Count; i++)
+        {
+            Image dot = deckSlotGuideDots[i];
+            if (dot == null) continue;
+            bool active = i == activeIndex;
+            dot.color = active ? new Color(1f, 1f, 1f, 0.95f) : new Color(1f, 1f, 1f, 0.38f);
+            RectTransform rt = dot.rectTransform;
+            rt.sizeDelta = active ? new Vector2(22f, 22f) : new Vector2(18f, 18f);
+        }
+    }
+
+    private Button InstantiateDeckSlotGuideNavButton(RectTransform parent, string objectName, string symbol)
+    {
+        if (parent == null) return null;
+        GameObject navPf = Resources.Load<GameObject>(BuildbeckUiResourcePaths.GuideNavButton);
+        if (navPf != null)
+        {
+            GameObject inst = Instantiate(navPf, parent, false);
+            inst.name = objectName;
+            TMP_Text tmp = inst.GetComponentInChildren<TMP_Text>(true);
+            if (tmp != null)
+            {
+                tmp.text = symbol;
+                if (hintTMPFont != null) tmp.font = hintTMPFont;
+            }
+
+            return inst.GetComponent<Button>();
+        }
+
+        return BuildbeckUiHierarchyBuilder.CreateDeckSlotGuideNavButton(parent, objectName, symbol, hintTMPFont);
     }
 
     private void BindExternalSlotButtonsIfNeeded()
     {
         if (externalSlotButtonsBound) return;
 
-        bool hasAny = deckSlotButton1 != null || deckSlotButton2 != null || deckSlotButton3 != null;
+        bool hasAny = deckSlotButton1 != null || deckSlotButton2 != null || deckSlotButton3 != null ||
+                      deckSlotButton4 != null || deckSlotButton5 != null;
         if (!hasAny) return;
 
         deckSlotButtons.Clear();
@@ -1124,8 +1708,22 @@ public class DeckManager : MonoBehaviour
             deckSlotButtons.Add(deckSlotButton3);
             SetSlotButtonLabel(deckSlotButton3, 3);
         }
+        if (deckSlotButton4 != null)
+        {
+            deckSlotButton4.onClick.RemoveAllListeners();
+            deckSlotButton4.onClick.AddListener(() => SelectDeckSlot(3));
+            deckSlotButtons.Add(deckSlotButton4);
+            SetSlotButtonLabel(deckSlotButton4, 4);
+        }
+        if (deckSlotButton5 != null)
+        {
+            deckSlotButton5.onClick.RemoveAllListeners();
+            deckSlotButton5.onClick.AddListener(() => SelectDeckSlot(4));
+            deckSlotButtons.Add(deckSlotButton5);
+            SetSlotButtonLabel(deckSlotButton5, 5);
+        }
 
-        EnsureDeckSlotButtonsVerticalNestedLayout();
+        // New layout controls slot button placement; skip legacy nested toggle layout.
         externalSlotButtonsBound = true;
         RefreshDeckSlotTabVisual();
     }
@@ -1273,10 +1871,13 @@ public class DeckManager : MonoBehaviour
         });
     }
 
-    private void SetSlotButtonLabel(Button button, int index)
+    private void SetSlotButtonLabel(Button button, int indexOneBased)
     {
         if (button == null) return;
-        string labelText = "牌組" + index.ToString();
+        int slot0 = indexOneBased - 1;
+        string labelText = PlayerData != null && slot0 >= 0
+            ? PlayerData.GetDeckSlotDisplayName(slot0)
+            : ("牌組" + indexOneBased.ToString());
         TMP_Text tmp = button.GetComponentInChildren<TMP_Text>(true);
         if (tmp != null)
         {
@@ -1313,9 +1914,6 @@ public class DeckManager : MonoBehaviour
             panelRect.anchorMin = new Vector2(0f, 1f);
             panelRect.anchorMax = new Vector2(1f, 1f);
             panelRect.pivot = new Vector2(0.5f, 1f);
-            Vector2 pos = panelRect.anchoredPosition;
-            pos.y = 0f;
-            panelRect.anchoredPosition = pos;
         }
         if (sr == null)
         {
@@ -1344,10 +1942,18 @@ public class DeckManager : MonoBehaviour
             if (ReferenceEquals(panel, libraryPanel))
                 _libraryPanelScrollRect = sr;
             else if (ReferenceEquals(panel, deckPanel))
+            {
                 _deckPanelScrollRect = sr;
+                EnsureDeckScrollUserGestureRelay(sr);
+            }
             ApplyDeckPanelScrollFeel(sr, panel);
             viewport = sr.viewport != null ? sr.viewport : panelRect;
             EnsureVerticalScrollbar(sr);
+            if (ReferenceEquals(panel, deckPanel))
+            {
+                _deckListParentAnchoredYBaselineCaptured = false;
+                ApplyDeckParentLayoutOffsets();
+            }
         }
         else viewport = panel.parent as RectTransform;
 
@@ -1390,8 +1996,13 @@ public class DeckManager : MonoBehaviour
     private void OnLibraryPanelScrollFeel(Vector2 normalized) =>
         HandleScrollEdgeFeel(true, _libraryPanelScrollRect, ref _libraryScrollLastNormY, ref _libraryScrollEdgePulseCo, ref _libraryScrollPulseGeneration, normalized);
 
-    private void OnDeckPanelScrollFeel(Vector2 normalized) =>
+    private void OnDeckPanelScrollFeel(Vector2 normalized)
+    {
         HandleScrollEdgeFeel(false, _deckPanelScrollRect, ref _deckScrollLastNormY, ref _deckScrollEdgePulseCo, ref _deckScrollPulseGeneration, normalized);
+        RectTransform deckContent = deckPanel as RectTransform;
+        if (deckContent != null)
+            RequestDeckArcLayoutUnlessDeferredToLateUpdate(deckContent, false);
+    }
 
     private void HandleScrollEdgeFeel(
         bool isLibrary,
@@ -1545,25 +2156,12 @@ public class DeckManager : MonoBehaviour
 
     private void RefreshScrollablePanels()
     {
-        RefreshPanelContentHeight(libraryPanel);
-        RefreshPanelContentHeight(deckPanel);
+        ListViewController.RefreshScrollablePanels();
     }
 
-    private void ForceRebuildPanelsLayout()
+    private void ForceRebuildPanelsLayout(bool includeDeck = true)
     {
-        RectTransform libRt = libraryPanel as RectTransform;
-        if (libRt != null)
-        {
-            NormalizeChildrenVisualState(libRt);
-            LayoutRebuilder.ForceRebuildLayoutImmediate(libRt);
-        }
-        RectTransform deckRt = deckPanel as RectTransform;
-        if (deckRt != null)
-        {
-            NormalizeChildrenVisualState(deckRt);
-            LayoutRebuilder.ForceRebuildLayoutImmediate(deckRt);
-        }
-        Canvas.ForceUpdateCanvases();
+        ListViewController.ForceRebuildPanelsLayout(includeDeck);
     }
 
     private void NormalizeChildrenVisualState(RectTransform panelRt)
@@ -1581,8 +2179,7 @@ public class DeckManager : MonoBehaviour
 
     private void ForcePanelsScrollToTop()
     {
-        ForcePanelScrollToTop(libraryPanel);
-        ForcePanelScrollToTop(deckPanel);
+        ListViewController.ForcePanelsScrollToTop();
     }
 
     private void ForcePanelScrollToTop(Transform panel)
@@ -1605,6 +2202,7 @@ public class DeckManager : MonoBehaviour
     private IEnumerator AnimateDeckCardRemove(GameObject cardObj)
     {
         if (cardObj == null) yield break;
+        _deckCardRemoveAnimationActive = true;
 
         RectTransform rt = cardObj.GetComponent<RectTransform>();
         CanvasGroup cg = cardObj.GetComponent<CanvasGroup>();
@@ -1665,7 +2263,20 @@ public class DeckManager : MonoBehaviour
             grid.enabled = true;
             LayoutRebuilder.ForceRebuildLayoutImmediate(parent);
         }
+        _deckCardRemoveAnimationActive = false;
         RefreshScrollablePanels();
+        RectTransform deckRt = deckPanel as RectTransform;
+        if (deckRt != null)
+        {
+            NormalizeChildrenVisualState(deckRt);
+            LayoutRebuilder.ForceRebuildLayoutImmediate(deckRt);
+            // Sync arc immediately: otherwise DeckArcSmoothUsesLateUpdate skips UnlessDeferred and the list
+            // renders one+ frames as straight Grid (短暫弧度失效).
+            EnsureDeckArcPresenter();
+            if (_deckArcPresenter != null) _deckArcPresenter.InvalidateLayoutState();
+            RequestDeckArcLayout(deckRt, false);
+        }
+        Canvas.ForceUpdateCanvases();
     }
 
     /// <summary>
@@ -1697,12 +2308,13 @@ public class DeckManager : MonoBehaviour
         float viewHeight = viewport != null ? viewport.rect.height : 0f;
 
         GridLayoutGroup grid = content.GetComponent<GridLayoutGroup>();
+        bool isDeck = ReferenceEquals(panel, deckPanel);
         if (grid != null)
         {
             float width = Mathf.Max(1f, content.rect.width);
             float usableWidth = Mathf.Max(1f, width - grid.padding.left - grid.padding.right);
             float unitW = grid.cellSize.x + grid.spacing.x;
-            int columns = Mathf.Max(1, Mathf.FloorToInt((usableWidth + grid.spacing.x) / Mathf.Max(1f, unitW)));
+            int columns = isDeck ? 1 : Mathf.Max(1, Mathf.FloorToInt((usableWidth + grid.spacing.x) / Mathf.Max(1f, unitW)));
             int childCount = content.childCount;
             int rows = childCount <= 0
                 ? 0
@@ -1748,6 +2360,111 @@ public class DeckManager : MonoBehaviour
             pos.y = Mathf.Clamp(pos.y, 0f, clampMaxY);
             content.anchoredPosition = pos;
         }
+
+        if (isDeck)
+            RequestDeckArcLayoutUnlessDeferredToLateUpdate(content, false);
+    }
+
+    private void RequestDeckArcLayout(RectTransform content, bool oncePerFrame)
+    {
+        if (content == null) return;
+        if (_deckCardRemoveAnimationActive && deckPanel != null && ReferenceEquals(content, deckPanel))
+            return;
+        EnsureDeckArcPresenter();
+        if (_deckArcPresenter == null) return;
+
+        int visibleSlotCount = NormalizeDeckArcVisibleSlotCount(deckArcVisibleSlotCount);
+        EnsureDeckArcSlotOffsetListSize(visibleSlotCount);
+
+        ComputeDeckArcHorizontalSmoothParams(out float arcSmoothT, out float arcMaxSpeed);
+
+        float chordL = Mathf.Max(1f, deckArcChordHalfWidth);
+        float radiusR = Mathf.Max(deckArcCircleRadius, chordL + 0.5f);
+
+        _deckArcPresenter.ApplyLayout(
+            content,
+            NewLayoutEnableDeckArc,
+            visibleSlotCount,
+            radiusR,
+            chordL,
+            deckArcShapeStrength,
+            deckArcVisibleRangePaddingSlots,
+            NewLayoutDeckCellHeight,
+            deckListCellSpacingY,
+            deckArcSlotXOffsetById,
+            arcSmoothT,
+            arcMaxSpeed,
+            oncePerFrame
+        );
+    }
+
+    /// <summary>
+    /// Velocity-based arc tightening applies while the user is dragging the deck list or coasting after release (see gesture relay + TickDeckScrollUserSessionEnd).
+    /// </summary>
+    private void ComputeDeckArcHorizontalSmoothParams(out float smoothTime, out float maxSpeed)
+    {
+        if (deckArcHorizontalSmoothTime <= 0f)
+        {
+            smoothTime = 0f;
+            maxSpeed = Mathf.Infinity;
+            return;
+        }
+
+        float vel = 0f;
+        if (_deckPanelScrollRect != null)
+            vel = Mathf.Abs(_deckPanelScrollRect.velocity.y);
+
+        float denom = Mathf.Max(1f, deckArcScrollVelocityRef);
+        float kVel = Mathf.Clamp01(vel / denom);
+
+        float k = 0f;
+        if (_deckScrollUserSessionActive)
+            k = _deckScrollPointerHeld ? Mathf.Max(kVel, DeckArcUserScrollMinKDuringDrag) : kVel;
+
+        smoothTime = Mathf.Lerp(deckArcHorizontalSmoothTime, deckArcHorizontalSmoothTime * 0.18f, k);
+        maxSpeed = Mathf.Lerp(900f, 11000f, k);
+    }
+
+    private void EnsureDeckScrollUserGestureRelay(ScrollRect sr)
+    {
+        if (sr == null) return;
+        DeckScrollUserGestureRelay relay = sr.GetComponent<DeckScrollUserGestureRelay>();
+        if (relay == null)
+            relay = sr.gameObject.AddComponent<DeckScrollUserGestureRelay>();
+        relay.Setup(this);
+    }
+
+    private void NotifyDeckScrollPointerHeld(bool held)
+    {
+        _deckScrollPointerHeld = held;
+        if (held)
+            _deckScrollUserSessionActive = true;
+    }
+
+    private void TickDeckScrollUserSessionEnd()
+    {
+        if (!_deckScrollUserSessionActive)
+            return;
+        if (_deckScrollPointerHeld)
+            return;
+        if (_deckPanelScrollRect == null)
+        {
+            _deckScrollUserSessionActive = false;
+            return;
+        }
+
+        if (Mathf.Abs(_deckPanelScrollRect.velocity.y) < DeckArcUserScrollSessionVelocityCutoff)
+            _deckScrollUserSessionActive = false;
+    }
+
+    private void EnsureDeckArcSlotOffsetListSize(int slotCount)
+    {
+        if (deckArcSlotXOffsetById == null)
+            deckArcSlotXOffsetById = new List<float>();
+        while (deckArcSlotXOffsetById.Count < slotCount)
+            deckArcSlotXOffsetById.Add(0f);
+        if (deckArcSlotXOffsetById.Count > slotCount)
+            deckArcSlotXOffsetById.RemoveRange(slotCount, deckArcSlotXOffsetById.Count - slotCount);
     }
 
     // Buildbeck "????" button hook:
@@ -1796,7 +2513,7 @@ public class DeckManager : MonoBehaviour
         PlayerData.SavePlayerData();
         StartCoroutine(RebuildPanelsAfterReset());
 
-        SceneLoader loader = Object.FindFirstObjectByType<SceneLoader>();
+        SceneLoader loader = GetCachedSceneLoader();
         if (loader != null) loader.RefreshEnterBattleState();
     }
 
@@ -1945,6 +2662,144 @@ public class DeckManager : MonoBehaviour
         CreateConfirmButton(resetConfirmPanel.transform, "ConfirmYesButton", "\u78BA\u8A8D", new Vector2(-120f, -88f), ConfirmResetDeckForRebuild);
         CreateConfirmButton(resetConfirmPanel.transform, "ConfirmNoButton", "\u53D6\u6D88", new Vector2(120f, -88f), HideResetDeckConfirm);
         resetConfirmPanel.SetActive(false);
+    }
+
+    public void OnClickEditDeckNameButton()
+    {
+        ShowDeckNameEditDialog();
+    }
+
+    public void ShowDeckNameEditDialog()
+    {
+        EnsureCoreRefs();
+        if (PlayerData == null)
+        {
+            ShowDeckHint("無法編輯：找不到玩家資料");
+            return;
+        }
+
+        EnsureDeckNameEditPanel();
+        if (deckNameEditPanel == null) return;
+
+        string cur = PlayerData.GetDeckSlotDisplayName(PlayerData.selectedDeckSlot);
+        if (deckNameEditInput != null)
+        {
+            deckNameEditInput.text = cur;
+            deckNameEditInput.ActivateInputField();
+            deckNameEditInput.caretPosition = cur != null ? cur.Length : 0;
+        }
+
+        deckNameEditPanel.SetActive(true);
+        deckNameEditPanel.transform.SetAsLastSibling();
+    }
+
+    public void HideDeckNameEditPanel()
+    {
+        if (deckNameEditPanel != null) deckNameEditPanel.SetActive(false);
+    }
+
+    public void ConfirmDeckNameEdit()
+    {
+        EnsureCoreRefs();
+        if (PlayerData == null)
+        {
+            HideDeckNameEditPanel();
+            return;
+        }
+
+        string text = deckNameEditInput != null ? deckNameEditInput.text : string.Empty;
+        PlayerData.SetDeckSlotDisplayName(PlayerData.selectedDeckSlot, text);
+        PlayerData.SavePlayerData();
+        HideDeckNameEditPanel();
+        RefreshDeckSlotTabVisual();
+        ShowDeckHint("牌組名稱已更新");
+        SceneLoader loader = GetCachedSceneLoader();
+        if (loader != null) loader.RefreshEnterBattleState();
+    }
+
+    private void EnsureDeckNameEditPanel()
+    {
+        if (deckNameEditPanel != null) return;
+
+        Canvas canvas = GetCachedRuntimeUiCanvas();
+        if (canvas == null)
+        {
+            Debug.LogWarning("DeckManager: cannot create deck name editor, Canvas not found.");
+            return;
+        }
+
+        deckNameEditPanel = new GameObject("DeckNameEditPanel", typeof(RectTransform), typeof(Image));
+        deckNameEditPanel.transform.SetParent(canvas.transform, false);
+        RectTransform panelRect = deckNameEditPanel.GetComponent<RectTransform>();
+        panelRect.anchorMin = new Vector2(0.5f, 0.5f);
+        panelRect.anchorMax = new Vector2(0.5f, 0.5f);
+        panelRect.pivot = new Vector2(0.5f, 0.5f);
+        panelRect.sizeDelta = new Vector2(720f, 340f);
+        deckNameEditPanel.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.82f);
+
+        TMP_FontAsset uiFont = hintTMPFont != null ? hintTMPFont : BuildbeckUiFonts.ResolveBuildbeckButtonFont();
+
+        GameObject titleObj = new GameObject("Title", typeof(RectTransform), typeof(TextMeshProUGUI));
+        titleObj.transform.SetParent(deckNameEditPanel.transform, false);
+        RectTransform titleRt = titleObj.GetComponent<RectTransform>();
+        titleRt.anchorMin = new Vector2(0f, 1f);
+        titleRt.anchorMax = new Vector2(1f, 1f);
+        titleRt.pivot = new Vector2(0.5f, 1f);
+        titleRt.offsetMin = new Vector2(24f, -76f);
+        titleRt.offsetMax = new Vector2(-24f, -18f);
+        TextMeshProUGUI titleTmp = titleObj.GetComponent<TextMeshProUGUI>();
+        if (uiFont != null) titleTmp.font = uiFont;
+        titleTmp.fontSize = 34f;
+        titleTmp.alignment = TextAlignmentOptions.Center;
+        titleTmp.color = Color.white;
+        titleTmp.text = "\u7DE8\u8F2F\u724C\u7D44\u540d\u7A31";
+
+        GameObject inputBgObj = new GameObject("DeckNameInputBg", typeof(RectTransform), typeof(Image));
+        inputBgObj.transform.SetParent(deckNameEditPanel.transform, false);
+        RectTransform inputBgRt = inputBgObj.GetComponent<RectTransform>();
+        inputBgRt.anchorMin = new Vector2(0.5f, 0.5f);
+        inputBgRt.anchorMax = new Vector2(0.5f, 0.5f);
+        inputBgRt.pivot = new Vector2(0.5f, 0.5f);
+        inputBgRt.anchoredPosition = new Vector2(0f, -8f);
+        inputBgRt.sizeDelta = new Vector2(620f, 54f);
+        inputBgObj.GetComponent<Image>().color = new Color(1f, 1f, 1f, 0.95f);
+
+        GameObject inputTextObj = new GameObject("Text", typeof(RectTransform), typeof(TextMeshProUGUI));
+        inputTextObj.transform.SetParent(inputBgObj.transform, false);
+        RectTransform inputTextRt = inputTextObj.GetComponent<RectTransform>();
+        inputTextRt.anchorMin = Vector2.zero;
+        inputTextRt.anchorMax = Vector2.one;
+        inputTextRt.offsetMin = new Vector2(12f, 8f);
+        inputTextRt.offsetMax = new Vector2(-12f, -8f);
+        TextMeshProUGUI inputText = inputTextObj.GetComponent<TextMeshProUGUI>();
+        if (uiFont != null) inputText.font = uiFont;
+        inputText.fontSize = 26f;
+        inputText.color = new Color(0.15f, 0.15f, 0.15f, 1f);
+        inputText.alignment = TextAlignmentOptions.Left;
+
+        GameObject placeholderObj = new GameObject("Placeholder", typeof(RectTransform), typeof(TextMeshProUGUI));
+        placeholderObj.transform.SetParent(inputBgObj.transform, false);
+        RectTransform phRt = placeholderObj.GetComponent<RectTransform>();
+        phRt.anchorMin = Vector2.zero;
+        phRt.anchorMax = Vector2.one;
+        phRt.offsetMin = new Vector2(12f, 8f);
+        phRt.offsetMax = new Vector2(-12f, -8f);
+        TextMeshProUGUI placeholder = placeholderObj.GetComponent<TextMeshProUGUI>();
+        if (uiFont != null) placeholder.font = uiFont;
+        placeholder.fontSize = 26f;
+        placeholder.color = new Color(0.4f, 0.4f, 0.4f, 0.65f);
+        placeholder.alignment = TextAlignmentOptions.Left;
+        placeholder.text = "\u724C\u7D44\u986F\u793A\u540d\u7A31";
+
+        deckNameEditInput = inputBgObj.AddComponent<TMP_InputField>();
+        deckNameEditInput.textComponent = inputText;
+        deckNameEditInput.placeholder = placeholder;
+        deckNameEditInput.characterLimit = 24;
+
+        CreateConfirmButton(deckNameEditPanel.transform, "DeckNameConfirmButton", "\u78BA\u8A8D", new Vector2(140f, -124f), ConfirmDeckNameEdit);
+        CreateConfirmButton(deckNameEditPanel.transform, "DeckNameCancelButton", "\u53D6\u6D88", new Vector2(-140f, -124f), HideDeckNameEditPanel);
+
+        deckNameEditPanel.SetActive(false);
     }
 
     private void CreateConfirmButton(Transform parent, string name, string label, Vector2 pos, UnityEngine.Events.UnityAction onClick)
@@ -2490,7 +3345,7 @@ public class DeckManager : MonoBehaviour
     {
         if (backpackInspectRoot != null) return;
 
-        Canvas canvas = Object.FindFirstObjectByType<Canvas>();
+        Canvas canvas = ResolvePrimaryUiCanvas();
         if (canvas == null) return;
 
         EnsureTMPHintReady();
@@ -2723,6 +3578,28 @@ public class DeckManager : MonoBehaviour
         closeBtnObj.transform.SetAsLastSibling();
 
         backpackInspectRoot.SetActive(false);
+    }
+
+    private sealed class DeckScrollUserGestureRelay : MonoBehaviour, IBeginDragHandler, IEndDragHandler
+    {
+        private DeckManager _host;
+
+        public void Setup(DeckManager host)
+        {
+            _host = host;
+        }
+
+        public void OnBeginDrag(PointerEventData eventData)
+        {
+            if (_host != null)
+                _host.NotifyDeckScrollPointerHeld(true);
+        }
+
+        public void OnEndDrag(PointerEventData eventData)
+        {
+            if (_host != null)
+                _host.NotifyDeckScrollPointerHeld(false);
+        }
     }
 
     private sealed class BackpackInspectSwipeCapture : MonoBehaviour, IBeginDragHandler, IEndDragHandler

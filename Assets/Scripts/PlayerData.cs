@@ -11,13 +11,15 @@ public class PlayerData : MonoBehaviour
     public int playerCoins;
     /// <summary>Owned cards: key = runtime id (monster ≥0, spell &lt;0 via <see cref="DeckCardId"/>).</summary>
     public readonly Dictionary<int, int> playerCollection = new Dictionary<int, int>();
-    public int deckSlotCount = 3;
+    public int deckSlotCount = 5;
     public int selectedDeckSlot = 0;
     public int totalCoins;
     [Range(1, MaxPlayerSlots)] public int activePlayerSlot = 1;
     public string activePlayerSlotName = "玩家1";
 
     private Dictionary<int, int>[] deckSlotMaps;
+    /// <summary>Per deck-slot display names (Buildbeck UI). Empty entry falls back to 「牌組{n}」.</summary>
+    private string[] deckSlotDisplayNames;
     private readonly List<string> cachedOtherSlotRows = new List<string>(128);
 
     [Header("UI")]
@@ -51,7 +53,7 @@ public class PlayerData : MonoBehaviour
 
     private void EnsureDeckSlotMaps()
     {
-        if (deckSlotCount <= 0) deckSlotCount = 3;
+        if (deckSlotCount <= 0) deckSlotCount = 5;
 
         if (deckSlotMaps == null || deckSlotMaps.Length != deckSlotCount)
         {
@@ -230,6 +232,15 @@ public class PlayerData : MonoBehaviour
             if (rowArray.Length < 2) return;
             selectedDeckSlot = Mathf.Clamp(int.Parse(rowArray[1].Trim()), 0, deckSlotCount - 1);
         }
+        else if (rowArray[0] == "deck_slot_name")
+        {
+            if (rowArray.Length < 3) return;
+            if (!int.TryParse(rowArray[1].Trim(), out int deckSlotIdx)) return;
+            EnsureDeckSlotMaps();
+            EnsureDeckSlotNamesBuffer();
+            deckSlotIdx = Mathf.Clamp(deckSlotIdx, 0, deckSlotCount - 1);
+            deckSlotDisplayNames[deckSlotIdx] = SanitizeDeckSlotName(rowArray[2]);
+        }
         else if (rowArray[0] == "slot_name")
         {
             if (rowArray.Length < 2) return;
@@ -336,6 +347,14 @@ public class PlayerData : MonoBehaviour
         current.Add($"slot,{activePlayerSlot},coins,{playerCoins}");
         current.Add($"slot,{activePlayerSlot},selected_deck_slot,{selectedDeckSlot}");
         current.Add($"slot,{activePlayerSlot},slot_name,{SanitizeSlotName(activePlayerSlotName, activePlayerSlot)}");
+
+        EnsureDeckSlotMaps();
+        EnsureDeckSlotNamesBuffer();
+        for (int s = 0; s < deckSlotCount; s++)
+        {
+            string label = SanitizeDeckSlotName(GetDeckSlotDisplayName(s));
+            current.Add($"slot,{activePlayerSlot},deck_slot_name,{s},{label}");
+        }
 
         foreach (var kv in playerCollection)
         {
@@ -786,6 +805,47 @@ public class PlayerData : MonoBehaviour
     {
         EnsureDeckSlotMaps();
         selectedDeckSlot = Mathf.Clamp(slot, 0, deckSlotCount - 1);
+    }
+
+    private void EnsureDeckSlotNamesBuffer()
+    {
+        EnsureDeckSlotMaps();
+        if (deckSlotDisplayNames != null && deckSlotDisplayNames.Length == deckSlotCount)
+            return;
+        var prev = deckSlotDisplayNames;
+        deckSlotDisplayNames = new string[deckSlotCount];
+        if (prev != null)
+        {
+            int copy = Mathf.Min(prev.Length, deckSlotCount);
+            for (int i = 0; i < copy; i++)
+                deckSlotDisplayNames[i] = prev[i];
+        }
+    }
+
+    /// <summary>Localized deck tab label for slot index 0..deckSlotCount-1.</summary>
+    public string GetDeckSlotDisplayName(int slot)
+    {
+        EnsureDeckSlotMaps();
+        EnsureDeckSlotNamesBuffer();
+        slot = Mathf.Clamp(slot, 0, deckSlotCount - 1);
+        string s = deckSlotDisplayNames[slot];
+        return string.IsNullOrWhiteSpace(s) ? ("牌組" + (slot + 1)) : s;
+    }
+
+    public void SetDeckSlotDisplayName(int slot, string name)
+    {
+        EnsureDeckSlotMaps();
+        EnsureDeckSlotNamesBuffer();
+        slot = Mathf.Clamp(slot, 0, deckSlotCount - 1);
+        deckSlotDisplayNames[slot] = SanitizeDeckSlotName(name);
+    }
+
+    private static string SanitizeDeckSlotName(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return string.Empty;
+        string n = name.Trim().Replace("\n", " ").Replace("\r", " ").Replace(",", " ");
+        if (n.Length > 24) n = n.Substring(0, 24);
+        return n;
     }
 
     public int GetSelectedDeckTotalCount()
