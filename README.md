@@ -58,6 +58,11 @@
 
 ---
 
+## 卡牌設定與對戰規則（詳細）
+
+- 請見：**[GAMEPLAY_AND_RULES.md](./GAMEPLAY_AND_RULES.md)**  
+  （資料表結構、組牌上限、對戰流程、天氣系統等）
+
 ## 開發備註（給 clone 下來的人）
 
 - 請勿將 `Library/`、`Temp/`、`Logs/` 等目錄提交版本控制（本倉庫已透過 `.gitignore` 排除）。
