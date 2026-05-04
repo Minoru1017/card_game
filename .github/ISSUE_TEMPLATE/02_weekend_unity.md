@@ -1,6 +1,6 @@
 ---
 name: 週末／Unity：場景與美術
-description: Layout、Prefab、UI 圖、動畫等需在 Unity 編輯器內處理的工作
+about: Layout、Prefab、UI 圖、動畫等需在 Unity 編輯器內處理的工作
 title: "[unity] "
 labels: []
 ---

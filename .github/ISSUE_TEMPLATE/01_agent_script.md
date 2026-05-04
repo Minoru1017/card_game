@@ -1,6 +1,6 @@
 ---
 name: 平日／Agent：只改腳本
-description: 給 Cursor Agent 或遠端協作；限定 C# 腳本，不改場景與 Prefab
+about: 給 Cursor Agent 或遠端協作；限定 C# 腳本，不改場景與 Prefab
 title: "[agent] "
 labels: []
 ---

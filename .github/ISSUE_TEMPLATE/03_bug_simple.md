@@ -1,6 +1,6 @@
 ---
 name: 簡單 Bug 回報
-description: 不區分 Agent／Unity 時使用的一般問題
+about: 不區分 Agent／Unity 時使用的一般問題
 title: "[bug] "
 labels: []
 ---
