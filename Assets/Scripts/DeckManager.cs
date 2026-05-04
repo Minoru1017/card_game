@@ -20,6 +20,11 @@ public partial class DeckManager : MonoBehaviour
     private GameObject resetConfirmPanel;
     private GameObject deckNameEditPanel;
     private TMP_InputField deckNameEditInput;
+    private TextMeshProUGUI deckNameEditCharCounterTmp;
+    private RectTransform deckNameEditCardRt;
+    private Coroutine _deckNameEditFocusCo;
+    /// <summary>開啟對話後短暫忽略遮罩 onClick，避免「編輯鈕同一筆點擊」在放開時誤觸全螢幕 dim 而立刻關閉。</summary>
+    private float _deckNameEditDimClickIgnoreUntilUnscaled;
 
     public Transform deckPanel;
     public Transform libraryPanel;
@@ -429,35 +434,43 @@ public partial class DeckManager : MonoBehaviour
 
     private IEnumerator CoReloadBuildbeckDeckUiAfterSceneLoad()
     {
-        // Wait 1-2 frames so Buildbeck scaffold/binder can create/wire nodes first.
-        yield return null;
-        yield return null;
-
-        if (IsBuildbeckSceneActive())
-            BuildbeckSceneAutoScaffold.EnsureScaffoldNow();
-
-        EnsureCoreRefs();
-        if (PlayerData != null) PlayerData.LoadPlayerData();
-
-        EnsureDeckUIRefs();
-        BindExternalSlotButtonsIfNeeded();
-        EnsureDeckSlotGuideDots();
-        RefreshDeckSlotTabVisual();
-
-        if (IsBuildbeckSceneActive())
+        try
         {
-            RequestBuildbeckUiReload();
-            yield break;
-        }
+            // Wait 1-2 frames so Buildbeck scaffold/binder can create/wire nodes first.
+            yield return null;
+            yield return null;
 
-        ClearPanels();
-        UpdateLibrary();
-        if (showDeck) UpdateDeck();
-        RefreshScrollablePanels();
-        ForcePanelsScrollToTop();
-        ForceRebuildPanelsLayout();
-        LogBuildbeckUiDiagOnce();
-        _sceneBuildbeckReloadCo = null;
+            if (IsBuildbeckSceneActive())
+                BuildbeckSceneAutoScaffold.EnsureScaffoldNow();
+
+            EnsureCoreRefs();
+            if (PlayerData != null) PlayerData.LoadPlayerData();
+
+            EnsureDeckUIRefs();
+            BindExternalSlotButtonsIfNeeded();
+            EnsureDeckSlotGuideDots();
+            RefreshDeckSlotTabVisual();
+
+            // 先前在 Buildbeck 分支 yield break 且未清除 _sceneBuildbeckReloadCo，會永久擋住後續 RequestBuildbeckUiReload。
+            ClearPanels();
+            UpdateLibrary();
+            if (showDeck) UpdateDeck();
+            RefreshScrollablePanels();
+            ForcePanelsScrollToTop();
+            ForceRebuildPanelsLayout();
+            LogBuildbeckUiDiagOnce();
+
+            if (IsBuildbeckSceneActive())
+            {
+                BuildbeckLayoutAutoBinder.TryWireReadyBattleButton();
+                SceneLoader loader = GetCachedSceneLoader();
+                if (loader != null) loader.RefreshEnterBattleState();
+            }
+        }
+        finally
+        {
+            _sceneBuildbeckReloadCo = null;
+        }
     }
 
     private static bool IsBuildbeckSceneActive()
@@ -683,6 +696,8 @@ public partial class DeckManager : MonoBehaviour
         if (backpackInspectRoot != null && backpackInspectRoot.activeSelf && Input.GetKeyDown(KeyCode.Escape))
             HideBackpackCardInspect();
         TickBackpackInspectSwipeInput();
+        if (deckNameEditPanel != null && deckNameEditPanel.activeSelf)
+            RefreshDeckNameEditCharCounter();
     }
 
     private void LateUpdate()
@@ -1461,11 +1476,15 @@ public partial class DeckManager : MonoBehaviour
 
     private static RectTransform ResolveGoButtonRectTransform()
     {
-        GameObject named = GameObject.Find("進入對戰");
-        if (named != null)
+        string[] goObjectNames = { "進入對戰", "ready", "Ready" };
+        for (int n = 0; n < goObjectNames.Length; n++)
         {
-            RectTransform rt = named.GetComponent<RectTransform>();
-            if (rt != null) return rt;
+            GameObject named = GameObject.Find(goObjectNames[n]);
+            if (named != null)
+            {
+                RectTransform rt = named.GetComponent<RectTransform>();
+                if (rt != null) return rt;
+            }
         }
 
         Button[] buttons = Object.FindObjectsByType<Button>(FindObjectsSortMode.None);
@@ -1475,7 +1494,8 @@ public partial class DeckManager : MonoBehaviour
             if (btn == null) continue;
 
             TMP_Text tmp = btn.GetComponentInChildren<TMP_Text>(true);
-            if (tmp != null && (tmp.text.Contains("GO") || tmp.text.Contains("進入對戰")))
+            if (tmp != null && (tmp.text.Contains("GO") || tmp.text.Contains("進入對戰") ||
+                                tmp.text.Contains("準備好了") || tmp.text.Contains("準備完成")))
                 return btn.GetComponent<RectTransform>();
 
             Text txt = btn.GetComponentInChildren<Text>(true);
@@ -2671,6 +2691,7 @@ public partial class DeckManager : MonoBehaviour
 
     public void ShowDeckNameEditDialog()
     {
+        Input.imeCompositionMode = IMECompositionMode.On;
         EnsureCoreRefs();
         if (PlayerData == null)
         {
@@ -2685,16 +2706,42 @@ public partial class DeckManager : MonoBehaviour
         if (deckNameEditInput != null)
         {
             deckNameEditInput.text = cur;
-            deckNameEditInput.ActivateInputField();
-            deckNameEditInput.caretPosition = cur != null ? cur.Length : 0;
+            OnDeckNameEditValueChanged(cur ?? string.Empty);
         }
 
         deckNameEditPanel.SetActive(true);
         deckNameEditPanel.transform.SetAsLastSibling();
+        Canvas.ForceUpdateCanvases();
+        LayoutDeckNameEditPanelBelowEditButton();
+        _deckNameEditDimClickIgnoreUntilUnscaled = Time.unscaledTime + 0.4f;
+
+        if (_deckNameEditFocusCo != null)
+        {
+            StopCoroutine(_deckNameEditFocusCo);
+            _deckNameEditFocusCo = null;
+        }
+        _deckNameEditFocusCo = StartCoroutine(CoFocusDeckNameInputSoon());
+    }
+
+    private void OnDeckNameEditDimClicked()
+    {
+        if (Time.unscaledTime < _deckNameEditDimClickIgnoreUntilUnscaled) return;
+        HideDeckNameEditPanel();
     }
 
     public void HideDeckNameEditPanel()
     {
+        if (_deckNameEditFocusCo != null)
+        {
+            StopCoroutine(_deckNameEditFocusCo);
+            _deckNameEditFocusCo = null;
+        }
+        if (deckNameEditInput != null)
+            deckNameEditInput.DeactivateInputField(false);
+        if (EventSystem.current != null &&
+            deckNameEditInput != null &&
+            EventSystem.current.currentSelectedGameObject == deckNameEditInput.gameObject)
+            EventSystem.current.SetSelectedGameObject(null);
         if (deckNameEditPanel != null) deckNameEditPanel.SetActive(false);
     }
 
@@ -2728,78 +2775,297 @@ public partial class DeckManager : MonoBehaviour
             return;
         }
 
-        deckNameEditPanel = new GameObject("DeckNameEditPanel", typeof(RectTransform), typeof(Image));
-        deckNameEditPanel.transform.SetParent(canvas.transform, false);
-        RectTransform panelRect = deckNameEditPanel.GetComponent<RectTransform>();
-        panelRect.anchorMin = new Vector2(0.5f, 0.5f);
-        panelRect.anchorMax = new Vector2(0.5f, 0.5f);
-        panelRect.pivot = new Vector2(0.5f, 0.5f);
-        panelRect.sizeDelta = new Vector2(720f, 340f);
-        deckNameEditPanel.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.82f);
+        TMP_FontAsset uiFont = BuildbeckUiFonts.ResolveBuildbeckButtonFont();
+        if (uiFont == null) uiFont = hintTMPFont;
+        if (uiFont == null) uiFont = TMP_Settings.defaultFontAsset;
 
-        TMP_FontAsset uiFont = hintTMPFont != null ? hintTMPFont : BuildbeckUiFonts.ResolveBuildbeckButtonFont();
+        deckNameEditPanel = new GameObject("DeckNameEditModal", typeof(RectTransform));
+        deckNameEditPanel.transform.SetParent(canvas.transform, false);
+        RectTransform rootRt = deckNameEditPanel.GetComponent<RectTransform>();
+        rootRt.anchorMin = Vector2.zero;
+        rootRt.anchorMax = Vector2.one;
+        rootRt.offsetMin = Vector2.zero;
+        rootRt.offsetMax = Vector2.zero;
+
+        DeckNameEditDismissOnEscape esc = deckNameEditPanel.AddComponent<DeckNameEditDismissOnEscape>();
+        esc.Init(this);
+
+        GameObject dimObj = new GameObject("DeckNameEditDim", typeof(RectTransform), typeof(Image), typeof(Button));
+        dimObj.transform.SetParent(deckNameEditPanel.transform, false);
+        RectTransform dimRt = dimObj.GetComponent<RectTransform>();
+        dimRt.anchorMin = Vector2.zero;
+        dimRt.anchorMax = Vector2.one;
+        dimRt.offsetMin = Vector2.zero;
+        dimRt.offsetMax = Vector2.zero;
+        Image dimImg = dimObj.GetComponent<Image>();
+        dimImg.color = new Color(0.12f, 0.09f, 0.08f, 0.52f);
+        dimImg.raycastTarget = true;
+        Button dimBtn = dimObj.GetComponent<Button>();
+        dimBtn.targetGraphic = dimImg;
+        ColorBlock dimColors = dimBtn.colors;
+        dimColors.highlightedColor = dimImg.color;
+        dimColors.pressedColor = dimImg.color;
+        dimColors.selectedColor = dimImg.color;
+        dimBtn.colors = dimColors;
+        dimBtn.onClick.AddListener(OnDeckNameEditDimClicked);
+
+        GameObject cardObj = new GameObject("DeckNameEditCard", typeof(RectTransform), typeof(Image));
+        cardObj.transform.SetParent(deckNameEditPanel.transform, false);
+        RectTransform cardRt = cardObj.GetComponent<RectTransform>();
+        cardRt.anchorMin = new Vector2(0.5f, 0.5f);
+        cardRt.anchorMax = new Vector2(0.5f, 0.5f);
+        cardRt.pivot = new Vector2(0.5f, 0.5f);
+        cardRt.sizeDelta = new Vector2(608f, 278f);
+        Image cardImg = cardObj.GetComponent<Image>();
+        cardImg.color = new Color(0.96f, 0.92f, 0.84f, 1f);
+        cardImg.raycastTarget = true;
+        deckNameEditCardRt = cardRt;
 
         GameObject titleObj = new GameObject("Title", typeof(RectTransform), typeof(TextMeshProUGUI));
-        titleObj.transform.SetParent(deckNameEditPanel.transform, false);
+        titleObj.transform.SetParent(cardObj.transform, false);
         RectTransform titleRt = titleObj.GetComponent<RectTransform>();
         titleRt.anchorMin = new Vector2(0f, 1f);
         titleRt.anchorMax = new Vector2(1f, 1f);
         titleRt.pivot = new Vector2(0.5f, 1f);
-        titleRt.offsetMin = new Vector2(24f, -76f);
-        titleRt.offsetMax = new Vector2(-24f, -18f);
+        titleRt.offsetMin = new Vector2(28f, -46f);
+        titleRt.offsetMax = new Vector2(-28f, -12f);
         TextMeshProUGUI titleTmp = titleObj.GetComponent<TextMeshProUGUI>();
         if (uiFont != null) titleTmp.font = uiFont;
-        titleTmp.fontSize = 34f;
+        titleTmp.fontSize = 26f;
+        titleTmp.fontStyle = FontStyles.Bold;
         titleTmp.alignment = TextAlignmentOptions.Center;
-        titleTmp.color = Color.white;
+        titleTmp.color = new Color(0.28f, 0.25f, 0.2f, 0.92f);
         titleTmp.text = "\u7DE8\u8F2F\u724C\u7D44\u540d\u7A31";
 
         GameObject inputBgObj = new GameObject("DeckNameInputBg", typeof(RectTransform), typeof(Image));
-        inputBgObj.transform.SetParent(deckNameEditPanel.transform, false);
+        inputBgObj.transform.SetParent(cardObj.transform, false);
         RectTransform inputBgRt = inputBgObj.GetComponent<RectTransform>();
         inputBgRt.anchorMin = new Vector2(0.5f, 0.5f);
         inputBgRt.anchorMax = new Vector2(0.5f, 0.5f);
         inputBgRt.pivot = new Vector2(0.5f, 0.5f);
-        inputBgRt.anchoredPosition = new Vector2(0f, -8f);
-        inputBgRt.sizeDelta = new Vector2(620f, 54f);
-        inputBgObj.GetComponent<Image>().color = new Color(1f, 1f, 1f, 0.95f);
+        inputBgRt.anchoredPosition = new Vector2(0f, 2f);
+        inputBgRt.sizeDelta = new Vector2(548f, 58f);
+        Image inputBgImg = inputBgObj.GetComponent<Image>();
+        inputBgImg.color = Color.white;
+        inputBgImg.raycastTarget = true;
+
+        GameObject viewportObj = new GameObject("Viewport", typeof(RectTransform), typeof(RectMask2D));
+        viewportObj.transform.SetParent(inputBgObj.transform, false);
+        RectTransform viewportRt = viewportObj.GetComponent<RectTransform>();
+        viewportRt.anchorMin = Vector2.zero;
+        viewportRt.anchorMax = Vector2.one;
+        viewportRt.offsetMin = new Vector2(14f, 10f);
+        viewportRt.offsetMax = new Vector2(-14f, -10f);
+
+        GameObject placeholderObj = new GameObject("Placeholder", typeof(RectTransform), typeof(TextMeshProUGUI));
+        placeholderObj.transform.SetParent(viewportObj.transform, false);
+        RectTransform phRt = placeholderObj.GetComponent<RectTransform>();
+        phRt.anchorMin = Vector2.zero;
+        phRt.anchorMax = Vector2.one;
+        phRt.offsetMin = Vector2.zero;
+        phRt.offsetMax = Vector2.zero;
+        TextMeshProUGUI placeholder = placeholderObj.GetComponent<TextMeshProUGUI>();
+        if (uiFont != null) placeholder.font = uiFont;
+        placeholder.fontSize = 26f;
+        placeholder.color = new Color(0.42f, 0.4f, 0.38f, 0.58f);
+        placeholder.alignment = TextAlignmentOptions.Left;
+        placeholder.richText = false;
+        placeholder.text = "\u70BA\u60A8\u7684\u724C\u7D44\u69CB\u60F3\u540d\u7A31\u5427\uFF01";
 
         GameObject inputTextObj = new GameObject("Text", typeof(RectTransform), typeof(TextMeshProUGUI));
-        inputTextObj.transform.SetParent(inputBgObj.transform, false);
+        inputTextObj.transform.SetParent(viewportObj.transform, false);
         RectTransform inputTextRt = inputTextObj.GetComponent<RectTransform>();
         inputTextRt.anchorMin = Vector2.zero;
         inputTextRt.anchorMax = Vector2.one;
-        inputTextRt.offsetMin = new Vector2(12f, 8f);
-        inputTextRt.offsetMax = new Vector2(-12f, -8f);
+        inputTextRt.offsetMin = Vector2.zero;
+        inputTextRt.offsetMax = Vector2.zero;
         TextMeshProUGUI inputText = inputTextObj.GetComponent<TextMeshProUGUI>();
         if (uiFont != null) inputText.font = uiFont;
         inputText.fontSize = 26f;
         inputText.color = new Color(0.15f, 0.15f, 0.15f, 1f);
         inputText.alignment = TextAlignmentOptions.Left;
+        inputText.richText = false;
+        inputText.overflowMode = TextOverflowModes.Overflow;
+        inputText.enableWordWrapping = false;
 
-        GameObject placeholderObj = new GameObject("Placeholder", typeof(RectTransform), typeof(TextMeshProUGUI));
-        placeholderObj.transform.SetParent(inputBgObj.transform, false);
-        RectTransform phRt = placeholderObj.GetComponent<RectTransform>();
-        phRt.anchorMin = Vector2.zero;
-        phRt.anchorMax = Vector2.one;
-        phRt.offsetMin = new Vector2(12f, 8f);
-        phRt.offsetMax = new Vector2(-12f, -8f);
-        TextMeshProUGUI placeholder = placeholderObj.GetComponent<TextMeshProUGUI>();
-        if (uiFont != null) placeholder.font = uiFont;
-        placeholder.fontSize = 26f;
-        placeholder.color = new Color(0.4f, 0.4f, 0.4f, 0.65f);
-        placeholder.alignment = TextAlignmentOptions.Left;
-        placeholder.text = "\u724C\u7D44\u986F\u793A\u540d\u7A31";
-
-        deckNameEditInput = inputBgObj.AddComponent<TMP_InputField>();
+        deckNameEditInput = inputBgObj.AddComponent<TmpInputFieldImeRedraw>();
+        deckNameEditInput.textViewport = viewportRt;
         deckNameEditInput.textComponent = inputText;
         deckNameEditInput.placeholder = placeholder;
         deckNameEditInput.characterLimit = 24;
+        deckNameEditInput.lineType = TMP_InputField.LineType.SingleLine;
+        deckNameEditInput.characterValidation = TMP_InputField.CharacterValidation.None;
+        // 預設 m_RichText=true 時，IME 組字會插入 <u></u>；若 text 元件 richText=false 會變成畫面上看到標籤字串。
+        deckNameEditInput.richText = false;
+        deckNameEditInput.onValueChanged.AddListener(OnDeckNameEditValueChanged);
+        deckNameEditInput.onSubmit.AddListener(_ => ConfirmDeckNameEdit());
 
-        CreateConfirmButton(deckNameEditPanel.transform, "DeckNameConfirmButton", "\u78BA\u8A8D", new Vector2(140f, -124f), ConfirmDeckNameEdit);
-        CreateConfirmButton(deckNameEditPanel.transform, "DeckNameCancelButton", "\u53D6\u6D88", new Vector2(-140f, -124f), HideDeckNameEditPanel);
+        GameObject counterObj = new GameObject("CharCounter", typeof(RectTransform), typeof(TextMeshProUGUI));
+        counterObj.transform.SetParent(cardObj.transform, false);
+        RectTransform ctrRt = counterObj.GetComponent<RectTransform>();
+        ctrRt.anchorMin = new Vector2(1f, 1f);
+        ctrRt.anchorMax = new Vector2(1f, 1f);
+        ctrRt.pivot = new Vector2(1f, 1f);
+        ctrRt.anchoredPosition = new Vector2(-28f, -128f);
+        ctrRt.sizeDelta = new Vector2(96f, 28f);
+        deckNameEditCharCounterTmp = counterObj.GetComponent<TextMeshProUGUI>();
+        if (uiFont != null) deckNameEditCharCounterTmp.font = uiFont;
+        deckNameEditCharCounterTmp.fontSize = 18f;
+        deckNameEditCharCounterTmp.alignment = TextAlignmentOptions.MidlineRight;
+        deckNameEditCharCounterTmp.color = new Color(0.35f, 0.32f, 0.27f, 0.9f);
+        deckNameEditCharCounterTmp.text = "0/24";
+
+        CreateDeckNameModalActionButton(cardObj.transform, "DeckNameCancelButton", "\u53D6\u6D88", new Vector2(-118f, 24f), new Vector2(172f, 52f), uiFont, HideDeckNameEditPanel, false);
+        CreateDeckNameModalActionButton(cardObj.transform, "DeckNameConfirmButton", "\u78BA\u8A8D", new Vector2(118f, 24f), new Vector2(172f, 52f), uiFont, ConfirmDeckNameEdit, true);
 
         deckNameEditPanel.SetActive(false);
+    }
+
+    /// <summary>將名稱編輯卡片置於 <see cref="editDeckNameButton"/>（或自動解析的編輯鈕）底緣正中下方。</summary>
+    private void LayoutDeckNameEditPanelBelowEditButton()
+    {
+        if (deckNameEditPanel == null) return;
+        if (deckNameEditCardRt == null)
+        {
+            Transform t = deckNameEditPanel.transform.Find("DeckNameEditCard");
+            if (t != null) deckNameEditCardRt = t.GetComponent<RectTransform>();
+        }
+        if (deckNameEditCardRt == null) return;
+
+        RectTransform rootRt = deckNameEditPanel.transform as RectTransform;
+        Canvas canvas = deckNameEditPanel.GetComponentInParent<Canvas>();
+        if (rootRt == null || canvas == null) return;
+
+        Camera eventCam = null;
+        if (canvas.renderMode == RenderMode.ScreenSpaceCamera || canvas.renderMode == RenderMode.WorldSpace)
+            eventCam = canvas.worldCamera != null ? canvas.worldCamera : Camera.main;
+
+        Button editBtn = editDeckNameButton != null
+            ? editDeckNameButton
+            : BuildbeckLayoutAutoBinder.ResolveEditDeckNameButton(this);
+
+        if (editBtn == null)
+        {
+            deckNameEditCardRt.anchorMin = deckNameEditCardRt.anchorMax = new Vector2(0.5f, 0.5f);
+            deckNameEditCardRt.pivot = new Vector2(0.5f, 0.5f);
+            deckNameEditCardRt.anchoredPosition = Vector2.zero;
+            return;
+        }
+
+        RectTransform buttonRt = editBtn.transform as RectTransform;
+        if (buttonRt == null) return;
+
+        Vector3[] corners = new Vector3[4];
+        buttonRt.GetWorldCorners(corners);
+        Vector3 bottomCenterWorld = (corners[0] + corners[3]) * 0.5f;
+
+        Vector2 screenPoint = RectTransformUtility.WorldToScreenPoint(eventCam, bottomCenterWorld);
+        const float gapPx = 10f;
+        screenPoint.y -= gapPx;
+
+        if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(rootRt, screenPoint, eventCam, out Vector2 localPoint))
+        {
+            deckNameEditCardRt.anchorMin = deckNameEditCardRt.anchorMax = new Vector2(0.5f, 0.5f);
+            deckNameEditCardRt.pivot = new Vector2(0.5f, 0.5f);
+            deckNameEditCardRt.anchoredPosition = Vector2.zero;
+            return;
+        }
+
+        deckNameEditCardRt.anchorMin = deckNameEditCardRt.anchorMax = new Vector2(0.5f, 0.5f);
+        deckNameEditCardRt.pivot = new Vector2(0.5f, 1f);
+        deckNameEditCardRt.anchoredPosition = localPoint;
+
+        float halfW = rootRt.rect.width * 0.5f;
+        float halfH = rootRt.rect.height * 0.5f;
+        float cardW = deckNameEditCardRt.rect.width;
+        float cardH = deckNameEditCardRt.rect.height;
+        const float margin = 8f;
+        float maxX = Mathf.Max(0f, halfW - cardW * 0.5f - margin);
+        Vector2 ap = deckNameEditCardRt.anchoredPosition;
+        ap.x = Mathf.Clamp(ap.x, -maxX, maxX);
+
+        float minTopY = -halfH + margin + cardH;
+        float maxTopY = halfH - margin;
+        if (minTopY <= maxTopY)
+            ap.y = Mathf.Clamp(ap.y, minTopY, maxTopY);
+
+        deckNameEditCardRt.anchoredPosition = ap;
+    }
+
+    private void OnDeckNameEditValueChanged(string s)
+    {
+        RefreshDeckNameEditCharCounter();
+    }
+
+    private void RefreshDeckNameEditCharCounter()
+    {
+        if (deckNameEditCharCounterTmp == null || deckNameEditInput == null) return;
+        if (deckNameEditPanel == null || !deckNameEditPanel.activeSelf) return;
+        int n = deckNameEditInput.text != null ? deckNameEditInput.text.Length : 0;
+        if (deckNameEditInput.isFocused)
+            n += GetImeCompositionStringLength();
+        n = Mathf.Min(24, n);
+        deckNameEditCharCounterTmp.text = n + "/24";
+    }
+
+    private static int GetImeCompositionStringLength()
+    {
+        if (EventSystem.current != null &&
+            EventSystem.current.currentInputModule is StandaloneInputModule sim &&
+            sim.input != null &&
+            !string.IsNullOrEmpty(sim.input.compositionString))
+            return sim.input.compositionString.Length;
+        return string.IsNullOrEmpty(Input.compositionString) ? 0 : Input.compositionString.Length;
+    }
+
+    private IEnumerator CoFocusDeckNameInputSoon()
+    {
+        yield return null;
+        yield return null;
+        if (deckNameEditInput != null && deckNameEditPanel != null && deckNameEditPanel.activeSelf)
+        {
+            EventSystem.current?.SetSelectedGameObject(deckNameEditInput.gameObject);
+            deckNameEditInput.Select();
+            deckNameEditInput.ActivateInputField();
+            int len = deckNameEditInput.text != null ? deckNameEditInput.text.Length : 0;
+            deckNameEditInput.caretPosition = len;
+        }
+        _deckNameEditFocusCo = null;
+    }
+
+    private static void CreateDeckNameModalActionButton(Transform parent, string name, string label, Vector2 anchoredPosition, Vector2 size, TMP_FontAsset font, UnityAction onClick, bool primary)
+    {
+        GameObject btnObj = new GameObject(name, typeof(RectTransform), typeof(Image), typeof(Button));
+        btnObj.transform.SetParent(parent, false);
+        RectTransform btnRect = btnObj.GetComponent<RectTransform>();
+        btnRect.anchorMin = new Vector2(0.5f, 0f);
+        btnRect.anchorMax = new Vector2(0.5f, 0f);
+        btnRect.pivot = new Vector2(0.5f, 0f);
+        btnRect.anchoredPosition = anchoredPosition;
+        btnRect.sizeDelta = size;
+
+        Image img = btnObj.GetComponent<Image>();
+        img.color = primary
+            ? new Color(0.4431373f, 0.28235295f, 0.24705884f, 1f)
+            : new Color(0.93f, 0.9f, 0.82f, 1f);
+
+        Button btn = btnObj.GetComponent<Button>();
+        btn.targetGraphic = img;
+        btn.onClick.AddListener(onClick);
+
+        GameObject textObj = new GameObject("Label", typeof(RectTransform), typeof(TextMeshProUGUI));
+        textObj.transform.SetParent(btnObj.transform, false);
+        RectTransform textRect = textObj.GetComponent<RectTransform>();
+        textRect.anchorMin = Vector2.zero;
+        textRect.anchorMax = Vector2.one;
+        textRect.offsetMin = Vector2.zero;
+        textRect.offsetMax = Vector2.zero;
+        TextMeshProUGUI tmp = textObj.GetComponent<TextMeshProUGUI>();
+        if (font != null) tmp.font = font;
+        tmp.fontSize = 26f;
+        tmp.alignment = TextAlignmentOptions.Center;
+        tmp.color = primary ? Color.white : new Color(0.22f, 0.18f, 0.14f, 1f);
+        tmp.text = label;
     }
 
     private void CreateConfirmButton(Transform parent, string name, string label, Vector2 pos, UnityEngine.Events.UnityAction onClick)
@@ -3622,6 +3888,23 @@ public partial class DeckManager : MonoBehaviour
             if (host == null || eventData == null) return;
             float dx = eventData.position.x - beginPos.x;
             host.OnBackpackInspectSwipe(dx);
+        }
+    }
+
+    private sealed class DeckNameEditDismissOnEscape : MonoBehaviour
+    {
+        private DeckManager _owner;
+
+        public void Init(DeckManager owner)
+        {
+            _owner = owner;
+        }
+
+        private void Update()
+        {
+            if (_owner == null || !gameObject.activeInHierarchy) return;
+            if (Input.GetKeyDown(KeyCode.Escape))
+                _owner.HideDeckNameEditPanel();
         }
     }
 }

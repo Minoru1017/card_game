@@ -46,3 +46,6 @@ sysinfo.txt
 # OS / tooling junk
 .DS_Store
 Thumbs.db
+
+# Local bake / tool logs
+bake_log.txt

@@ -321,7 +321,11 @@ public class SceneLoader : MonoBehaviour
     {
         EnsureBattlePreviewUi();
         RefreshBattlePreviewBodyText();
-        if (battlePreviewOverlayRoot != null) battlePreviewOverlayRoot.SetActive(true);
+        if (battlePreviewOverlayRoot != null)
+        {
+            battlePreviewOverlayRoot.transform.SetAsLastSibling();
+            battlePreviewOverlayRoot.SetActive(true);
+        }
     }
 
     private void HideBattlePreviewModal()
@@ -372,6 +376,13 @@ public class SceneLoader : MonoBehaviour
 
         GameObject overlay = new GameObject("BattlePreviewOverlay", typeof(RectTransform), typeof(CanvasGroup), typeof(Image));
         overlay.transform.SetParent(parentCanvas.transform, false);
+        // Buildbeck「解散牌組」可能掛巢狀 Canvas（sortingOrder = 父階 +30）；預覽浮窗必須更高才不會被蓋住。
+        Canvas overlayCanvas = overlay.AddComponent<Canvas>();
+        overlayCanvas.overrideSorting = true;
+        overlayCanvas.sortingOrder = parentCanvas.sortingOrder + 80;
+        overlay.AddComponent<GraphicRaycaster>();
+        overlay.transform.SetAsLastSibling();
+
         RectTransform overlayRt = overlay.GetComponent<RectTransform>();
         overlayRt.anchorMin = Vector2.zero;
         overlayRt.anchorMax = Vector2.one;

@@ -1,0 +1,4 @@
+# Issue 建立頁的設定（範本選單）
+# 說明：https://docs.github.com/en/communities/using-templates-to-encourage-useful-issues-and-pull-requests/configuring-issue-templates-for-your-repository
+
+blank_issues_enabled: true

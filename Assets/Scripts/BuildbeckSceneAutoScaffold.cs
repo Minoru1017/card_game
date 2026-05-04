@@ -66,6 +66,8 @@ public static class BuildbeckSceneAutoScaffold
             BuildbeckLayoutAutoBinder.TryWireEditDeckNameButton(dmSave);
             BuildbeckLayoutAutoBinder.TryBindCurrentDeckNameDisplay(dmSave);
         }
+
+        BuildbeckLayoutAutoBinder.TryWireReadyBattleButton();
     }
 
     private static void EnsureEventSystem()

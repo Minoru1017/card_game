@@ -1,11 +1,11 @@
 schema_version,1
 uuid,41678ae8a8ed40f4894c943c4b75788f
 role,遊戲測試員
-decks,ddddadas464:11張 | 第二隊:17張 | 牌組5:9張
-heroes,死、城堡、宗教審判官、修女、國王、飢荒、聖院騎士、聖女、赤紅惡龍、瘟疫、遠古雷鳥、聖盾
+decks,哈哈:22張 | 第二隊:17張 | 牌組5:0張 | 牌組4:0張 | 牌組5:0張
+heroes,聖盾軍、主教、死、聖盾、瘟疫
 start_date,2026-05-01
-wins,0
-losses,0
+wins,2
+losses,1
 draws,0
-quits,0
-last_result,無
+quits,2
+last_result,玩家中離

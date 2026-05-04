@@ -355,6 +355,12 @@ public class GlobalNavRuntime : MonoBehaviour
     private static void EnsureNavLabelFont()
     {
         if (navLabelFont != null && FontSupportsRequiredGlyphs(navLabelFont)) return;
+        TMP_FontAsset buildbeck = BuildbeckUiFonts.ResolveBuildbeckButtonFont();
+        if (buildbeck != null && FontSupportsRequiredGlyphs(buildbeck))
+        {
+            navLabelFont = buildbeck;
+            return;
+        }
         TMP_FontAsset[] fonts = Resources.FindObjectsOfTypeAll<TMP_FontAsset>();
         for (int i = 0; i < fonts.Length; i++)
         {
@@ -557,6 +563,7 @@ public class GlobalNavRuntime : MonoBehaviour
 
     private bool OpenPlayerInfoOverlay()
     {
+        Input.imeCompositionMode = IMECompositionMode.On;
         EnsurePlayerInfoOverlay();
         if (playerInfoOverlayRoot == null) return false;
         RefreshPlayerInfoOverlayContent();
@@ -723,37 +730,52 @@ public class GlobalNavRuntime : MonoBehaviour
         Image inputBg = inputBgObj.GetComponent<Image>();
         inputBg.color = new Color(1f, 1f, 1f, 0.92f);
 
-        GameObject inputTextObj = new GameObject("Text", typeof(RectTransform), typeof(TextMeshProUGUI));
-        inputTextObj.transform.SetParent(inputBgObj.transform, false);
-        RectTransform inputTextRt = inputTextObj.GetComponent<RectTransform>();
-        inputTextRt.anchorMin = Vector2.zero;
-        inputTextRt.anchorMax = Vector2.one;
-        inputTextRt.offsetMin = new Vector2(10f, 6f);
-        inputTextRt.offsetMax = new Vector2(-10f, -6f);
-        TextMeshProUGUI inputText = inputTextObj.GetComponent<TextMeshProUGUI>();
-        if (navLabelFont != null) inputText.font = navLabelFont;
-        inputText.fontSize = 22f;
-        inputText.color = new Color(0.2f, 0.16f, 0.12f, 1f);
-        inputText.alignment = TextAlignmentOptions.Left;
+        GameObject viewportObj = new GameObject("Viewport", typeof(RectTransform), typeof(RectMask2D));
+        viewportObj.transform.SetParent(inputBgObj.transform, false);
+        RectTransform viewportRt = viewportObj.GetComponent<RectTransform>();
+        viewportRt.anchorMin = Vector2.zero;
+        viewportRt.anchorMax = Vector2.one;
+        viewportRt.offsetMin = new Vector2(10f, 6f);
+        viewportRt.offsetMax = new Vector2(-10f, -6f);
 
         GameObject placeholderObj = new GameObject("Placeholder", typeof(RectTransform), typeof(TextMeshProUGUI));
-        placeholderObj.transform.SetParent(inputBgObj.transform, false);
+        placeholderObj.transform.SetParent(viewportObj.transform, false);
         RectTransform phRt = placeholderObj.GetComponent<RectTransform>();
         phRt.anchorMin = Vector2.zero;
         phRt.anchorMax = Vector2.one;
-        phRt.offsetMin = new Vector2(10f, 6f);
-        phRt.offsetMax = new Vector2(-10f, -6f);
+        phRt.offsetMin = Vector2.zero;
+        phRt.offsetMax = Vector2.zero;
         TextMeshProUGUI placeholder = placeholderObj.GetComponent<TextMeshProUGUI>();
         if (navLabelFont != null) placeholder.font = navLabelFont;
         placeholder.fontSize = 22f;
         placeholder.color = new Color(0.45f, 0.4f, 0.35f, 0.75f);
         placeholder.alignment = TextAlignmentOptions.Left;
+        placeholder.richText = false;
         placeholder.text = "玩家槽位名稱";
 
-        playerSlotNameInput = inputBgObj.AddComponent<TMP_InputField>();
+        GameObject inputTextObj = new GameObject("Text", typeof(RectTransform), typeof(TextMeshProUGUI));
+        inputTextObj.transform.SetParent(viewportObj.transform, false);
+        RectTransform inputTextRt = inputTextObj.GetComponent<RectTransform>();
+        inputTextRt.anchorMin = Vector2.zero;
+        inputTextRt.anchorMax = Vector2.one;
+        inputTextRt.offsetMin = Vector2.zero;
+        inputTextRt.offsetMax = Vector2.zero;
+        TextMeshProUGUI inputText = inputTextObj.GetComponent<TextMeshProUGUI>();
+        if (navLabelFont != null) inputText.font = navLabelFont;
+        inputText.fontSize = 22f;
+        inputText.color = new Color(0.2f, 0.16f, 0.12f, 1f);
+        inputText.alignment = TextAlignmentOptions.Left;
+        inputText.richText = false;
+        inputText.overflowMode = TextOverflowModes.Overflow;
+        inputText.enableWordWrapping = false;
+
+        playerSlotNameInput = inputBgObj.AddComponent<TmpInputFieldImeRedraw>();
+        playerSlotNameInput.textViewport = viewportRt;
         playerSlotNameInput.textComponent = inputText;
         playerSlotNameInput.placeholder = placeholder;
         playerSlotNameInput.characterLimit = 24;
+        playerSlotNameInput.characterValidation = TMP_InputField.CharacterValidation.None;
+        playerSlotNameInput.richText = false;
 
         GameObject saveNameBtnObj = CreateButton(
             slotSection.transform,

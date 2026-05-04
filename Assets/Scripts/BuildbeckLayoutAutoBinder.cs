@@ -76,6 +76,18 @@ public static class BuildbeckLayoutAutoBinder
         "DeckNameEditButton",
     };
 
+    /// <summary>戰鬥準備完成 → 開啟 <see cref="SceneLoader.EnterBattle"/>（戰前預覽／戰鬥資訊浮窗）。</summary>
+    private static readonly string[] ReadyBattleButtonNames =
+    {
+        "ready",
+        "Ready",
+        "戰鬥準備完成",
+        "準備完成",
+        "進入對戰",
+        "BattleReadyButton",
+        "GoBattle",
+    };
+
     private static readonly string[] CurrentDeckDisplayNameObjectNames =
     {
         "CurrentDeckDisplayName",
@@ -156,6 +168,7 @@ public static class BuildbeckLayoutAutoBinder
         if (deckManager.deckSlotButton5 == null) deckManager.deckSlotButton5 = FindFirstButtonByNames(DeckSlot5Names);
 
         TryWireBackButtonToPersistent();
+        TryWireReadyBattleButton();
         TryWireSaveDeckButton(deckManager);
         TryWireDisbandDeckButton(deckManager);
         TryWireEditDeckNameButton(deckManager);
@@ -178,6 +191,32 @@ public static class BuildbeckLayoutAutoBinder
         UnityEngine.Events.UnityAction persist = loader.EnterPersistent;
         back.onClick.RemoveListener(persist);
         back.onClick.AddListener(persist);
+    }
+
+    /// <summary>
+    /// 對戰準備／ready 鈕 → <see cref="SceneLoader.EnterBattle"/>。場景重載或 UI 重整後應再呼叫，並會更新 <see cref="SceneLoader.enterBattleButton"/>。
+    /// </summary>
+    public static void TryWireReadyBattleButton()
+    {
+        Scene active = SceneManager.GetActiveScene();
+        if (!active.IsValid() || !active.name.Equals(SceneName, System.StringComparison.OrdinalIgnoreCase))
+            return;
+
+        Button ready = FindFirstButtonByNames(ReadyBattleButtonNames);
+        if (ready == null) return;
+
+        SceneLoader loader = cachedSceneLoader;
+        if (loader == null || loader.gameObject == null)
+            loader = Object.FindFirstObjectByType<SceneLoader>();
+        cachedSceneLoader = loader;
+        if (loader == null) return;
+
+        UnityEngine.Events.UnityAction enter = loader.EnterBattle;
+        ready.onClick.RemoveListener(enter);
+        ready.onClick.AddListener(enter);
+
+        // 場景重載後務必指到新實例；僅在 null 時指派會留下舊引用，導致 onClick 失效或 interactable 錯位。
+        loader.enterBattleButton = ready;
     }
 
     /// <summary>Wires scene or scaffold-created save button to <see cref="DeckManager.OnClickSaveDeckButton"/>.</summary>

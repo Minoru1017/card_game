@@ -239,7 +239,14 @@ public class PlayerData : MonoBehaviour
             EnsureDeckSlotMaps();
             EnsureDeckSlotNamesBuffer();
             deckSlotIdx = Mathf.Clamp(deckSlotIdx, 0, deckSlotCount - 1);
-            deckSlotDisplayNames[deckSlotIdx] = SanitizeDeckSlotName(rowArray[2]);
+            // 名稱可含逗號：存檔以逗號 split 後需自索引 2 起整段接回。
+            string rawLabel = rowArray[2];
+            if (rowArray.Length > 3)
+            {
+                for (int ri = 3; ri < rowArray.Length; ri++)
+                    rawLabel = rawLabel + "," + rowArray[ri];
+            }
+            deckSlotDisplayNames[deckSlotIdx] = SanitizeDeckSlotName(rawLabel);
         }
         else if (rowArray[0] == "slot_name")
         {
@@ -843,7 +850,7 @@ public class PlayerData : MonoBehaviour
     private static string SanitizeDeckSlotName(string name)
     {
         if (string.IsNullOrWhiteSpace(name)) return string.Empty;
-        string n = name.Trim().Replace("\n", " ").Replace("\r", " ").Replace(",", " ");
+        string n = name.Trim().Replace("\n", " ").Replace("\r", " ");
         if (n.Length > 24) n = n.Substring(0, 24);
         return n;
     }
