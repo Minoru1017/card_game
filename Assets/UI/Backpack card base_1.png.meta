@@ -1,10 +1,22 @@
 fileFormatVersion: 2
-guid: 2c20185a59d82ab4a80a15ba5cbbec8c
+guid: 669f2496ab6b6984bb7ba756e0c9c393
 TextureImporter:
   internalIDToNameTable:
   - first:
-      213: 2688860679172727607
-    second: ready_0
+      213: 6632076728766282113
+    second: Backpack card base_1_0
+  - first:
+      213: 3494914738632376882
+    second: Backpack card base_1_1
+  - first:
+      213: 9102024961471353002
+    second: Backpack card base_1_2
+  - first:
+      213: 5242933023118614078
+    second: Backpack card base_1_3
+  - first:
+      213: -9219592859724678183
+    second: Backpack card base_1_4
   externalObjects: {}
   serializedVersion: 12
   mipmaps:
@@ -122,22 +134,106 @@ TextureImporter:
     serializedVersion: 2
     sprites:
     - serializedVersion: 2
-      name: ready_0
+      name: Backpack card base_1_0
       rect:
         serializedVersion: 2
-        x: 6
-        y: 6
-        width: 432
-        height: 132
+        x: 27
+        y: 19
+        width: 284
+        height: 695
       alignment: 0
-      pivot: {x: 0, y: 0}
+      pivot: {x: 0.5, y: 0.5}
       border: {x: 0, y: 0, z: 0, w: 0}
       outline: []
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 7332b90aa80c05520800000000000000
-      internalID: 2688860679172727607
+      spriteID: 189bf3585aed90c50800000000000000
+      internalID: 6632076728766282113
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Backpack card base_1_1
+      rect:
+        serializedVersion: 2
+        x: 27
+        y: 19
+        width: 284
+        height: 695
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 232c57c107e608030800000000000000
+      internalID: 3494914738632376882
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Backpack card base_1_2
+      rect:
+        serializedVersion: 2
+        x: 30
+        y: 616
+        width: 279
+        height: 98
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: aa01d355a73e05e70800000000000000
+      internalID: 9102024961471353002
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Backpack card base_1_3
+      rect:
+        serializedVersion: 2
+        x: 27
+        y: 147
+        width: 284
+        height: 432
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: e3e56286ec3a2c840800000000000000
+      internalID: 5242933023118614078
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: Backpack card base_1_4
+      rect:
+        serializedVersion: 2
+        x: 72
+        y: 19
+        width: 201
+        height: 92
+      alignment: 0
+      pivot: {x: 0.5, y: 0.5}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 9dbf16e342d6d0080800000000000000
+      internalID: -9219592859724678183
       vertices: []
       indices: 
       edges: []
@@ -145,7 +241,7 @@ TextureImporter:
     outline: []
     physicsShape: []
     bones: []
-    spriteID: 
+    spriteID: 25e84ceea6d0084418f7fe0b26daa278
     internalID: 0
     vertices: []
     indices: 
@@ -153,7 +249,11 @@ TextureImporter:
     weights: []
     secondaryTextures: []
     nameFileIdTable:
-      ready_0: 2688860679172727607
+      Backpack card base_1_0: 6632076728766282113
+      Backpack card base_1_1: 3494914738632376882
+      Backpack card base_1_2: 9102024961471353002
+      Backpack card base_1_3: 5242933023118614078
+      Backpack card base_1_4: -9219592859724678183
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 

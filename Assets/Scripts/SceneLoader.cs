@@ -12,8 +12,6 @@ public class SceneLoader : MonoBehaviour
     [Header("Target Scene")]
     public string battleSceneName = "BattleSimulation";
     public string persistentSceneName = "Persistent";
-    public string buildbeckSceneName = "Buildbeck";
-    public string cardStoreSceneName = "CardStore";
     [Header("Deck Check")]
     public PlayerData playerData;
     public CardStore cardStore;
@@ -206,40 +204,6 @@ public class SceneLoader : MonoBehaviour
         }
 
         SceneManager.LoadScene(persistentSceneName);
-    }
-
-    // Bind this method to the "前往 Buildbeck" button OnClick.
-    public void EnterBuildbeck()
-    {
-        if (string.IsNullOrWhiteSpace(buildbeckSceneName))
-        {
-            Debug.LogError("SceneLoader: buildbeckSceneName is empty.");
-            return;
-        }
-        if (!Application.CanStreamedLevelBeLoaded(buildbeckSceneName))
-        {
-            Debug.LogError("SceneLoader: buildbeck scene not in Build Settings -> " + buildbeckSceneName);
-            return;
-        }
-
-        SceneManager.LoadScene(buildbeckSceneName);
-    }
-
-    // Bind this method to the "前往 CardStore" button OnClick.
-    public void EnterCardStore()
-    {
-        if (string.IsNullOrWhiteSpace(cardStoreSceneName))
-        {
-            Debug.LogError("SceneLoader: cardStoreSceneName is empty.");
-            return;
-        }
-        if (!Application.CanStreamedLevelBeLoaded(cardStoreSceneName))
-        {
-            Debug.LogError("SceneLoader: CardStore scene not in Build Settings -> " + cardStoreSceneName);
-            return;
-        }
-
-        SceneManager.LoadScene(cardStoreSceneName);
     }
 
     public void RefreshEnterBattleState()

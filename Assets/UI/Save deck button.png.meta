@@ -152,7 +152,8 @@ TextureImporter:
     edges: []
     weights: []
     secondaryTextures: []
-    nameFileIdTable: {}
+    nameFileIdTable:
+      Save deck button_0: -8740061953673909288
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 

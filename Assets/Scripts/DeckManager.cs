@@ -1924,18 +1924,52 @@ public partial class DeckManager : MonoBehaviour
     private void AttachWheelScroll(Transform panel)
     {
         if (panel == null) return;
-        ScrollRect sr = panel.GetComponent<ScrollRect>();
-        if (sr == null) sr = panel.GetComponentInParent<ScrollRect>();
         RectTransform viewport = null;
         RectTransform panelRect = panel as RectTransform;
+        bool isLibraryPanel = ReferenceEquals(panel, libraryPanel);
+        bool isDeckPanel = ReferenceEquals(panel, deckPanel);
+        // Only the Persistent scene's BagUIHorizontalRow uses the horizontal swipe layout.
+        // Buildbeck's left-side library (any other name) keeps the original vertical scroll behavior.
+        bool isHorizontalLibrary = isLibraryPanel && IsHorizontalBagPanelName(panel);
+        ScrollRect sr = null;
+
+        if (isHorizontalLibrary && panelRect != null)
+        {
+            viewport = EnsureLibraryHorizontalViewport(panelRect);
+            sr = viewport != null ? viewport.GetComponent<ScrollRect>() : null;
+        }
+
+        if (sr == null)
+        {
+            sr = panel.GetComponent<ScrollRect>();
+            if (!isHorizontalLibrary && sr == null) sr = panel.GetComponentInParent<ScrollRect>();
+        }
+
         if (panelRect != null)
         {
-            // Normalize to top-anchored content model to keep scroll range correct.
-            panelRect.anchorMin = new Vector2(0f, 1f);
-            panelRect.anchorMax = new Vector2(1f, 1f);
-            panelRect.pivot = new Vector2(0.5f, 1f);
+            if (isHorizontalLibrary)
+            {
+                // BagUIHorizontalRow is a horizontal row, so keep the content left-anchored for left-right swipe.
+                panelRect.anchorMin = new Vector2(0f, 0.5f);
+                panelRect.anchorMax = new Vector2(0f, 0.5f);
+                panelRect.pivot = new Vector2(0f, 0.5f);
+                GridLayoutGroup grid = panelRect.GetComponent<GridLayoutGroup>();
+                if (grid != null)
+                {
+                    grid.startAxis = GridLayoutGroup.Axis.Horizontal;
+                    grid.constraint = GridLayoutGroup.Constraint.FixedRowCount;
+                    grid.constraintCount = 1;
+                }
+            }
+            else
+            {
+                // Normalize to top-anchored content model to keep vertical scroll range correct.
+                panelRect.anchorMin = new Vector2(0f, 1f);
+                panelRect.anchorMax = new Vector2(1f, 1f);
+                panelRect.pivot = new Vector2(0.5f, 1f);
+            }
         }
-        if (sr == null)
+        if (!isHorizontalLibrary && sr == null)
         {
             RectTransform fallbackViewport = panel.parent as RectTransform;
             if (fallbackViewport != null && panelRect != null)
@@ -1951,25 +1985,38 @@ public partial class DeckManager : MonoBehaviour
         if (sr != null)
         {
             // Auto-wire ScrollRect bindings if scene setup is incomplete.
-            if (sr.content == null && panelRect != null) sr.content = panelRect;
+            if (isHorizontalLibrary && panelRect != null)
+            {
+                sr.content = panelRect;
+                if (viewport != null) sr.viewport = viewport;
+            }
+            else if (sr.content == null && panelRect != null) sr.content = panelRect;
             if (sr.viewport == null)
             {
                 RectTransform candidate = panel.parent as RectTransform;
                 if (candidate != null) sr.viewport = candidate;
             }
-            sr.horizontal = false;
-            sr.vertical = true;
-            if (ReferenceEquals(panel, libraryPanel))
+            sr.horizontal = isHorizontalLibrary;
+            sr.vertical = !isHorizontalLibrary;
+            if (isLibraryPanel)
+            {
                 _libraryPanelScrollRect = sr;
-            else if (ReferenceEquals(panel, deckPanel))
+                if (isHorizontalLibrary)
+                {
+                    sr.verticalScrollbar = null;
+                    sr.verticalScrollbarVisibility = ScrollRect.ScrollbarVisibility.AutoHide;
+                }
+            }
+            else if (isDeckPanel)
             {
                 _deckPanelScrollRect = sr;
                 EnsureDeckScrollUserGestureRelay(sr);
             }
             ApplyDeckPanelScrollFeel(sr, panel);
             viewport = sr.viewport != null ? sr.viewport : panelRect;
-            EnsureVerticalScrollbar(sr);
-            if (ReferenceEquals(panel, deckPanel))
+            if (!isHorizontalLibrary)
+                EnsureVerticalScrollbar(sr);
+            if (isDeckPanel)
             {
                 _deckListParentAnchoredYBaselineCaptured = false;
                 ApplyDeckParentLayoutOffsets();
@@ -1990,6 +2037,77 @@ public partial class DeckManager : MonoBehaviour
             }
         }
 
+    }
+
+    /// <summary>
+    /// True only when the library panel is the Persistent scene's <c>BagUIHorizontalRow</c> (horizontal swipe row).
+    /// Any other library panel name (e.g. Buildbeck's <c>Library Grid</c>) keeps the legacy vertical scroll layout.
+    /// </summary>
+    private static bool IsHorizontalBagPanelName(Transform panel)
+    {
+        if (panel == null) return false;
+        string n = panel.name;
+        if (string.IsNullOrEmpty(n)) return false;
+        return n.Equals("BagUIHorizontalRow", System.StringComparison.OrdinalIgnoreCase);
+    }
+
+    private RectTransform EnsureLibraryHorizontalViewport(RectTransform content)
+    {
+        if (content == null) return null;
+        const string ViewportName = "RuntimeLibraryHorizontalViewport";
+        RectTransform currentParent = content.parent as RectTransform;
+        if (currentParent == null) return null;
+
+        if (currentParent.name == ViewportName)
+        {
+            EnsureLibraryHorizontalScrollRect(currentParent, content);
+            return currentParent;
+        }
+
+        Transform originalParent = content.parent;
+        int originalSibling = content.GetSiblingIndex();
+        GameObject viewportObj = new GameObject(ViewportName, typeof(RectTransform), typeof(Image), typeof(RectMask2D), typeof(ScrollRect));
+        viewportObj.transform.SetParent(originalParent, false);
+        viewportObj.transform.SetSiblingIndex(originalSibling);
+
+        RectTransform viewport = viewportObj.GetComponent<RectTransform>();
+        viewport.anchorMin = content.anchorMin;
+        viewport.anchorMax = content.anchorMax;
+        viewport.pivot = content.pivot;
+        viewport.anchoredPosition = content.anchoredPosition;
+        viewport.sizeDelta = content.sizeDelta;
+        viewport.localScale = content.localScale;
+        viewport.localRotation = content.localRotation;
+
+        Image viewportImage = viewportObj.GetComponent<Image>();
+        viewportImage.color = new Color(1f, 1f, 1f, 0.001f);
+        viewportImage.raycastTarget = true;
+
+        content.SetParent(viewport, false);
+        content.anchorMin = new Vector2(0f, 0.5f);
+        content.anchorMax = new Vector2(0f, 0.5f);
+        content.pivot = new Vector2(0f, 0.5f);
+        content.anchoredPosition = Vector2.zero;
+        content.localScale = Vector3.one;
+        content.localRotation = Quaternion.identity;
+
+        EnsureLibraryHorizontalScrollRect(viewport, content);
+        return viewport;
+    }
+
+    private static void EnsureLibraryHorizontalScrollRect(RectTransform viewport, RectTransform content)
+    {
+        if (viewport == null || content == null) return;
+        ScrollRect sr = viewport.GetComponent<ScrollRect>();
+        if (sr == null) sr = viewport.gameObject.AddComponent<ScrollRect>();
+        sr.content = content;
+        sr.viewport = viewport;
+        sr.horizontal = true;
+        sr.vertical = false;
+        sr.horizontalScrollbar = null;
+        sr.verticalScrollbar = null;
+        sr.horizontalScrollbarVisibility = ScrollRect.ScrollbarVisibility.AutoHide;
+        sr.verticalScrollbarVisibility = ScrollRect.ScrollbarVisibility.AutoHide;
     }
 
     private void ApplyDeckPanelScrollFeel(ScrollRect sr, Transform panel)
@@ -2033,14 +2151,15 @@ public partial class DeckManager : MonoBehaviour
         Vector2 normalized)
     {
         if (sr == null) return;
-        float y = normalized.y;
+        bool useHorizontalAxis = sr.horizontal && !sr.vertical;
+        float position = useHorizontalAxis ? normalized.x : normalized.y;
         if (lastNormY >= 0f)
         {
             const float edgeEps = 0.004f;
             const float inner = 0.035f;
-            bool hitTop = lastNormY < 1f - inner && y >= 1f - edgeEps;
-            bool hitBottom = lastNormY > inner && y <= edgeEps;
-            if (hitTop || hitBottom)
+            bool hitMax = lastNormY < 1f - inner && position >= 1f - edgeEps;
+            bool hitMin = lastNormY > inner && position <= edgeEps;
+            if (hitMax || hitMin)
             {
                 if (Time.unscaledTime >= _scrollEdgeFeelCooldownUntilUnscaled)
                 {
@@ -2056,7 +2175,7 @@ public partial class DeckManager : MonoBehaviour
                 }
             }
         }
-        lastNormY = y;
+        lastNormY = position;
     }
 
     private IEnumerator CoViewportScrollEdgePulse(RectTransform viewport, int generation, bool isLibrary)
@@ -2210,11 +2329,16 @@ public partial class DeckManager : MonoBehaviour
         if (sr == null) return;
         Canvas.ForceUpdateCanvases();
         sr.StopMovement();
-        sr.verticalNormalizedPosition = 1f;
+        bool useHorizontalAxis = sr.horizontal && !sr.vertical;
+        if (useHorizontalAxis)
+            sr.horizontalNormalizedPosition = 0f;
+        else
+            sr.verticalNormalizedPosition = 1f;
         if (sr.content != null)
         {
             Vector2 p = sr.content.anchoredPosition;
-            p.y = 0f;
+            if (useHorizontalAxis) p.x = 0f;
+            else p.y = 0f;
             sr.content.anchoredPosition = p;
         }
     }
@@ -2325,12 +2449,38 @@ public partial class DeckManager : MonoBehaviour
         if (content == null) return;
 
         RectTransform viewport = content.parent as RectTransform;
+        bool isLibrary = ReferenceEquals(panel, libraryPanel);
+        bool isHorizontalLibrary = isLibrary && IsHorizontalBagPanelName(panel);
         float viewHeight = viewport != null ? viewport.rect.height : 0f;
+        float viewWidth = viewport != null ? viewport.rect.width : 0f;
 
         GridLayoutGroup grid = content.GetComponent<GridLayoutGroup>();
         bool isDeck = ReferenceEquals(panel, deckPanel);
         if (grid != null)
         {
+            if (isHorizontalLibrary)
+            {
+                int libChildCount = content.childCount;
+                float contentWidth = grid.padding.left + grid.padding.right;
+                if (libChildCount > 0)
+                {
+                    contentWidth += libChildCount * grid.cellSize.x;
+                    contentWidth += Mathf.Max(0, libChildCount - 1) * grid.spacing.x;
+                }
+
+                Vector2 libSize = content.sizeDelta;
+                libSize.x = libChildCount <= 0 ? viewWidth : Mathf.Max(viewWidth, contentWidth);
+                libSize.y = Mathf.Max(viewHeight, grid.padding.top + grid.padding.bottom + grid.cellSize.y);
+                content.sizeDelta = libSize;
+
+                Vector2 libPos = content.anchoredPosition;
+                float minX = -Mathf.Max(0f, libSize.x - viewWidth);
+                libPos.x = Mathf.Clamp(libPos.x, minX, 0f);
+                libPos.y = 0f;
+                content.anchoredPosition = libPos;
+                return;
+            }
+
             float width = Mathf.Max(1f, content.rect.width);
             float usableWidth = Mathf.Max(1f, width - grid.padding.left - grid.padding.right);
             float unitW = grid.cellSize.x + grid.spacing.x;

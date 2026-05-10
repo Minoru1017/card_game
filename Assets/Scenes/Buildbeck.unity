@@ -974,8 +974,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   battleSceneName: BattleSimulation
   persistentSceneName: Persistent
-  buildbeckSceneName: Buildbeck
-  cardStoreSceneName: CardStore
   playerData: {fileID: 0}
   cardStore: {fileID: 0}
   enterBattleButton: {fileID: 0}

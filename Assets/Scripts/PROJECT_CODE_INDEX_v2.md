@@ -39,7 +39,7 @@
 | 模組 | 功能描述 | 主要類別/函式 | 典型輸入 | 典型輸出 |
 | --- | --- | --- | --- | --- |
 | 場景流程/導航 | 場景切換與前置條件檢查 | `SceneLoader` / `BattleSceneBootstrap` / `EnterBattle()` | 切換請求、組牌狀態 | 場景載入、提示顯示 |
-| 存檔重置/維運 | 刪檔與恢復預設狀態 | `SaveResetManager` / `DeleteSave()` / `ResetToDefaults()` | 重置/刪除操作 | 存檔清除、資料重建 |
+| 存檔重置/維運 | 由全域玩家資訊面板執行重置流程 | `GlobalNavRuntime` / `TryOpenPlayerInfoOverlay()` | 玩家資訊面板互動 | 玩家資料重置與刷新 |
 | 自動模擬/測試 | 批次自動對戰與勝率統計 | `BattleAutoSimPlugin` / `Run()` / `EnsureProgressUi()` / `TryAutoPlayOneCard()` | 模擬參數、回合數 | 勝率統計、進度與結果 |
 
 ---

@@ -77,7 +77,7 @@ public class CardDisplay : MonoBehaviour
         if (backgroundImage != null) return backgroundImage;
 
         // Prefer common art node names used by current card prefabs.
-        string[] preferredNames = { "Role", "BGImage", "Artwork", "Art" };
+        string[] preferredNames = { "Role", "BGImage", "Artwork", "Art", "Card Art" };
         for (int i = 0; i < preferredNames.Length; i++)
         {
             Transform t = FindDeepChildByName(transform, preferredNames[i]);
@@ -116,7 +116,9 @@ public class CardDisplay : MonoBehaviour
         // User-requested behavior: Library thumbnail should use the green oval layer.
         if (isLibraryCard)
         {
-            Image libraryTarget = FindNamedImage("BGImage");
+            // Backpack card prefab uses "Card Art"; legacy library card uses "BGImage".
+            Image libraryTarget = FindNamedImage("Card Art");
+            if (libraryTarget == null) libraryTarget = FindNamedImage("BGImage");
             if (libraryTarget != null)
             {
                 libraryTarget.sprite = sprite;
@@ -133,10 +135,11 @@ public class CardDisplay : MonoBehaviour
         Image bgImage = FindNamedImage("BGImage");
         Image art = FindNamedImage("Art");
         Image artwork = FindNamedImage("Artwork");
+        Image cardArt = FindNamedImage("Card Art");
 
         // Prefer an already-visible layer to avoid layout side effects.
-        Image target = PickFirstVisible(nbBg, role, bgImage, art, artwork);
-        if (target == null) target = PickFirstNonNull(nbBg, role, bgImage, art, artwork, ResolveArtworkTargetImage());
+        Image target = PickFirstVisible(nbBg, role, bgImage, art, artwork, cardArt);
+        if (target == null) target = PickFirstNonNull(nbBg, role, bgImage, art, artwork, cardArt, ResolveArtworkTargetImage());
         if (target == null) return;
 
         target.sprite = sprite;

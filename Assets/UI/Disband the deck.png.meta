@@ -152,7 +152,8 @@ TextureImporter:
     edges: []
     weights: []
     secondaryTextures: []
-    nameFileIdTable: {}
+    nameFileIdTable:
+      Disband the deck_0: 460565798666071974
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 

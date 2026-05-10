@@ -1,11 +1,11 @@
 schema_version,1
 uuid,41678ae8a8ed40f4894c943c4b75788f
 role,遊戲測試員
-decks,哈哈:22張 | 第二隊:17張 | 牌組5:0張 | 牌組4:0張 | 牌組5:0張
-heroes,聖盾軍、主教、死、聖盾、瘟疫
+decks,哈哈:7張 | 第二隊:0張 | 牌組5:0張
+heroes,聖盾軍、主教、聖盾、瘟疫、飢荒、聖院騎士、赤紅惡龍、王后、王國騎兵、國王、宗教審判官、城堡、聖女、民兵、死、長弓兵、戰爭、傳教士
 start_date,2026-05-01
-wins,2
+wins,5
 losses,1
 draws,0
 quits,2
-last_result,玩家中離
+last_result,勝利
