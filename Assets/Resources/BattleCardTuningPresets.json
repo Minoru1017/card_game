@@ -1,0 +1,60 @@
+{
+    "presets": [
+        {
+            "presetId": "preset1",
+            "displayName": "預設一",
+            "layout": {
+                "handCardSizeMultiplier": 1.8,
+                "handCardSpacing": 0.0,
+                "handAreaAnchoredYCanPlay": -100.0,
+                "handAreaAnchoredYCantPlay": -100.0,
+                "enemyHandAreaAnchoredYCanPlay": 100.0,
+                "enemyHandAreaAnchoredYCantPlay": 100.0
+            },
+            "text": {
+                "handCardTextScale": 1.5,
+                "handCardNameScale": 1.2,
+                "handCardBackplateScale": 1.0
+            },
+            "field": {
+                "fieldMonsterCardSizeMultiplier": 2.0,
+                "fieldSpellCardSizeMultiplier": 2.0,
+                "enemyFieldSizeMultiplier": 0.95,
+                "fieldAreaOffsetY": 10.0,
+                "playerMonsterFieldX": -230.0,
+                "enemyMonsterFieldX": 260.0,
+                "monsterSpellSpacingX": 250.0,
+                "fieldAttackHealthTextScale": 1.0,
+                "fieldSpellTextScale": 1.0
+            }
+        },
+        {
+            "presetId": "control_group",
+            "displayName": "對照組",
+            "layout": {
+                "handCardSizeMultiplier": 3.0,
+                "handCardSpacing": 80.0,
+                "handAreaAnchoredYCanPlay": 200.0,
+                "handAreaAnchoredYCantPlay": 200.0,
+                "enemyHandAreaAnchoredYCanPlay": 200.0,
+                "enemyHandAreaAnchoredYCantPlay": 200.0
+            },
+            "text": {
+                "handCardTextScale": 2.5,
+                "handCardNameScale": 2.5,
+                "handCardBackplateScale": 2.0
+            },
+            "field": {
+                "fieldMonsterCardSizeMultiplier": 5.0,
+                "fieldSpellCardSizeMultiplier": 5.0,
+                "enemyFieldSizeMultiplier": 1.5,
+                "fieldAreaOffsetY": 200.0,
+                "playerMonsterFieldX": -600.0,
+                "enemyMonsterFieldX": 600.0,
+                "monsterSpellSpacingX": 400.0,
+                "fieldAttackHealthTextScale": 2.5,
+                "fieldSpellTextScale": 2.5
+            }
+        }
+    ]
+}

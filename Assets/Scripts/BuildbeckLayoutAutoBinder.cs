@@ -12,6 +12,7 @@ public static class BuildbeckLayoutAutoBinder
     private const string SceneName = "Buildbeck";
     private static DeckManager cachedDeckManager;
     private static SceneLoader cachedSceneLoader;
+    private static bool sceneHooked;
     private static readonly string[] LibraryPanelNames =
     {
         "Library Grid",
@@ -38,8 +39,8 @@ public static class BuildbeckLayoutAutoBinder
 
     private static readonly string[] BackButtonNames =
     {
-        "BackButton",
-        "Back",
+        "return",
+        "Return",
         "返回",
         "返回按鈕",
         "回首頁",
@@ -98,15 +99,34 @@ public static class BuildbeckLayoutAutoBinder
         "牌組名稱",
     };
 
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    private static void RegisterBuildbeckSceneHook()
+    {
+        if (sceneHooked) return;
+        SceneManager.sceneLoaded += OnBuildbeckSceneLoaded;
+        sceneHooked = true;
+    }
+
+    private static void OnBuildbeckSceneLoaded(Scene scene, LoadSceneMode mode)
+    {
+        if (!scene.IsValid() || !scene.name.Equals(SceneName, System.StringComparison.OrdinalIgnoreCase))
+            return;
+        TryWireDeckManagerForScene(scene);
+    }
+
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void WireBuildbeckLayout()
     {
+        RegisterBuildbeckSceneHook();
         Scene active = SceneManager.GetActiveScene();
         if (!active.IsValid() || !active.name.Equals(SceneName, System.StringComparison.OrdinalIgnoreCase))
-        {
             return;
-        }
 
+        TryWireDeckManagerForScene(active);
+    }
+
+    private static void TryWireDeckManagerForScene(Scene scene)
+    {
         DeckManager deckManager = cachedDeckManager;
         if (deckManager == null) deckManager = Object.FindFirstObjectByType<DeckManager>();
         cachedDeckManager = deckManager;
@@ -116,7 +136,7 @@ public static class BuildbeckLayoutAutoBinder
             return;
         }
 
-        TryWireDeckManager(deckManager);
+        TryWireDeckManager(deckManager, scene);
     }
 
     /// <summary>
@@ -142,32 +162,32 @@ public static class BuildbeckLayoutAutoBinder
             deckManager.deckSlotButton5 = null;
         }
 
-        TryWireDeckManager(deckManager);
+        TryWireDeckManager(deckManager, SceneManager.GetActiveScene());
     }
 
-    private static void TryWireDeckManager(DeckManager deckManager)
+    private static void TryWireDeckManager(DeckManager deckManager, Scene buildbeckScene)
     {
         if (deckManager == null) return;
 
         if (deckManager.libraryPanel == null)
         {
-            Transform libraryPanel = FindFirstTransformByNames(LibraryPanelNames);
+            Transform libraryPanel = FindFirstTransformByNames(buildbeckScene, LibraryPanelNames);
             if (libraryPanel != null) deckManager.libraryPanel = libraryPanel;
         }
 
         if (deckManager.deckPanel == null)
         {
-            Transform deckPanel = FindFirstTransformByNames(DeckPanelNames);
+            Transform deckPanel = FindFirstTransformByNames(buildbeckScene, DeckPanelNames);
             if (deckPanel != null) deckManager.deckPanel = deckPanel;
         }
 
-        if (deckManager.deckSlotButton1 == null) deckManager.deckSlotButton1 = FindFirstButtonByNames(DeckSlot1Names);
-        if (deckManager.deckSlotButton2 == null) deckManager.deckSlotButton2 = FindFirstButtonByNames(DeckSlot2Names);
-        if (deckManager.deckSlotButton3 == null) deckManager.deckSlotButton3 = FindFirstButtonByNames(DeckSlot3Names);
-        if (deckManager.deckSlotButton4 == null) deckManager.deckSlotButton4 = FindFirstButtonByNames(DeckSlot4Names);
-        if (deckManager.deckSlotButton5 == null) deckManager.deckSlotButton5 = FindFirstButtonByNames(DeckSlot5Names);
+        if (deckManager.deckSlotButton1 == null) deckManager.deckSlotButton1 = FindFirstButtonByNames(buildbeckScene, DeckSlot1Names);
+        if (deckManager.deckSlotButton2 == null) deckManager.deckSlotButton2 = FindFirstButtonByNames(buildbeckScene, DeckSlot2Names);
+        if (deckManager.deckSlotButton3 == null) deckManager.deckSlotButton3 = FindFirstButtonByNames(buildbeckScene, DeckSlot3Names);
+        if (deckManager.deckSlotButton4 == null) deckManager.deckSlotButton4 = FindFirstButtonByNames(buildbeckScene, DeckSlot4Names);
+        if (deckManager.deckSlotButton5 == null) deckManager.deckSlotButton5 = FindFirstButtonByNames(buildbeckScene, DeckSlot5Names);
 
-        TryWireBackButtonToPersistent();
+        TryWireBackButtonToPersistent(buildbeckScene);
         TryWireReadyBattleButton();
         TryWireSaveDeckButton(deckManager);
         TryWireDisbandDeckButton(deckManager);
@@ -175,10 +195,17 @@ public static class BuildbeckLayoutAutoBinder
         TryBindCurrentDeckNameDisplay(deckManager);
     }
 
-    private static void TryWireBackButtonToPersistent()
+    /// <summary>返回／return → <see cref="SceneLoader.EnterPersistent"/>。含僅有 <see cref="Graphic"/> 無 <see cref="Button"/> 時自動補 <c>Button</c>。</summary>
+    public static void TryWireBackButtonToPersistent(Scene? buildbeckScene = null)
     {
-        Button back = FindFirstButtonByNames(BackButtonNames);
+        Scene scene = buildbeckScene ?? SceneManager.GetActiveScene();
+        if (!scene.IsValid() || !scene.name.Equals(SceneName, System.StringComparison.OrdinalIgnoreCase))
+            return;
+
+        Button back = ResolveBackButton(scene);
         if (back == null) return;
+
+        BringReturnButtonOntoCanvasTop(back);
 
         SceneLoader loader = cachedSceneLoader;
         if (loader == null) loader = Object.FindFirstObjectByType<SceneLoader>();
@@ -190,7 +217,36 @@ public static class BuildbeckLayoutAutoBinder
 
         UnityEngine.Events.UnityAction persist = loader.EnterPersistent;
         back.onClick.RemoveListener(persist);
-        back.onClick.AddListener(persist);
+
+        ReturnButtonClickFeedback fx = back.GetComponent<ReturnButtonClickFeedback>();
+        if (fx == null) fx = back.gameObject.AddComponent<ReturnButtonClickFeedback>();
+        fx.Configure(persist);
+    }
+
+    /// <summary>
+    /// 將返回鈕掛到所屬 <see cref="Canvas"/> 根下最後一個子節點（同 Canvas 內最上層繪製）。編牌 UI 動態建立後可再呼叫。
+    /// </summary>
+    public static void BringBuildbeckReturnButtonToFront(Scene? buildbeckScene = null)
+    {
+        Scene scene = buildbeckScene ?? SceneManager.GetActiveScene();
+        if (!scene.IsValid() || !scene.name.Equals(SceneName, System.StringComparison.OrdinalIgnoreCase))
+            return;
+
+        Button back = ResolveBackButton(scene);
+        BringReturnButtonOntoCanvasTop(back);
+    }
+
+    private static void BringReturnButtonOntoCanvasTop(Button back)
+    {
+        if (back == null) return;
+        RectTransform rt = back.transform as RectTransform;
+        if (rt == null) return;
+        Canvas canvas = back.GetComponentInParent<Canvas>();
+        if (canvas == null) return;
+        Transform canvasTransform = canvas.transform;
+        if (rt.parent != canvasTransform)
+            rt.SetParent(canvasTransform, true);
+        rt.SetAsLastSibling();
     }
 
     /// <summary>
@@ -202,7 +258,7 @@ public static class BuildbeckLayoutAutoBinder
         if (!active.IsValid() || !active.name.Equals(SceneName, System.StringComparison.OrdinalIgnoreCase))
             return;
 
-        Button ready = FindFirstButtonByNames(ReadyBattleButtonNames);
+        Button ready = FindFirstButtonByNames(active, ReadyBattleButtonNames);
         if (ready == null) return;
 
         SceneLoader loader = cachedSceneLoader;
@@ -226,7 +282,7 @@ public static class BuildbeckLayoutAutoBinder
 
         Button save = deckManager.saveDeckButton;
         if (save == null)
-            save = FindFirstButtonByNames(SaveDeckButtonNames);
+            save = FindFirstButtonByNames(SceneManager.GetActiveScene(), SaveDeckButtonNames);
         if (save == null) return;
 
         UnityEngine.Events.UnityAction handler = deckManager.OnClickSaveDeckButton;
@@ -239,7 +295,7 @@ public static class BuildbeckLayoutAutoBinder
     {
         if (deckManager == null) return null;
         if (deckManager.disbandDeckButton != null) return deckManager.disbandDeckButton;
-        return FindFirstButtonByNames(DisbandDeckButtonNames);
+        return FindFirstButtonByNames(SceneManager.GetActiveScene(), DisbandDeckButtonNames);
     }
 
     /// <summary>Wires disband/clear deck UI to <see cref="DeckManager.OnClickResetDeckButton"/> (confirm dialog then clear).</summary>
@@ -260,7 +316,7 @@ public static class BuildbeckLayoutAutoBinder
     {
         if (deckManager == null) return null;
         if (deckManager.editDeckNameButton != null) return deckManager.editDeckNameButton;
-        return FindFirstButtonByNames(EditDeckNameButtonNames);
+        return FindFirstButtonByNames(SceneManager.GetActiveScene(), EditDeckNameButtonNames);
     }
 
     public static void TryWireEditDeckNameButton(DeckManager deckManager)
@@ -313,32 +369,63 @@ public static class BuildbeckLayoutAutoBinder
         }
     }
 
-    private static Transform FindFirstTransformByNames(string[] names)
+    private static Transform FindFirstTransformByNames(Scene buildbeckScene, string[] names)
     {
-        Scene active = SceneManager.GetActiveScene();
-        if (!active.IsValid() || !active.name.Equals(SceneName, System.StringComparison.OrdinalIgnoreCase))
+        if (!buildbeckScene.IsValid() || !buildbeckScene.name.Equals(SceneName, System.StringComparison.OrdinalIgnoreCase))
             return null;
         for (int i = 0; i < names.Length; i++)
         {
-            GameObject go = SceneSearchUtil.FindSceneObject(active, names[i]);
+            GameObject go = SceneSearchUtil.FindSceneObject(buildbeckScene, names[i]);
             if (go != null) return go.transform;
         }
 
         return null;
     }
 
-    private static Button FindFirstButtonByNames(string[] names)
+    private static Button FindFirstButtonByNames(Scene buildbeckScene, string[] names)
     {
-        Scene active = SceneManager.GetActiveScene();
-        if (!active.IsValid() || !active.name.Equals(SceneName, System.StringComparison.OrdinalIgnoreCase))
+        if (!buildbeckScene.IsValid() || !buildbeckScene.name.Equals(SceneName, System.StringComparison.OrdinalIgnoreCase))
             return null;
         for (int i = 0; i < names.Length; i++)
         {
-            GameObject go = SceneSearchUtil.FindSceneObject(active, names[i]);
+            GameObject go = SceneSearchUtil.FindSceneObject(buildbeckScene, names[i]);
             if (go == null) continue;
             Button btn = go.GetComponent<Button>();
             if (btn == null) btn = go.GetComponentInChildren<Button>(true);
             if (btn != null) return btn;
+        }
+
+        return null;
+    }
+
+    /// <summary>Designer 可能只做 Image 未掛 Button；補上後才能綁 <c>onClick</c>。</summary>
+    private static Button ResolveBackButton(Scene buildbeckScene)
+    {
+        if (!buildbeckScene.IsValid() || !buildbeckScene.name.Equals(SceneName, System.StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        for (int i = 0; i < BackButtonNames.Length; i++)
+        {
+            GameObject go = SceneSearchUtil.FindSceneObject(buildbeckScene, BackButtonNames[i]);
+            if (go == null) continue;
+
+            Button btn = go.GetComponent<Button>();
+            if (btn == null) btn = go.GetComponentInChildren<Button>(true);
+            if (btn != null) return btn;
+
+            Graphic g = go.GetComponent<Graphic>();
+            if (g == null) g = go.GetComponentInChildren<Graphic>(true);
+            if (g == null || !g.raycastTarget) continue;
+
+            btn = g.GetComponent<Button>();
+            if (btn == null)
+            {
+                btn = g.gameObject.AddComponent<Button>();
+                btn.targetGraphic = g;
+                btn.transition = Selectable.Transition.None;
+            }
+
+            return btn;
         }
 
         return null;

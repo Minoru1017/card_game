@@ -97,17 +97,28 @@ public partial class DeckManager
                 if (_owner.PlayerData.GetSelectedDeckCount(id) <= 0)
                 {
                     GameObject removingObj = _owner.deckDic[id];
+                    bool bottomListRow = _owner.ComputeDeckCardIsBottomListRow(removingObj);
                     _owner.deckDic.Remove(id);
-                    _owner.StartCoroutine(_owner.AnimateDeckCardRemove(removingObj));
+                    _owner.StartCoroutine(_owner.AnimateDeckCardRemove(removingObj, bottomListRow));
                     deferDeckForceRebuild = true;
                 }
                 else
                 {
-                    _owner.deckDic[id].GetComponent<CardCounter>().SetCounter(_owner.PlayerData.GetSelectedDeckCount(id));
+                    int deckCount = _owner.PlayerData.GetSelectedDeckCount(id);
+                    GameObject deckGo = _owner.deckDic[id];
+                    CardCounter dcc = deckGo.GetComponent<CardCounter>();
+                    if (dcc != null) dcc.SetCounter(deckCount);
+                    _owner.SyncBuildbeckDeckStripMtOiPrimaryTexts(deckGo);
+                    _owner.ApplyDeckStripStackPresentation(deckGo, deckCount);
                 }
 
                 if (_owner.libraryDic.ContainsKey(id))
-                    _owner.libraryDic[id].GetComponent<CardCounter>().SetCounter(_owner.PlayerData.GetCollectionCount(id));
+                {
+                    int libCount = _owner.PlayerData.GetCollectionCount(id);
+                    CardCounter libCc = _owner.libraryDic[id].GetComponent<CardCounter>();
+                    if (libCc != null) libCc.SetCounter(libCount);
+                    _owner.ApplyLibraryDeckGenStackPresentation(_owner.libraryDic[id], libCount);
+                }
                 else
                     _owner.CreateCard(id, CardState.Library);
             }
@@ -126,7 +137,14 @@ public partial class DeckManager
                 _owner.PlayerData.AddCollection(id, -1);
 
                 if (_owner.deckDic.ContainsKey(id))
-                    _owner.deckDic[id].GetComponent<CardCounter>().SetCounter(_owner.PlayerData.GetSelectedDeckCount(id));
+                {
+                    int deckCount = _owner.PlayerData.GetSelectedDeckCount(id);
+                    GameObject deckGo = _owner.deckDic[id];
+                    CardCounter dcc = deckGo.GetComponent<CardCounter>();
+                    if (dcc != null) dcc.SetCounter(deckCount);
+                    _owner.SyncBuildbeckDeckStripMtOiPrimaryTexts(deckGo);
+                    _owner.ApplyDeckStripStackPresentation(deckGo, deckCount);
+                }
                 else
                     _owner.CreateCard(id, CardState.Deck);
 
@@ -137,7 +155,10 @@ public partial class DeckManager
                 }
                 else
                 {
-                    _owner.libraryDic[id].GetComponent<CardCounter>().SetCounter(_owner.PlayerData.GetCollectionCount(id));
+                    int libCount = _owner.PlayerData.GetCollectionCount(id);
+                    CardCounter libCc = _owner.libraryDic[id].GetComponent<CardCounter>();
+                    if (libCc != null) libCc.SetCounter(libCount);
+                    _owner.ApplyLibraryDeckGenStackPresentation(_owner.libraryDic[id], libCount);
                 }
             }
             _owner.PlayerData.SavePlayerData();

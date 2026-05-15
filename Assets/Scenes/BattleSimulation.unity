@@ -5457,8 +5457,27 @@ MonoBehaviour:
   enemyAI: {fileID: 0}
   battleCardPrefab: {fileID: 7214545359648620762, guid: c8cb3fb8fe9c36c4a8867e34cd48d546, type: 3}
   fieldMonsterPrefab: {fileID: 7214545359648620762, guid: c8cb3fb8fe9c36c4a8867e34cd48d546, type: 3}
-  fieldMonsterScale: 1
-  fieldMonsterStatTextScale: 0.8
+  cardLayout:
+    handCardSizeMultiplier: 1.8
+    handCardSpacing: 0
+    handAreaAnchoredYCanPlay: -100
+    handAreaAnchoredYCantPlay: -100
+    enemyHandAreaAnchoredYCanPlay: 100
+    enemyHandAreaAnchoredYCantPlay: 100
+  cardText:
+    handCardTextScale: 1.5
+    handCardNameScale: 1.2
+    handCardBackplateScale: 1
+  cardField:
+    fieldMonsterCardSizeMultiplier: 2
+    fieldSpellCardSizeMultiplier: 2
+    enemyFieldSizeMultiplier: 0.95
+    fieldAreaOffsetY: 10
+    playerMonsterFieldX: -230
+    enemyMonsterFieldX: 260
+    monsterSpellSpacingX: 250
+    fieldAttackHealthTextScale: 1
+    fieldSpellTextScale: 1
   startHealth: 20
   startHandCount: 3
   maxHandSize: 7
@@ -5478,12 +5497,6 @@ MonoBehaviour:
   firstWeatherPreferFog: 0
   firstWeatherPreferGale: 0
   autoStartOnPlay: 1
-  handCardScale: 1.75
-  handCardSpacing: 45
-  handAreaBaseYOffset: 118
-  handCardTextScale: 2.01
-  handCardNameScale: 1.513
-  handCardBackplateScale: 1
   attackMotionDuration: 0.4
   hitShakeDuration: 0.28
   hitShakeStrength: 12
@@ -5522,6 +5535,9 @@ MonoBehaviour:
   debugPanelHotkeyKey1: 100
   debugPanelHotkeyKey2: 101
   debugPanelVisibleOnPlay: 0
+  enableHeroDamageMonochromeFlash: 1
+  heroDamageMonochromeFlashSeconds: 0.1
+  heroDamageMonochromeRecoverSeconds: 0.22
   playerTurnIdlePromptSeconds: 10
   settlementCaptureFlipTextureY: 0
   sceneEndTurnButton: {fileID: 660947613}

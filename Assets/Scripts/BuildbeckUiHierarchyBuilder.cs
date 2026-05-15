@@ -36,8 +36,8 @@ public static class BuildbeckUiHierarchyBuilder
         contentRt.sizeDelta = Vector2.zero;
 
         GridLayoutGroup grid = content.GetComponent<GridLayoutGroup>();
-        grid.cellSize = new Vector2(160f, 220f);
-        grid.spacing = new Vector2(16f, 16f);
+        grid.cellSize = new Vector2(200f, 240f);
+        grid.spacing = new Vector2(0f, -15f);
         grid.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
         grid.constraintCount = Mathf.Max(1, columnCount);
         grid.childAlignment = TextAnchor.UpperCenter;

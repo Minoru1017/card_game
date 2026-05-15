@@ -11,7 +11,8 @@ public class GlobalNavConfigData
 {
     public string homeSceneName = "hall";
     public string backpackSceneName = "Persistent";
-    public List<string> hideInSceneNameContains = new List<string> { "battle" };
+    public string settingsSceneName = "Settings";
+    public List<string> hideInSceneNameContains = new List<string> { "battle", "buildbeck", "builddeck" };
     public float triggerSize = 128f;
     public float triggerTopRightMargin = 28f;
 }
@@ -42,6 +43,7 @@ public class GlobalNavRuntime : MonoBehaviour
     private TextMeshProUGUI playerInfoTotalMatchesText;
     private TMP_InputField playerSlotNameInput;
     private Button backpackButton;
+    private Button settingsButton;
     private Button goLoginButton;
     private const float TabPanelRightMargin = 28f;
     private const float TabPanelTopMargin = 176f;
@@ -154,6 +156,17 @@ public class GlobalNavRuntime : MonoBehaviour
             new Vector2(160f, 160f),
             new Color(0.24f, 0.47f, 0.32f, 0.98f),
             30f);
+        GameObject settingsBtnObj = CreateNavTileButton(
+            panel.transform,
+            "SettingsButton",
+            "遊戲設定",
+            new Vector2(0.5f, 0.20f),
+            new Vector2(0.5f, 0.20f),
+            new Vector2(0.5f, 0.5f),
+            Vector2.zero,
+            new Vector2(160f, 160f),
+            new Color(0.38f, 0.32f, 0.58f, 0.98f),
+            30f);
         GameObject goLoginBtnObj = CreateNavTileButton(
             panel.transform,
             "GoLoginButton",
@@ -174,6 +187,7 @@ public class GlobalNavRuntime : MonoBehaviour
         view.playerInfoButton = playerInfoBtnObj.GetComponent<Button>();
         view.closeButton = null;
         backpackButton = backpackBtnObj.GetComponent<Button>();
+        settingsButton = settingsBtnObj.GetComponent<Button>();
         goLoginButton = goLoginBtnObj.GetComponent<Button>();
 
         if (view.rootCanvas != null) view.rootCanvas.sortingOrder = 6000;
@@ -233,6 +247,16 @@ public class GlobalNavRuntime : MonoBehaviour
             {
                 SetTabPanelOpen(false);
                 TryLoadBackpackScene();
+            });
+        }
+
+        if (settingsButton != null)
+        {
+            settingsButton.onClick.RemoveAllListeners();
+            settingsButton.onClick.AddListener(() =>
+            {
+                SetTabPanelOpen(false);
+                TryLoadSettingsScene();
             });
         }
 
@@ -393,7 +417,7 @@ public class GlobalNavRuntime : MonoBehaviour
     private static bool FontSupportsRequiredGlyphs(TMP_FontAsset font)
     {
         if (font == null) return false;
-        const string required = "玩家資訊回首頁登入頁面重置資料儲存名稱";
+        const string required = "玩家資訊回首頁遊戲設定登入頁面重置資料儲存名稱";
         for (int i = 0; i < required.Length; i++)
         {
             char ch = required[i];
@@ -433,9 +457,10 @@ public class GlobalNavRuntime : MonoBehaviour
         panelRt.offsetMin = new Vector2(TabPanelLeftMargin, TabPanelBottomMargin);
         panelRt.offsetMax = new Vector2(-TabPanelRightMargin, -TabPanelTopMargin);
 
-        ResizeTabButton(view.homeButton, 0.18f, 0.5f);
-        ResizeTabButton(view.playerInfoButton, 0.40f, 0.5f);
-        ResizeTabButton(backpackButton, 0.62f, 0.5f);
+        ResizeTabButton(view.homeButton, 0.12f, 0.5f);
+        ResizeTabButton(view.playerInfoButton, 0.30f, 0.5f);
+        ResizeTabButton(backpackButton, 0.48f, 0.5f);
+        ResizeTabButton(settingsButton, 0.66f, 0.5f);
         ResizeTabButton(goLoginButton, 0.84f, 0.5f);
     }
 
@@ -466,6 +491,7 @@ public class GlobalNavRuntime : MonoBehaviour
         if (view.homeButton != null) view.homeButton.interactable = open;
         if (view.playerInfoButton != null) view.playerInfoButton.interactable = open;
         if (backpackButton != null) backpackButton.interactable = open;
+        if (settingsButton != null) settingsButton.interactable = open;
         if (goLoginButton != null) goLoginButton.interactable = open;
         if (view.closeButton != null) view.closeButton.interactable = open;
     }
@@ -491,7 +517,9 @@ public class GlobalNavRuntime : MonoBehaviour
 
     private void ApplySceneState(string sceneName)
     {
-        bool hidden = string.Equals(sceneName, "login", StringComparison.OrdinalIgnoreCase);
+        bool hidden = string.Equals(sceneName, "login", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(sceneName, "Buildbeck", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(sceneName, "Builddeck", StringComparison.OrdinalIgnoreCase);
         if (config.hideInSceneNameContains != null)
         {
             string lower = (sceneName ?? string.Empty).ToLowerInvariant();
@@ -548,6 +576,20 @@ public class GlobalNavRuntime : MonoBehaviour
         if (string.IsNullOrEmpty(resolved))
         {
             Debug.LogError("GlobalNavRuntime: backpack scene not found in Build Settings -> " + preferred);
+            return;
+        }
+        SceneManager.LoadScene(resolved);
+    }
+
+    private static void TryLoadSettingsScene()
+    {
+        string preferred = string.IsNullOrWhiteSpace(config != null ? config.settingsSceneName : null)
+            ? "Settings"
+            : config.settingsSceneName;
+        string resolved = ResolveSceneFromBuildSettings(preferred);
+        if (string.IsNullOrEmpty(resolved))
+        {
+            Debug.LogError("GlobalNavRuntime: settings scene not found in Build Settings -> " + preferred);
             return;
         }
         SceneManager.LoadScene(resolved);

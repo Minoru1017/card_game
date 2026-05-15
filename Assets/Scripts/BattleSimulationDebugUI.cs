@@ -195,12 +195,19 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
     private float nextRefreshTime;
     private int lastHandSignature = int.MinValue;
     private int lastFieldSignature = int.MinValue;
-    private Vector2 prefabCardSize = new Vector2(170f, 210f);
+    private const float BattleHandLayoutWidthPx = 170f;
+    private const float BattleHandLayoutHeightPx = 210f;
+    private Vector2 prefabCardSize = new Vector2(BattleHandLayoutWidthPx, BattleHandLayoutHeightPx);
+    private Vector2 battleCardPrefabNativeSize = new Vector2(168.5f, 245.5f);
     private float lastScale = -1f;
     private float lastSpacing = -1f;
     private float lastTextScale = -1f;
     private float lastNameScale = -1f;
     private float lastBackplateScale = -1f;
+    private float lastFieldScale = -1f;
+    private float lastFieldSpellScale = -1f;
+    private int lastFieldLayoutSignature = int.MinValue;
+    private int lastFieldTextTuningSignature = int.MinValue;
     private Button quickEndTurnButton;
     public Button sceneEndTurnButton;
     private bool isPlayingCardAnimation;
@@ -234,6 +241,9 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
     private float handAreaYCurrent;
     private float handAreaTargetY = float.NaN;
     private Coroutine handAreaTweenRoutine;
+    private float enemyHandAreaYCurrent;
+    private float enemyHandAreaTargetY = float.NaN;
+    private Coroutine enemyHandAreaTweenRoutine;
     private Coroutine playerHeroDamagedFxRoutine;
     private RectTransform heroDamageMonochromeFlashRt;
     private CanvasGroup heroDamageMonochromeFlashCg;
@@ -349,6 +359,11 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         {
             StopCoroutine(handAreaTweenRoutine);
             handAreaTweenRoutine = null;
+        }
+        if (enemyHandAreaTweenRoutine != null)
+        {
+            StopCoroutine(enemyHandAreaTweenRoutine);
+            enemyHandAreaTweenRoutine = null;
         }
         ForceHideSpellCastOverlay();
         ForceHideTurnBanner();
@@ -972,8 +987,10 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         float currentTextScale = GetHandCardTextScale();
         float currentNameScale = GetHandCardNameScale();
         float currentBackplateScale = GetHandCardBackplateScale();
-        float targetHandY = GetHandAreaYOffset();
-        UpdateHandAreaYOffsetAnimated(targetHandY);
+        float targetHandY = GetPlayerHandAreaYOffset();
+        UpdatePlayerHandAreaYOffsetAnimated(targetHandY);
+        if (enemyHandArea != null)
+            UpdateEnemyHandAreaYOffsetAnimated(GetEnemyHandAreaYOffset());
         bool layoutChanged =
             !Mathf.Approximately(currentScale, lastScale) ||
             !Mathf.Approximately(currentSpacing, lastSpacing) ||
@@ -997,6 +1014,17 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
             SetHandButtonsInteractable();
         }
 
+        ApplyFieldZoneLayoutFromTuningIfChanged();
+
+        float currentFieldScale = GetFieldMonsterScale();
+        float currentFieldSpellScale = GetFieldSpellScale();
+        bool fieldScaleChanged =
+            !Mathf.Approximately(currentFieldScale, lastFieldScale) ||
+            !Mathf.Approximately(currentFieldSpellScale, lastFieldSpellScale);
+        int fieldTextSig = ComputeFieldTextTuningSignature();
+        bool fieldTextChanged = fieldTextSig != lastFieldTextTuningSignature;
+        if (fieldTextChanged) lastFieldTextTuningSignature = fieldTextSig;
+
         if (fieldSignature != lastFieldSignature)
         {
             if (deferFieldRefreshDuringAttack)
@@ -1006,13 +1034,22 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
             else
             {
                 lastFieldSignature = fieldSignature;
+                lastFieldScale = currentFieldScale;
+                lastFieldSpellScale = currentFieldSpellScale;
                 RefreshFieldCards();
             }
+        }
+        else if ((fieldScaleChanged || fieldTextChanged) && !deferFieldRefreshDuringAttack)
+        {
+            lastFieldScale = currentFieldScale;
+            lastFieldSpellScale = currentFieldSpellScale;
+            if (fieldScaleChanged) RefreshFieldCardLayoutsOnly();
+            if (fieldTextChanged) RefreshFieldCardVisualTuningOnly();
         }
 
     }
 
-    private void UpdateHandAreaYOffsetAnimated(float targetY)
+    private void UpdatePlayerHandAreaYOffsetAnimated(float targetY)
     {
         if (handArea == null) return;
         if (float.IsNaN(handAreaTargetY))
@@ -1026,30 +1063,68 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         if (Mathf.Abs(targetY - handAreaTargetY) < 0.5f) return;
         handAreaTargetY = targetY;
         if (handAreaTweenRoutine != null) StopCoroutine(handAreaTweenRoutine);
-        handAreaTweenRoutine = StartCoroutine(AnimateHandAreaY(handAreaTargetY));
+        handAreaTweenRoutine = StartCoroutine(AnimateHandAreaY(
+            handArea,
+            handAreaTargetY,
+            ApplyPlayerHandAreaY,
+            ClearPlayerHandAreaTween));
     }
 
-    private IEnumerator AnimateHandAreaY(float toY)
+    private void ApplyPlayerHandAreaY(float y) => handAreaYCurrent = y;
+
+    private void ClearPlayerHandAreaTween() => handAreaTweenRoutine = null;
+
+    private void UpdateEnemyHandAreaYOffsetAnimated(float targetY)
     {
-        if (handArea == null) yield break;
-        float fromY = handArea.anchoredPosition.y;
+        if (enemyHandArea == null) return;
+        if (float.IsNaN(enemyHandAreaTargetY))
+        {
+            enemyHandAreaYCurrent = targetY;
+            enemyHandAreaTargetY = targetY;
+            enemyHandArea.anchoredPosition = new Vector2(0f, enemyHandAreaYCurrent);
+            return;
+        }
+
+        if (Mathf.Abs(targetY - enemyHandAreaTargetY) < 0.5f) return;
+        enemyHandAreaTargetY = targetY;
+        if (enemyHandAreaTweenRoutine != null) StopCoroutine(enemyHandAreaTweenRoutine);
+        enemyHandAreaTweenRoutine = StartCoroutine(AnimateHandAreaY(
+            enemyHandArea,
+            enemyHandAreaTargetY,
+            ApplyEnemyHandAreaY,
+            ClearEnemyHandAreaTween));
+    }
+
+    private void ApplyEnemyHandAreaY(float y) => enemyHandAreaYCurrent = y;
+
+    private void ClearEnemyHandAreaTween() => enemyHandAreaTweenRoutine = null;
+
+    private IEnumerator AnimateHandAreaY(
+        RectTransform area,
+        float toY,
+        System.Action<float> applyY,
+        System.Action onComplete)
+    {
+        if (area == null) yield break;
+        float fromY = area.anchoredPosition.y;
         float t = 0f;
         const float duration = 0.28f;
-        while (t < duration && handArea != null)
+        while (t < duration && area != null)
         {
             t += Time.unscaledDeltaTime;
             float p = Mathf.Clamp01(t / duration);
             float eased = p * p * (3f - 2f * p);
-            handAreaYCurrent = Mathf.Lerp(fromY, toY, eased);
-            handArea.anchoredPosition = new Vector2(0f, handAreaYCurrent);
+            float y = Mathf.Lerp(fromY, toY, eased);
+            applyY(y);
+            area.anchoredPosition = new Vector2(0f, y);
             yield return null;
         }
-        if (handArea != null)
+        if (area != null)
         {
-            handAreaYCurrent = toY;
-            handArea.anchoredPosition = new Vector2(0f, handAreaYCurrent);
+            applyY(toY);
+            area.anchoredPosition = new Vector2(0f, toY);
         }
-        handAreaTweenRoutine = null;
+        onComplete?.Invoke();
     }
 
     private Transform FindCanvas2()
@@ -1800,7 +1875,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         handArea.anchorMin = new Vector2(0.5f, 0f);
         handArea.anchorMax = new Vector2(0.5f, 0f);
         handArea.pivot = new Vector2(0.5f, 0f);
-        handArea.anchoredPosition = new Vector2(0f, GetHandAreaYOffset());
+        handArea.anchoredPosition = new Vector2(0f, GetPlayerHandAreaYOffset());
         handArea.sizeDelta = new Vector2(1100f, 230f);
         handAreaYCurrent = handArea.anchoredPosition.y;
         handAreaTargetY = handAreaYCurrent;
@@ -1811,8 +1886,10 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         enemyHandArea.anchorMin = new Vector2(0.5f, 1f);
         enemyHandArea.anchorMax = new Vector2(0.5f, 1f);
         enemyHandArea.pivot = new Vector2(0.5f, 1f);
-        enemyHandArea.anchoredPosition = new Vector2(0f, -20f);
+        enemyHandArea.anchoredPosition = new Vector2(0f, GetEnemyHandAreaYOffset());
         enemyHandArea.sizeDelta = new Vector2(1100f, 180f);
+        enemyHandAreaYCurrent = enemyHandArea.anchoredPosition.y;
+        enemyHandAreaTargetY = enemyHandAreaYCurrent;
 
         CreateDeckPileVisual(parent, false);
         CreateDeckPileVisual(parent, true);
@@ -1826,7 +1903,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         playerFieldArea.anchorMin = new Vector2(0.5f, 0.5f);
         playerFieldArea.anchorMax = new Vector2(0.5f, 0.5f);
         playerFieldArea.pivot = new Vector2(0.5f, 0.5f);
-        playerFieldArea.anchoredPosition = new Vector2(-230f, 10f);
+        playerFieldArea.anchoredPosition = Vector2.zero;
         playerFieldArea.sizeDelta = new Vector2(260f, 300f);
 
         GameObject playerSpellFieldObj = new GameObject("PlayerSpellFieldArea", typeof(RectTransform));
@@ -1835,7 +1912,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         playerSpellFieldArea.anchorMin = new Vector2(0.5f, 0.5f);
         playerSpellFieldArea.anchorMax = new Vector2(0.5f, 0.5f);
         playerSpellFieldArea.pivot = new Vector2(0.5f, 0.5f);
-        playerSpellFieldArea.anchoredPosition = new Vector2(-400f, 10f);
+        playerSpellFieldArea.anchoredPosition = Vector2.zero;
         playerSpellFieldArea.sizeDelta = new Vector2(150f, 300f);
 
         GameObject enemyFieldObj = new GameObject("EnemyFieldArea", typeof(RectTransform));
@@ -1844,7 +1921,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         enemyFieldArea.anchorMin = new Vector2(0.5f, 0.5f);
         enemyFieldArea.anchorMax = new Vector2(0.5f, 0.5f);
         enemyFieldArea.pivot = new Vector2(0.5f, 0.5f);
-        enemyFieldArea.anchoredPosition = new Vector2(260f, 10f);
+        enemyFieldArea.anchoredPosition = Vector2.zero;
         enemyFieldArea.sizeDelta = new Vector2(260f, 300f);
         enemyFieldArea.SetAsLastSibling();
 
@@ -1854,9 +1931,11 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         enemySpellFieldArea.anchorMin = new Vector2(0.5f, 0.5f);
         enemySpellFieldArea.anchorMax = new Vector2(0.5f, 0.5f);
         enemySpellFieldArea.pivot = new Vector2(0.5f, 0.5f);
-        enemySpellFieldArea.anchoredPosition = new Vector2(400f, 10f);
+        enemySpellFieldArea.anchoredPosition = Vector2.zero;
         enemySpellFieldArea.sizeDelta = new Vector2(150f, 300f);
         enemySpellFieldArea.SetAsLastSibling();
+
+        ApplyFieldZoneLayoutFromTuning(force: true);
 
         GameObject weatherOverlayObj = new GameObject("WeatherForecastOverlay", typeof(RectTransform), typeof(Image), typeof(CanvasGroup));
         weatherOverlayObj.transform.SetParent(parent, false);
@@ -2702,7 +2781,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         rt.anchorMin = new Vector2(0.5f, 0.5f);
         rt.anchorMax = new Vector2(0.5f, 0.5f);
         rt.pivot = new Vector2(0.5f, 0.5f);
-        rt.sizeDelta = prefabCardSize * (GetHandCardScale() * 0.62f);
+        rt.sizeDelta = GetBattleCardFxDisplayedSize(0.62f);
 
         Image img = ghost.GetComponent<Image>();
         img.color = new Color(0.16f, 0.22f, 0.45f, 1f); // facedown card back
@@ -2787,7 +2866,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         rootRt.anchorMin = new Vector2(1f, 0.5f);
         rootRt.anchorMax = new Vector2(1f, 0.5f);
         rootRt.pivot = new Vector2(0.5f, 0.5f);
-        rootRt.sizeDelta = prefabCardSize * 0.62f;
+        rootRt.sizeDelta = GetBattleCardFxDisplayedSize(0.62f);
         rootRt.anchoredPosition = isPlayerPile ? new Vector2(-78f, -210f) : new Vector2(-78f, 210f);
 
         for (int i = 0; i < 3; i++)
@@ -3223,7 +3302,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         rect.anchorMin = new Vector2(0.5f, 1f);
         rect.anchorMax = new Vector2(0.5f, 1f);
         rect.pivot = new Vector2(0.5f, 1f);
-        rect.sizeDelta = prefabCardSize * (GetHandCardScale() * 0.75f);
+        rect.sizeDelta = GetBattleCardFxDisplayedSize(0.75f);
         Vector2 start = enemyHandArea.anchoredPosition + new Vector2(0f, -24f);
         RectTransform sourceCard = GetEnemyPlayedSourceRect();
         if (sourceCard != null)
@@ -3550,11 +3629,13 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         panelObj.SetActive(false);
     }
 
-    private void ApplyPrefabVisualTuning(CardDisplay display, bool isFieldCard = false)
+    private void ApplyPrefabVisualTuning(CardDisplay display, bool isFieldCard = false, bool isFieldSpellCard = false)
     {
         float textScale = GetHandCardTextScale();
         float backplateScale = GetHandCardBackplateScale();
-        float fieldStatScale = (battleManager != null) ? battleManager.fieldMonsterStatTextScale : 0.85f;
+        BattleFieldCardTuning fieldTuning = GetFieldTuning();
+        float fieldStatScale = fieldTuning != null ? fieldTuning.fieldAttackHealthTextScale : 0.85f;
+        float fieldSpellTextScale = fieldTuning != null ? fieldTuning.fieldSpellTextScale : 1f;
 
         if (isFieldCard && display.nameText != null)
         {
@@ -3578,6 +3659,10 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
                     (display.healthText != null && t == display.healthText))
                 {
                     scale *= fieldStatScale;
+                }
+                else if (isFieldSpellCard)
+                {
+                    scale *= fieldSpellTextScale;
                 }
             }
             t.rectTransform.localScale = Vector3.one * scale;
@@ -3686,19 +3771,166 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
 
     private void CachePrefabCardSize()
     {
-        if (battleCardPrefab == null) return;
+        prefabCardSize = new Vector2(BattleHandLayoutWidthPx, BattleHandLayoutHeightPx);
+        battleCardPrefabNativeSize = new Vector2(168.5f, 245.5f);
 
+        if (battleCardPrefab == null) return;
         RectTransform prefabRect = battleCardPrefab.GetComponent<RectTransform>();
         if (prefabRect == null) return;
-        if (prefabRect.rect.width <= 1f || prefabRect.rect.height <= 1f) return;
-
-        prefabCardSize = new Vector2(prefabRect.rect.width, prefabRect.rect.height);
+        if (prefabRect.sizeDelta.x > 1f && prefabRect.sizeDelta.y > 1f)
+            battleCardPrefabNativeSize = prefabRect.sizeDelta;
     }
+
+    private static Vector2 GetPrefabLogicalRectSize(RectTransform prefabRect)
+    {
+        if (prefabRect == null) return Vector2.zero;
+        Vector3 ls = prefabRect.localScale;
+        return new Vector2(
+            prefabRect.sizeDelta.x * Mathf.Abs(ls.x),
+            prefabRect.sizeDelta.y * Mathf.Abs(ls.y));
+    }
+
+    private float GetBattleCardPrefabLogicalWidth()
+    {
+        return Mathf.Max(1f, GetPrefabLogicalRectSize(
+            battleCardPrefab != null ? battleCardPrefab.GetComponent<RectTransform>() : null).x);
+    }
+
+    private float GetBattleCardLayoutWidthRatio() =>
+        BattleHandLayoutWidthPx / GetBattleCardPrefabLogicalWidth();
+
+    /// <summary>手牌：含 handCardSizeMultiplier，僅用於手牌區實際卡牌。</summary>
+    private float GetBattleHandUniformScale(float extraMultiplier = 1f)
+    {
+        float handScale = GetHandCardScale() * Mathf.Max(0.01f, extraMultiplier);
+        return handScale * GetBattleCardLayoutWidthRatio();
+    }
+
+    /// <summary>抽牌／牌庫／敵方出牌幽靈等：固定基準尺寸，不受 handCardSizeMultiplier 影響。</summary>
+    private float GetBattleCardFxUniformScale(float extraMultiplier = 1f)
+    {
+        float layoutScale = BattleSimulationManager.HandCardScaleBaseline * Mathf.Max(0.01f, extraMultiplier);
+        return layoutScale * GetBattleCardLayoutWidthRatio();
+    }
+
+    private void ApplyBattleHandCardRectLayout(RectTransform rect, float extraMultiplier = 1f)
+    {
+        if (rect == null) return;
+        rect.sizeDelta = battleCardPrefabNativeSize;
+        rect.localScale = Vector3.one * GetBattleHandUniformScale(extraMultiplier);
+    }
+
+    private float GetFieldMonsterScale()
+    {
+        if (battleManager == null) return BattleSimulationManager.FieldCardScaleBaseline;
+        return battleManager.FieldMonsterScale;
+    }
+
+    private float GetFieldSpellScale()
+    {
+        if (battleManager == null) return BattleFieldCardTuning.FieldSpellScaleBaseline;
+        return battleManager.FieldSpellScale;
+    }
+
+    private BattleFieldCardTuning GetFieldTuning() => battleManager != null ? battleManager.CardField : null;
+
+    private float GetBattleFieldUniformScale(bool enemy, bool isSpell)
+    {
+        BattleFieldCardTuning tuning = GetFieldTuning();
+        float fieldScale = tuning != null
+            ? tuning.GetFieldCardScaleForSide(enemy, isSpell)
+            : GetFieldMonsterScale();
+        return fieldScale * GetBattleCardLayoutWidthRatio();
+    }
+
+    private void ApplyBattleFieldCardRectLayout(RectTransform rect, bool enemy, bool isSpell)
+    {
+        if (rect == null) return;
+        rect.sizeDelta = battleCardPrefabNativeSize;
+        rect.localScale = Vector3.one * GetBattleFieldUniformScale(enemy, isSpell);
+    }
+
+    private int ComputeFieldLayoutSignature()
+    {
+        BattleFieldCardTuning t = GetFieldTuning();
+        if (t == null) return 0;
+        return System.HashCode.Combine(
+            t.fieldAreaOffsetY,
+            t.playerMonsterFieldX,
+            t.enemyMonsterFieldX,
+            t.monsterSpellSpacingX);
+    }
+
+    private int ComputeFieldTextTuningSignature()
+    {
+        BattleFieldCardTuning t = GetFieldTuning();
+        if (t == null) return 0;
+        return System.HashCode.Combine(t.fieldAttackHealthTextScale, t.fieldSpellTextScale);
+    }
+
+    private void ApplyFieldZoneLayoutFromTuningIfChanged()
+    {
+        int sig = ComputeFieldLayoutSignature();
+        if (sig == lastFieldLayoutSignature) return;
+        lastFieldLayoutSignature = sig;
+        ApplyFieldZoneLayoutFromTuning(force: false);
+    }
+
+    private void ApplyFieldZoneLayoutFromTuning(bool force)
+    {
+        if (!force)
+        {
+            int sig = ComputeFieldLayoutSignature();
+            if (sig == lastFieldLayoutSignature) return;
+            lastFieldLayoutSignature = sig;
+        }
+        else
+        {
+            lastFieldLayoutSignature = ComputeFieldLayoutSignature();
+        }
+
+        BattleFieldCardTuning t = GetFieldTuning();
+        if (t == null) return;
+
+        float y = t.fieldAreaOffsetY;
+        if (playerFieldArea != null)
+            playerFieldArea.anchoredPosition = new Vector2(t.playerMonsterFieldX, y);
+        if (playerSpellFieldArea != null)
+            playerSpellFieldArea.anchoredPosition = new Vector2(t.playerMonsterFieldX - t.monsterSpellSpacingX, y);
+        if (enemyFieldArea != null)
+            enemyFieldArea.anchoredPosition = new Vector2(t.enemyMonsterFieldX, y);
+        if (enemySpellFieldArea != null)
+            enemySpellFieldArea.anchoredPosition = new Vector2(t.enemyMonsterFieldX + t.monsterSpellSpacingX, y);
+    }
+
+    private float GetBattleCardPrefabLogicalHeight()
+    {
+        return Mathf.Max(1f, GetPrefabLogicalRectSize(
+            battleCardPrefab != null ? battleCardPrefab.GetComponent<RectTransform>() : null).y);
+    }
+
+    private float GetBattleHandDisplayedWidth(float extraMultiplier = 1f) =>
+        GetBattleCardPrefabLogicalWidth() * GetBattleHandUniformScale(extraMultiplier);
+
+    private float GetBattleHandDisplayedHeight(float extraMultiplier = 1f) =>
+        GetBattleCardPrefabLogicalHeight() * GetBattleHandUniformScale(extraMultiplier);
+
+    private Vector2 GetBattleHandDisplayedSize(float extraMultiplier = 1f) =>
+        new Vector2(GetBattleHandDisplayedWidth(extraMultiplier), GetBattleHandDisplayedHeight(extraMultiplier));
+
+    private float GetBattleCardFxDisplayedWidth(float extraMultiplier = 1f) =>
+        GetBattleCardPrefabLogicalWidth() * GetBattleCardFxUniformScale(extraMultiplier);
+
+    private float GetBattleCardFxDisplayedHeight(float extraMultiplier = 1f) =>
+        GetBattleCardPrefabLogicalHeight() * GetBattleCardFxUniformScale(extraMultiplier);
+
+    private Vector2 GetBattleCardFxDisplayedSize(float extraMultiplier = 1f) =>
+        new Vector2(GetBattleCardFxDisplayedWidth(extraMultiplier), GetBattleCardFxDisplayedHeight(extraMultiplier));
 
     private float GetHandCardScale()
     {
-        if (battleManager == null) return 1.2f;
-        return Mathf.Max(0.1f, battleManager.handCardScale);
+        if (battleManager == null) return BattleSimulationManager.HandCardScaleBaseline;
+        return battleManager.HandCardScale;
     }
 
     private float GetHandCardSpacing()
@@ -3725,23 +3957,31 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         return Mathf.Max(0.1f, battleManager.handCardNameScale);
     }
 
-    private float GetHandAreaYOffset()
+    private float GetHandScaleLiftOffset() =>
+        Mathf.Max(0f, GetHandCardScale() - BattleSimulationManager.HandCardScaleBaseline) * 120f;
+
+    /// <summary>我方手牌區 Y：底邊錨點。</summary>
+    private float GetPlayerHandAreaYOffset()
     {
-        float scale = GetHandCardScale();
-        float baseY = battleManager == null ? 24f : battleManager.handAreaBaseYOffset;
-        // Card grows upward when scaled; lift hand area to keep card bottoms visible.
-        float scaleOffset = Mathf.Max(0f, scale - 1f) * 120f;
-        float y = baseY + scaleOffset - 150f;
+        if (battleManager == null) return -25f;
 
-        // Only fully reveal player hand on player's turn.
-        // On other turns, lower the hand so only top ~1/3 remains visible.
-        if (battleManager != null && !battleManager.IsPlayerTurn())
-        {
-            float cardHeight = prefabCardSize.y * scale;
-            y -= cardHeight * (2f / 3f);
-        }
+        float lift = GetHandScaleLiftOffset();
+        if (battleManager.CanPlayerActNow())
+            return battleManager.HandAreaAnchoredYCanPlay + lift;
 
-        return y;
+        return battleManager.HandAreaAnchoredYCantPlay;
+    }
+
+    /// <summary>敵方手牌區 Y：頂邊錨點。</summary>
+    private float GetEnemyHandAreaYOffset()
+    {
+        if (battleManager == null) return -20f;
+
+        float lift = GetHandScaleLiftOffset();
+        if (battleManager.CanEnemyActNow())
+            return battleManager.EnemyHandAreaAnchoredYCanPlay - lift;
+
+        return battleManager.EnemyHandAreaAnchoredYCantPlay;
     }
 
     private GameObject ResolveCardPrefab()

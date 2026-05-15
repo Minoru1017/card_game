@@ -14,7 +14,13 @@ public partial class DeckManager
         public void LateUpdateArc()
         {
             if (!DeckManager.NewLayoutEnableDeckArc || _owner.deckPanel == null) return;
-            if (_owner._deckCardRemoveAnimationActive) return;
+            if (_owner._deckCardRemoveAnimationActive)
+            {
+                // #region agent log
+                DeckManager._agentDbgLateArcSkipCount++;
+                // #endregion
+                return;
+            }
             if (_owner.deckArcHorizontalSmoothTime <= 0f) return;
             _owner.RequestDeckArcLayout(_owner.deckPanel as RectTransform, false);
         }

@@ -6,7 +6,7 @@ using UnityEngine.UI;
 public class DeckArcPresenter : MonoBehaviour
 {
     private const float SettledPosEpsilon = 0.035f;
-    private const float ScrollSettledEpsilon = 0.002f;
+    private const float ScrollSettledEpsilon = 0.02f;
 
     private int _lastAppliedFrame = -1;
     private int _completedHeavyApplyFrame = -1;
@@ -16,8 +16,6 @@ public class DeckArcPresenter : MonoBehaviour
 
     private readonly List<float> _layoutBaseXCache = new List<float>();
     private readonly List<float> _layoutBaseYCache = new List<float>();
-    private readonly Dictionary<int, float> _lastSmoothedArcXByChildId = new Dictionary<int, float>();
-    private readonly HashSet<int> _seenIds = new HashSet<int>();
 
     /// <summary>
     /// Call after deck list structure changes (e.g. card removed) so the next <see cref="ApplyLayout"/>
@@ -61,7 +59,9 @@ public class DeckArcPresenter : MonoBehaviour
         float cellH = (grid != null && grid.cellSize.y > 1f) ? grid.cellSize.y : fallbackCellHeight;
         float spacingY = grid != null ? grid.spacing.y : fallbackSpacingY;
         float stepY = cellH + spacingY;
-        float scrollY = content.anchoredPosition.y;
+        RectTransform viewportRt = content.parent as RectTransform;
+        float viewH = viewportRt != null ? viewportRt.rect.height : 0f;
+        float scrollY = GetDeckScrollYClamped(content, viewH, write: false);
         float firstVisibleIndex = stepY > 0.01f ? scrollY / stepY : 0f;
 
         int normalizedSlotCount = Mathf.Max(3, visibleSlotCount);
@@ -101,7 +101,8 @@ public class DeckArcPresenter : MonoBehaviour
                 L,
                 shapeStrength,
                 rangePaddingSlots,
-                slotXOffsetById))
+                slotXOffsetById,
+                cellH))
             return;
 
         if (_completedHeavyApplyFrame == Time.frameCount)
@@ -120,7 +121,14 @@ public class DeckArcPresenter : MonoBehaviour
             }
         }
 
-        _seenIds.Clear();
+        // 僅在網格重建後寫回 clamp：刪列後 content 變矮、y 可能仍大於新 maxY。
+        // 一般捲到頂/底時不要用 write，否則會與 Elastic overscroll 搶位置造成閃動。
+        if (needGridRebuild)
+        {
+            scrollY = GetDeckScrollYClamped(content, viewH, write: true);
+            firstVisibleIndex = stepY > 0.01f ? scrollY / stepY : 0f;
+        }
+
         for (int i = 0; i < n; i++)
         {
             RectTransform child = content.GetChild(i) as RectTransform;
@@ -143,25 +151,50 @@ public class DeckArcPresenter : MonoBehaviour
                 out float xOffset,
                 out float yOffset);
 
+            // Arc math can propose large vertical nudges vs. a short grid row; clamp so rows stay inside the scroll viewport mask.
+            float verticalBudget = Mathf.Max(6f, cellH * 0.42f);
+            float ay = Mathf.Abs(yOffset);
+            if (ay > verticalBudget)
+                yOffset *= verticalBudget / Mathf.Max(1e-5f, ay);
+
             float targetX = layoutBaseX + xOffset;
             float targetY = layoutBaseY + yOffset;
-            Vector2 pos = child.anchoredPosition;
-            int cid = child.gameObject.GetInstanceID();
-            _seenIds.Add(cid);
 
-            pos.x = targetX;
-            pos.y = targetY;
-            _lastSmoothedArcXByChildId[cid] = targetX;
-
-            child.anchoredPosition = pos;
-            child.localRotation = Quaternion.identity;
+            float curX = child.anchoredPosition.x;
+            float curY = child.anchoredPosition.y;
+            if (Mathf.Abs(curX - targetX) > 0.002f || Mathf.Abs(curY - targetY) > 0.002f ||
+                Quaternion.Angle(child.localRotation, Quaternion.identity) > 0.05f)
+            {
+                child.anchoredPosition = new Vector2(targetX, targetY);
+                child.localRotation = Quaternion.identity;
+            }
         }
-
-        PruneStaleState();
 
         _lastFullApplyFullSig = fullSig;
         _lastFullApplyScrollY = scrollY;
         _completedHeavyApplyFrame = Time.frameCount;
+    }
+
+    /// <summary>
+    /// 與牌組清單 Refresh 相同規則：<c>y ∈ [0, max(0, sizeDelta.y - viewportHeight)]</c>。
+    /// <paramref name="write"/> 為 true 時，僅在超出閾值才寫回，避免觸發 ScrollRect 回呼造成弧線反覆套用。
+    /// </summary>
+    private static float GetDeckScrollYClamped(RectTransform content, float viewportHeight, bool write)
+    {
+        if (content == null) return 0f;
+        float y = content.anchoredPosition.y;
+        if (!float.IsFinite(y)) y = 0f;
+        float contentH = content.sizeDelta.y;
+        float maxY = Mathf.Max(0f, contentH - viewportHeight);
+        float clamped = Mathf.Clamp(y, 0f, maxY);
+        if (write && Mathf.Abs(clamped - y) > 0.35f)
+        {
+            Vector2 p = content.anchoredPosition;
+            p.y = clamped;
+            content.anchoredPosition = p;
+        }
+
+        return clamped;
     }
 
     private void EnsureBasePositionCacheSize(int n)
@@ -237,7 +270,8 @@ public class DeckArcPresenter : MonoBehaviour
         float chordHalfWidthPx,
         float arcShapeStrength,
         float visibleRangePaddingSlots,
-        List<float> slotXOffsetById)
+        List<float> slotXOffsetById,
+        float cellH)
     {
         if (_layoutBaseXCache.Count != n)
             return false;
@@ -265,6 +299,11 @@ public class DeckArcPresenter : MonoBehaviour
                 out float xOffset,
                 out float yOffset);
 
+            float verticalBudget = Mathf.Max(6f, cellH * 0.42f);
+            float ay = Mathf.Abs(yOffset);
+            if (ay > verticalBudget)
+                yOffset *= verticalBudget / Mathf.Max(1e-5f, ay);
+
             float targetX = layoutBaseX + xOffset;
             float targetY = _layoutBaseYCache[i] + yOffset;
             float curX = child.anchoredPosition.x;
@@ -276,21 +315,6 @@ public class DeckArcPresenter : MonoBehaviour
         }
 
         return true;
-    }
-
-    private void PruneStaleState()
-    {
-        if (_lastSmoothedArcXByChildId.Count <= _seenIds.Count) return;
-        List<int> stale = null;
-        foreach (int key in _lastSmoothedArcXByChildId.Keys)
-        {
-            if (_seenIds.Contains(key)) continue;
-            if (stale == null) stale = new List<int>();
-            stale.Add(key);
-        }
-        if (stale == null) return;
-        for (int i = 0; i < stale.Count; i++)
-            _lastSmoothedArcXByChildId.Remove(stale[i]);
     }
 
     /// <summary>

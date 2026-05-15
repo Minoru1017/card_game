@@ -1,4 +1,4 @@
----
+00---
 name: 平日／Agent：只改腳本
 about: 給 Cursor Agent 或遠端協作；限定 C# 腳本，不改場景與 Prefab
 title: "[agent] "

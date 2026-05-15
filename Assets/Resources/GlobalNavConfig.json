@@ -1,7 +1,10 @@
 {
   "homeSceneName": "hall",
+  "settingsSceneName": "Settings",
   "hideInSceneNameContains": [
-    "battle"
+    "battle",
+    "buildbeck",
+    "builddeck"
   ],
   "triggerSize": 128.0,
   "triggerTopRightMargin": 28.0

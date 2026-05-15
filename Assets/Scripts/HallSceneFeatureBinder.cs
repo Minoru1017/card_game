@@ -36,24 +36,9 @@ public class HallSceneFeatureBinder : MonoBehaviour
         TryBindSceneButton("背包", "Persistent");
         TryBindSceneButton("商店", "CardStore");
 
-        // Settings icon: toggle settings panel visibility in-place.
-        GameObject settingsIcon = GameObject.Find("遊戲設定");
-        if (settingsIcon != null)
-        {
-            Button btn = EnsureButton(settingsIcon);
-            if (btn != null)
-            {
-                btn.onClick.RemoveAllListeners();
-                btn.onClick.AddListener(() =>
-                {
-                    GameObject settingsPanel = GameObject.Find("遊戲設定面板");
-                    if (settingsPanel != null)
-                    {
-                        settingsPanel.SetActive(!settingsPanel.activeSelf);
-                    }
-                });
-            }
-        }
+        TryBindSceneButton("遊戲設定", "Settings");
+        TryBindSceneButton("SettingsButton", "Settings");
+        TryBindSceneButton("設定", "Settings");
 
         RefreshResourceDisplay();
     }

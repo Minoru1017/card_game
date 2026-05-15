@@ -9,11 +9,21 @@ using UnityEngine.SceneManagement;
 
 /// <summary>
 /// Auto-binds card artwork sprite overrides when artists drop/update images under Assets/UI.
-/// File name is matched against CardList.csv card names (Chinese/English).
+/// 兩類美術：<see cref="CardArtKind.CardArt"/>（本體立繪）、<see cref="CardArtKind.DeckThumb"/>（組牌縮圖）。
 /// </summary>
 public sealed class CardArtworkAutoBinder : AssetPostprocessor
 {
+    private enum CardArtKind
+    {
+        CardArt,
+        DeckThumb,
+    }
+
     private const string UiFolderPrefix = "Assets/UI/";
+    /// <summary>卡牌本體立繪目錄（檔名對 CardList 卡名）。</summary>
+    private const string CardArtFolderPrefix = "Assets/UI/CardArt/";
+    /// <summary>組建牌組／館藏縮圖目錄（檔名對 CardList 卡名）。</summary>
+    private const string DeckThumbFolderPrefix = "Assets/UI/DeckThumb/";
     private const string CardCsvPath = "Assets/Assets/Datas/CardList.csv";
     private const string DataManagerPrefabPath = "Assets/prefabs/DataManager.prefab";
     private const string CardStoreScenePath = "Assets/Scenes/CardStore.unity";
@@ -33,6 +43,12 @@ public sealed class CardArtworkAutoBinder : AssetPostprocessor
 
     private static readonly char[] CsvComma = { ',' };
 
+    /// <summary>匯入管線進行中排隊，於 <see cref="EditorApplication.delayCall"/> 一次處理，避免改名時開場景／SaveAssets 導致 Unity 當機。</summary>
+    private static readonly HashSet<string> PendingBindPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    private static readonly HashSet<string> PendingClearPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    private static bool deferredFlushScheduled;
+    private static bool isFlushingDeferred;
+
     [MenuItem("Tools/Card Art/Rescan UI Images And Rebind")]
     private static void RescanAllUiImages()
     {
@@ -42,7 +58,7 @@ public sealed class CardArtworkAutoBinder : AssetPostprocessor
         for (int i = 0; i < guids.Length; i++)
         {
             string path = AssetDatabase.GUIDToAssetPath(guids[i]);
-            if (!TryBindByImagePath(path))
+            if (!TryBindByImagePath(path, syncSceneStores: true))
             {
                 continue;
             }
@@ -98,63 +114,85 @@ public sealed class CardArtworkAutoBinder : AssetPostprocessor
         string[] movedAssets,
         string[] movedFromAssetPaths)
     {
-        // 自動觸發入口：Unity 匯入/刪除/搬移資產後會呼叫這裡。
-        bool changed = false;
+        if (isFlushingDeferred)
+            return;
 
-        for (int i = 0; i < importedAssets.Length; i++)
+        EnqueuePostprocessPaths(importedAssets, PendingBindPaths);
+        EnqueuePostprocessPaths(movedAssets, PendingBindPaths);
+        EnqueuePostprocessPaths(deletedAssets, PendingClearPaths);
+        EnqueuePostprocessPaths(movedFromAssetPaths, PendingClearPaths);
+
+        if (PendingBindPaths.Count == 0 && PendingClearPaths.Count == 0)
+            return;
+
+        ScheduleDeferredFlush();
+    }
+
+    private static void EnqueuePostprocessPaths(string[] paths, HashSet<string> target)
+    {
+        if (paths == null || paths.Length == 0)
+            return;
+
+        for (int i = 0; i < paths.Length; i++)
         {
-            if (IsUiImagePath(importedAssets[i]))
-            {
-                LogInfo($"已讀取到你的美術資源：{importedAssets[i]}");
-            }
-
-            if (TryBindByImagePath(importedAssets[i]))
-            {
-                changed = true;
-            }
-        }
-
-        for (int i = 0; i < deletedAssets.Length; i++)
-        {
-            if (!IsUiImagePath(deletedAssets[i])) continue;
-            LogInfo($"已讀取到你的美術資源異動（刪除）：{deletedAssets[i]}");
-            if (TryClearBindByImagePath(deletedAssets[i]))
-            {
-                changed = true;
-            }
-        }
-
-        for (int i = 0; i < movedAssets.Length; i++)
-        {
-            if (IsUiImagePath(movedAssets[i]))
-            {
-                LogInfo($"已讀取到你的美術資源異動（新增/移動）：{movedAssets[i]}");
-            }
-
-            if (TryBindByImagePath(movedAssets[i]))
-            {
-                changed = true;
-            }
-        }
-
-        for (int i = 0; i < movedFromAssetPaths.Length; i++)
-        {
-            if (!IsUiImagePath(movedFromAssetPaths[i])) continue;
-            LogInfo($"已讀取到你的美術資源異動（原路徑）：{movedFromAssetPaths[i]}");
-            // 檔案搬家/改名時，舊檔名對應的卡牌綁定要先清掉，避免殘留錯誤綁定。
-            if (TryClearBindByImagePath(movedFromAssetPaths[i]))
-            {
-                changed = true;
-            }
-        }
-
-        if (changed)
-        {
-            AssetDatabase.SaveAssets();
+            string path = paths[i];
+            if (!IsUiImagePath(path))
+                continue;
+            target.Add(path);
         }
     }
 
-    private static bool TryBindByImagePath(string assetPath)
+    private static void ScheduleDeferredFlush()
+    {
+        if (deferredFlushScheduled)
+            return;
+
+        deferredFlushScheduled = true;
+        EditorApplication.delayCall += FlushDeferredPostprocess;
+    }
+
+    private static void FlushDeferredPostprocess()
+    {
+        deferredFlushScheduled = false;
+        if (PendingBindPaths.Count == 0 && PendingClearPaths.Count == 0)
+            return;
+
+        string[] clearPaths = new string[PendingClearPaths.Count];
+        PendingClearPaths.CopyTo(clearPaths);
+        PendingClearPaths.Clear();
+
+        string[] bindPaths = new string[PendingBindPaths.Count];
+        PendingBindPaths.CopyTo(bindPaths);
+        PendingBindPaths.Clear();
+
+        isFlushingDeferred = true;
+        bool changed = false;
+        try
+        {
+            AssetDatabase.StartAssetEditing();
+            for (int i = 0; i < clearPaths.Length; i++)
+            {
+                if (TryClearBindByImagePath(clearPaths[i], syncSceneStores: false))
+                    changed = true;
+            }
+
+            for (int i = 0; i < bindPaths.Length; i++)
+            {
+                if (TryBindByImagePath(bindPaths[i], syncSceneStores: false))
+                    changed = true;
+            }
+        }
+        finally
+        {
+            AssetDatabase.StopAssetEditing();
+            isFlushingDeferred = false;
+        }
+
+        if (changed)
+            AssetDatabase.SaveAssets();
+    }
+
+    private static bool TryBindByImagePath(string assetPath, bool syncSceneStores = true)
     {
         // 自動綁定主流程：路徑/副檔名過濾 -> 取 Sprite -> 檔名比對卡牌 -> 寫回 Prefab/Scene。
         if (!IsUiImagePath(assetPath))
@@ -175,15 +213,18 @@ public sealed class CardArtworkAutoBinder : AssetPostprocessor
             return false;
         }
 
-        if (!TryGetCardKeyByFileName(fileName, out int cardKey))
+        CardArtKind kind = ClassifyArtKind(assetPath, fileName);
+        string lookupName = StripArtKindSuffixFromFileName(fileName, kind);
+        if (!TryGetCardKeyByFileName(lookupName, out int cardKey))
         {
-            LogWarn($"已讀取到你的美術資源，但找不到同名卡牌：{fileName}");
+            LogWarn($"已讀取到你的美術資源，但找不到同名卡牌：{lookupName}");
             return false;
         }
 
-        LogInfo($"正在將美術圖套至對應卡牌（cardKey={cardKey}）：{assetPath}");
-        bool prefabUpdated = TryUpdatePrefabCardStore(cardKey, sprite);
-        bool sceneUpdated = TryUpdateSceneCardStore(CardStoreScenePath, cardKey, sprite);
+        string kindLabel = kind == CardArtKind.DeckThumb ? "組牌縮圖" : "卡牌立繪";
+        LogInfo($"正在將{kindLabel}套至對應卡牌（cardKey={cardKey}）：{assetPath}");
+        bool prefabUpdated = TryUpdatePrefabCardStore(cardKey, sprite, kind);
+        bool sceneUpdated = syncSceneStores && TryUpdateSceneCardStore(CardStoreScenePath, cardKey, sprite, kind);
         bool anyUpdated = prefabUpdated || sceneUpdated;
 
         if (anyUpdated)
@@ -210,7 +251,53 @@ public sealed class CardArtworkAutoBinder : AssetPostprocessor
         return SupportedImageExt.Contains(ext);
     }
 
-    private static bool TryClearBindByImagePath(string assetPath)
+    private static CardArtKind ClassifyArtKind(string assetPath, string fileNameWithoutExt)
+    {
+        if (!string.IsNullOrEmpty(assetPath))
+        {
+            string p = assetPath.Replace('\\', '/');
+            if (p.StartsWith(DeckThumbFolderPrefix, StringComparison.OrdinalIgnoreCase))
+                return CardArtKind.DeckThumb;
+            if (p.StartsWith(CardArtFolderPrefix, StringComparison.OrdinalIgnoreCase))
+                return CardArtKind.CardArt;
+        }
+
+        if (HasDeckThumbFileNameSuffix(fileNameWithoutExt))
+            return CardArtKind.DeckThumb;
+
+        return CardArtKind.CardArt;
+    }
+
+    private static bool HasDeckThumbFileNameSuffix(string fileNameWithoutExt)
+    {
+        if (string.IsNullOrWhiteSpace(fileNameWithoutExt)) return false;
+        string n = fileNameWithoutExt.Trim();
+        string[] suffixes = { "_deck", "_thumb", "_縮圖", "_deckthumb" };
+        for (int i = 0; i < suffixes.Length; i++)
+        {
+            if (n.EndsWith(suffixes[i], StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+        return false;
+    }
+
+    /// <summary>比對卡名前去掉縮圖專用尾碼（資料夾已區分時檔名可與卡名相同）。</summary>
+    private static string StripArtKindSuffixFromFileName(string fileNameWithoutExt, CardArtKind kind)
+    {
+        if (kind != CardArtKind.DeckThumb || string.IsNullOrWhiteSpace(fileNameWithoutExt))
+            return fileNameWithoutExt;
+
+        string n = fileNameWithoutExt.Trim();
+        string[] suffixes = { "_deckthumb", "_deck", "_thumb", "_縮圖" };
+        for (int i = 0; i < suffixes.Length; i++)
+        {
+            if (n.EndsWith(suffixes[i], StringComparison.OrdinalIgnoreCase))
+                return n.Substring(0, n.Length - suffixes[i].Length);
+        }
+        return n;
+    }
+
+    private static bool TryClearBindByImagePath(string assetPath, bool syncSceneStores = true)
     {
         if (!IsUiImagePath(assetPath))
         {
@@ -223,24 +310,26 @@ public sealed class CardArtworkAutoBinder : AssetPostprocessor
             return false;
         }
 
-        if (!TryGetCardKeyByFileName(fileName, out int cardKey))
+        CardArtKind kind = ClassifyArtKind(assetPath, fileName);
+        string lookupName = StripArtKindSuffixFromFileName(fileName, kind);
+        if (!TryGetCardKeyByFileName(lookupName, out int cardKey))
         {
-            LogWarn($"已讀取到刪除/移出事件，但找不到同名卡牌：{fileName}");
+            LogWarn($"已讀取到刪除/移出事件，但找不到同名卡牌：{lookupName}");
             return false;
         }
 
         Sprite fallbackSprite = LoadFallbackSprite();
         if (fallbackSprite != null)
         {
-            LogInfo($"正在將刪除卡圖改綁預設圖（cardKey={cardKey}）：{assetPath}");
+            LogInfo($"正在將刪除的美術改綁預設圖（cardKey={cardKey}）：{assetPath}");
         }
         else
         {
-            LogWarn($"預設圖不存在或不可用，將改為清空 artworkSprite：{DefaultFallbackArtPath}");
+            LogWarn($"預設圖不存在或不可用，將改為清空對應欄位：{DefaultFallbackArtPath}");
         }
 
-        bool prefabUpdated = TryClearPrefabCardStore(cardKey, fallbackSprite);
-        bool sceneUpdated = TryClearSceneCardStore(CardStoreScenePath, cardKey, fallbackSprite);
+        bool prefabUpdated = TryClearPrefabCardStore(cardKey, fallbackSprite, kind);
+        bool sceneUpdated = syncSceneStores && TryClearSceneCardStore(CardStoreScenePath, cardKey, fallbackSprite, kind);
         bool anyUpdated = prefabUpdated || sceneUpdated;
 
         if (anyUpdated)
@@ -264,7 +353,7 @@ public sealed class CardArtworkAutoBinder : AssetPostprocessor
 
     private static bool TryGetCardKeyByFileName(string fileName, out int cardKey)
     {
-        // 依圖片檔名比對 CardList.csv（中文名/英文名皆可），回傳遊戲內使用的 cardKey。
+        // 依圖片檔名（正規化後）與 CardList.csv 卡名／英文名完全相符才綁定。
         cardKey = 0;
         TextAsset csv = AssetDatabase.LoadAssetAtPath<TextAsset>(CardCsvPath);
         if (csv == null || string.IsNullOrWhiteSpace(csv.text))
@@ -385,7 +474,7 @@ public sealed class CardArtworkAutoBinder : AssetPostprocessor
         return s;
     }
 
-    private static bool TryUpdatePrefabCardStore(int cardKey, Sprite sprite)
+    private static bool TryUpdatePrefabCardStore(int cardKey, Sprite sprite, CardArtKind kind)
     {
         // 將綁定結果寫回 DataManager.prefab 內的 CardStore。
         GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(DataManagerPrefabPath);
@@ -400,7 +489,9 @@ public sealed class CardArtworkAutoBinder : AssetPostprocessor
             return false;
         }
 
-        bool changed = UpsertArtworkOverride(store, cardKey, sprite);
+        bool changed = kind == CardArtKind.DeckThumb
+            ? UpsertDeckThumbOverride(store, cardKey, sprite)
+            : UpsertArtworkOverride(store, cardKey, sprite);
         if (changed)
         {
             EditorUtility.SetDirty(store);
@@ -434,7 +525,7 @@ public sealed class CardArtworkAutoBinder : AssetPostprocessor
         return changed;
     }
 
-    private static bool TryClearPrefabCardStore(int cardKey, Sprite fallbackSprite)
+    private static bool TryClearPrefabCardStore(int cardKey, Sprite fallbackSprite, CardArtKind kind)
     {
         GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(DataManagerPrefabPath);
         if (prefab == null)
@@ -448,7 +539,9 @@ public sealed class CardArtworkAutoBinder : AssetPostprocessor
             return false;
         }
 
-        bool changed = ClearArtworkOverride(store, cardKey, fallbackSprite);
+        bool changed = kind == CardArtKind.DeckThumb
+            ? ClearDeckThumbOverride(store, cardKey, fallbackSprite)
+            : ClearArtworkOverride(store, cardKey, fallbackSprite);
         if (changed)
         {
             EditorUtility.SetDirty(store);
@@ -458,7 +551,7 @@ public sealed class CardArtworkAutoBinder : AssetPostprocessor
         return changed;
     }
 
-    private static bool TryUpdateSceneCardStore(string scenePath, int cardKey, Sprite sprite)
+    private static bool TryUpdateSceneCardStore(string scenePath, int cardKey, Sprite sprite, CardArtKind kind)
     {
         // 將綁定結果同步到 CardStore.unity 場景中的 CardStore。
         // 若場景未開啟，會以 Additive 方式暫開、儲存後再關閉。
@@ -483,7 +576,10 @@ public sealed class CardArtworkAutoBinder : AssetPostprocessor
                 CardStore[] stores = roots[i].GetComponentsInChildren<CardStore>(true);
                 for (int j = 0; j < stores.Length; j++)
                 {
-                    if (!UpsertArtworkOverride(stores[j], cardKey, sprite))
+                    bool storeChanged = kind == CardArtKind.DeckThumb
+                        ? UpsertDeckThumbOverride(stores[j], cardKey, sprite)
+                        : UpsertArtworkOverride(stores[j], cardKey, sprite);
+                    if (!storeChanged)
                     {
                         continue;
                     }
@@ -560,7 +656,7 @@ public sealed class CardArtworkAutoBinder : AssetPostprocessor
         return changed;
     }
 
-    private static bool TryClearSceneCardStore(string scenePath, int cardKey, Sprite fallbackSprite)
+    private static bool TryClearSceneCardStore(string scenePath, int cardKey, Sprite fallbackSprite, CardArtKind kind)
     {
         if (!File.Exists(scenePath))
         {
@@ -583,7 +679,10 @@ public sealed class CardArtworkAutoBinder : AssetPostprocessor
                 CardStore[] stores = roots[i].GetComponentsInChildren<CardStore>(true);
                 for (int j = 0; j < stores.Length; j++)
                 {
-                    if (!ClearArtworkOverride(stores[j], cardKey, fallbackSprite))
+                    bool storeChanged = kind == CardArtKind.DeckThumb
+                        ? ClearDeckThumbOverride(stores[j], cardKey, fallbackSprite)
+                        : ClearArtworkOverride(stores[j], cardKey, fallbackSprite);
+                    if (!storeChanged)
                     {
                         continue;
                     }
@@ -651,6 +750,38 @@ public sealed class CardArtworkAutoBinder : AssetPostprocessor
         return true;
     }
 
+    private static bool UpsertDeckThumbOverride(CardStore store, int cardKey, Sprite sprite)
+    {
+        if (store == null || sprite == null)
+            return false;
+
+        if (store.artworkOverrides == null)
+            store.artworkOverrides = new List<CardStore.CardArtworkOverride>();
+
+        for (int i = 0; i < store.artworkOverrides.Count; i++)
+        {
+            CardStore.CardArtworkOverride entry = store.artworkOverrides[i];
+            if (entry == null || entry.id != cardKey)
+                continue;
+
+            if (entry.deckThumbSprite == sprite && string.IsNullOrWhiteSpace(entry.deckThumbResourcePath))
+                return false;
+
+            entry.deckThumbResourcePath = string.Empty;
+            entry.deckThumbSprite = sprite;
+            return true;
+        }
+
+        store.artworkOverrides.Add(new CardStore.CardArtworkOverride
+        {
+            id = cardKey,
+            deckThumbResourcePath = string.Empty,
+            deckThumbSprite = sprite,
+        });
+
+        return true;
+    }
+
     private static bool ClearArtworkOverride(CardStore store, int cardKey, Sprite fallbackSprite)
     {
         if (store == null || store.artworkOverrides == null)
@@ -678,6 +809,32 @@ public sealed class CardArtworkAutoBinder : AssetPostprocessor
 
             entry.artworkSprite = fallbackSprite;
             entry.artworkResourcePath = string.Empty;
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool ClearDeckThumbOverride(CardStore store, int cardKey, Sprite fallbackSprite)
+    {
+        if (store == null || store.artworkOverrides == null)
+            return false;
+
+        for (int i = 0; i < store.artworkOverrides.Count; i++)
+        {
+            CardStore.CardArtworkOverride entry = store.artworkOverrides[i];
+            if (entry == null || entry.id != cardKey)
+                continue;
+
+            bool shouldAssignFallback = fallbackSprite != null;
+            bool alreadyExpected = shouldAssignFallback
+                ? (entry.deckThumbSprite == fallbackSprite && string.IsNullOrWhiteSpace(entry.deckThumbResourcePath))
+                : (entry.deckThumbSprite == null && string.IsNullOrWhiteSpace(entry.deckThumbResourcePath));
+            if (alreadyExpected)
+                return false;
+
+            entry.deckThumbSprite = fallbackSprite;
+            entry.deckThumbResourcePath = string.Empty;
             return true;
         }
 

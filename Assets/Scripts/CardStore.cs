@@ -8,9 +8,12 @@ public class CardStore : MonoBehaviour
     public class CardArtworkOverride
     {
         public int id;
-        [Tooltip("Optional resource path under Assets/Resources, e.g. CardArt/monster_001")]
+        [Tooltip("卡牌本體立繪：Resources 路徑，例如 CardArt/monster_001")]
         public string artworkResourcePath;
         public Sprite artworkSprite;
+        [Tooltip("組建牌組縮圖：Resources 路徑")]
+        public string deckThumbResourcePath;
+        public Sprite deckThumbSprite;
     }
 
     public TextAsset cardData;
@@ -104,8 +107,10 @@ public class CardStore : MonoBehaviour
     private void ApplyCardArtwork(Card card, string csvArtPath)
     {
         if (card == null) return;
-        string path = string.IsNullOrWhiteSpace(csvArtPath) ? string.Empty : csvArtPath.Trim();
-        Sprite sprite = LoadSpriteByPath(path);
+        string cardArtPath = string.IsNullOrWhiteSpace(csvArtPath) ? string.Empty : csvArtPath.Trim();
+        Sprite cardArtSprite = LoadSpriteByPath(cardArtPath);
+        string thumbPath = string.Empty;
+        Sprite thumbSprite = null;
 
         // Inspector override has higher priority and can replace CSV setting.
         for (int i = 0; i < artworkOverrides.Count; i++)
@@ -114,17 +119,24 @@ public class CardStore : MonoBehaviour
             if (entry == null || entry.id != card.id) continue;
             if (!string.IsNullOrWhiteSpace(entry.artworkResourcePath))
             {
-                path = entry.artworkResourcePath.Trim();
-                sprite = LoadSpriteByPath(path);
+                cardArtPath = entry.artworkResourcePath.Trim();
+                cardArtSprite = LoadSpriteByPath(cardArtPath);
             }
             if (entry.artworkSprite != null)
+                cardArtSprite = entry.artworkSprite;
+
+            if (!string.IsNullOrWhiteSpace(entry.deckThumbResourcePath))
             {
-                sprite = entry.artworkSprite;
+                thumbPath = entry.deckThumbResourcePath.Trim();
+                thumbSprite = LoadSpriteByPath(thumbPath);
             }
+            if (entry.deckThumbSprite != null)
+                thumbSprite = entry.deckThumbSprite;
             break;
         }
 
-        card.SetArtwork(path, sprite);
+        card.SetArtwork(cardArtPath, cardArtSprite);
+        card.SetDeckThumb(thumbPath, thumbSprite);
     }
 
     private static Sprite LoadSpriteByPath(string path)

@@ -71,8 +71,80 @@ public class BattleSimulationManager : MonoBehaviour
     public EnemyAI enemyAI;
     public GameObject battleCardPrefab;
     public GameObject fieldMonsterPrefab;
-    [Range(0.5f, 2.0f)] public float fieldMonsterScale = 1.2f;
-    [Range(0.5f, 2.0f)] public float fieldMonsterStatTextScale = 0.85f;
+
+    public const float HandCardScaleBaseline = BattleCardLayoutTuning.HandCardScaleBaseline;
+    public const float HandCardSizeMultiplierMax = BattleCardLayoutTuning.HandCardSizeMultiplierMax;
+    public const float FieldCardScaleBaseline = BattleFieldCardTuning.FieldMonsterScaleBaseline;
+    public const float FieldCardSizeMultiplierMax = BattleFieldCardTuning.FieldCardSizeMultiplierMax;
+
+    [Header("手牌版面（大小／間距／手牌區位置）")]
+    [Tooltip("僅手牌。詳見 BattleCardLayoutTuning.cs")]
+    [SerializeField] private BattleCardLayoutTuning cardLayout = new BattleCardLayoutTuning();
+
+    [Header("手牌文字（字級縮放）")]
+    [Tooltip("僅手牌卡面文字。詳見 BattleCardTextTuning.cs")]
+    [SerializeField] private BattleCardTextTuning cardText = new BattleCardTextTuning();
+
+    [Header("場上卡牌（怪獸／法術／間距／攻血字）")]
+    [Tooltip("場上怪獸與法術牌、槽位、ATK／HP。詳見 BattleFieldCardTuning.cs")]
+    [SerializeField] private BattleFieldCardTuning cardField = new BattleFieldCardTuning();
+
+    public BattleCardLayoutTuning CardLayout => cardLayout;
+    public BattleCardTextTuning CardText => cardText;
+    public BattleFieldCardTuning CardField => cardField;
+
+    /// <summary>將調校快照寫入執行中的 cardLayout／cardText／cardField。</summary>
+    public void ApplyCardTuning(
+        BattleCardLayoutTuning layout,
+        BattleCardTextTuning text,
+        BattleFieldCardTuning field)
+    {
+        if (layout != null) BattleCardTuningCopy.Copy(cardLayout, layout);
+        if (text != null) BattleCardTuningCopy.Copy(cardText, text);
+        if (field != null) BattleCardTuningCopy.Copy(cardField, field);
+    }
+
+    /// <summary>從 Resources 預設（如 <see cref="BattleCardTuningPresetLibrary.Preset1Id"/>）載入並套用。</summary>
+    public bool TryApplyCardTuningPreset(string presetId) =>
+        BattleCardTuningPresetLibrary.TryApplyPreset(this, presetId);
+
+    public float HandCardScale => cardLayout.HandCardScale;
+    public float FieldMonsterScale => cardField.FieldMonsterScale;
+    public float FieldSpellScale => cardField.FieldSpellScale;
+    public float HandAreaAnchoredYCanPlay => cardLayout.handAreaAnchoredYCanPlay;
+    public float EnemyHandAreaAnchoredYCanPlay => cardLayout.enemyHandAreaAnchoredYCanPlay;
+    public float HandAreaAnchoredYCantPlay => cardLayout.handAreaAnchoredYCantPlay;
+    public float EnemyHandAreaAnchoredYCantPlay => cardLayout.enemyHandAreaAnchoredYCantPlay;
+
+    public float handCardSpacing
+    {
+        get => cardLayout.handCardSpacing;
+        set => cardLayout.handCardSpacing = value;
+    }
+
+    public float handCardTextScale
+    {
+        get => cardText.handCardTextScale;
+        set => cardText.handCardTextScale = value;
+    }
+
+    public float handCardNameScale
+    {
+        get => cardText.handCardNameScale;
+        set => cardText.handCardNameScale = value;
+    }
+
+    public float handCardBackplateScale
+    {
+        get => cardText.handCardBackplateScale;
+        set => cardText.handCardBackplateScale = value;
+    }
+
+    public float fieldMonsterStatTextScale
+    {
+        get => cardField.fieldAttackHealthTextScale;
+        set => cardField.fieldAttackHealthTextScale = value;
+    }
 
     [Header("Battle Settings")]
     [Tooltip("我方／敵方英雄起始生命")]
@@ -138,12 +210,6 @@ public class BattleSimulationManager : MonoBehaviour
 
     [Header("Debug")]
     public bool autoStartOnPlay = true;
-    [Range(0.5f, 2.0f)] public float handCardScale = 1.5f;
-    [Range(0f, 80f)] public float handCardSpacing = 10f;
-    [Range(0f, 220f)] public float handAreaBaseYOffset = 24f;
-    [Range(0.5f, 2.5f)] public float handCardTextScale = 1.0f;
-    [Range(0.5f, 2.5f)] public float handCardNameScale = 1.0f;
-    [Range(0.5f, 2.0f)] public float handCardBackplateScale = 1.0f;
     [Header("Combat Animation")]
     public float attackMotionDuration = 0.4f;
     public float hitShakeDuration = 0.28f;
@@ -735,6 +801,7 @@ public class BattleSimulationManager : MonoBehaviour
         EnsureSceneVisualsReady();
         EnsureBattleUIExists();
         ResolveRefs();
+        BattleCardTuningUserSettings.TryApplySelectedPreset(this);
         if (autoStartOnPlay) StartBattle();
     }
 
@@ -2453,6 +2520,23 @@ public class BattleSimulationManager : MonoBehaviour
         return enemyHand[index];
     }
     public bool IsPlayerTurn() { return playerTurn && !battleOver; }
+
+    /// <summary>玩家是否可操作手牌（我方回合且無開場／棄牌／法術演出鎖定）。</summary>
+    public bool CanPlayerActNow() => CanPlayerAct();
+
+    /// <summary>敵方是否可操作手牌（敵方回合且無開場／法術演出鎖定）。</summary>
+    public bool CanEnemyActNow() => CanEnemyAct();
+
+    private bool CanEnemyAct()
+    {
+        if (battleOver) return false;
+        if (IsEnemyDiscardPopupLockActive()) return false;
+        if (openingPresentationInProgress) return false;
+        if (weatherForecastInProgress) return false;
+        if (activeSpellCastPresentationCount > 0) return false;
+        if (playerTurn) return false;
+        return true;
+    }
     public bool DidPlayerPassTurnThisTurn() { return playerPassedTurnThisTurn; }
     public bool DidEnemyPassTurnThisTurn() { return enemyPassedTurnThisTurn; }
 
@@ -2820,4 +2904,13 @@ public class BattleSimulationManager : MonoBehaviour
             }
         }
     }
+
+#if UNITY_EDITOR
+    private void OnValidate()
+    {
+        if (cardLayout != null) cardLayout.OnValidateInEditor();
+        if (cardText != null) cardText.OnValidateInEditor();
+        if (cardField != null) cardField.OnValidateInEditor();
+    }
+#endif
 }

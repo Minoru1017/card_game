@@ -70,7 +70,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
             return;
         }
 
-        float cardWidth = (battleCardPrefab != null ? prefabCardSize.x : 170f) * GetHandCardScale();
+        float cardWidth = GetBattleHandDisplayedWidth();
         // Symmetric fan layout with wider spacing for better readability/selectability.
         float stackStep = Mathf.Max(32f, cardWidth * 0.42f + GetHandCardSpacing());
         float centerX = handArea.rect.width * 0.5f;
@@ -118,8 +118,8 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         int count = battleManager.GetEnemyHandCount();
         if (count <= 0 || battleCardPrefab == null) return;
 
-        float scale = GetHandCardScale() * 0.75f;
-        float cardWidth = prefabCardSize.x * scale;
+        float scale = 0.75f;
+        float cardWidth = GetBattleHandDisplayedWidth(scale);
         float stackStep = Mathf.Max(18f, cardWidth * 0.33f);
         float centerX = enemyHandArea.rect.width * 0.5f;
         float center = (count - 1) * 0.5f;
@@ -137,8 +137,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
             rect.anchorMax = new Vector2(0f, 1f);
             rect.pivot = new Vector2(0.5f, 1f);
             rect.anchoredPosition = new Vector2(centerX + (i - center) * stackStep, -8f);
-            rect.sizeDelta = prefabCardSize * scale;
-            rect.localScale = Vector3.one;
+            ApplyBattleHandCardRectLayout(rect, scale);
             float fan = (i - center) * 6f;
             rect.localRotation = Quaternion.Euler(0f, 0f, fan);
             float curveY = Mathf.Pow(Mathf.Abs(i - center), 1.35f) * 3.6f;
@@ -226,8 +225,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         rect.anchorMax = new Vector2(0f, 0f);
         rect.pivot = new Vector2(0.5f, 0f);
         rect.anchoredPosition = new Vector2(x, -8f);
-        rect.sizeDelta = prefabCardSize * GetHandCardScale();
-        rect.localScale = Vector3.one;
+        ApplyBattleHandCardRectLayout(rect);
 
         CardDisplay display = cardObj.GetComponentInChildren<CardDisplay>();
         if (display != null)

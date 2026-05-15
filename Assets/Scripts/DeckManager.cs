@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using System.IO;
 using System.Text;
 using UnityEngine;
 using UnityEngine.Events;
@@ -51,10 +52,9 @@ public partial class DeckManager : MonoBehaviour
     [Tooltip("若顯示區使用舊版 Unity UI Text，拖於此（與上一欄二選一即可）。")]
     public Text currentDeckDisplayNameLegacyText;
 
-    [Header("Buildbeck — Deck list area")]
-    [Range(0.55f, 0.99f)]
-    [Tooltip("Buildbeck 專用：牌組 ScrollRect 視窗右側錨點（螢幕寬 0–1）。略小可讓右側留白給解散／儲存鈕，避免被牌組區壓住；C 弧仍由 Deck Arc 參數控制。")]
-    public float buildbeckDeckViewportRightEdgeNormalized = 0.88f;
+    [Header("Buildbeck — Library 卡片外殼 (DeckGen df/oi)")]
+    [Tooltip("使用新版 df/oi 外殼時，是否顯示卡面上的「卡片名稱」。變更後可呼叫 RefreshLibraryDeckGenCardNameVisibility() 立即重刷館藏。")]
+    public bool buildbeckLibraryDeckGenShowCardName = true;
 
     public GameObject deckCardPrefab;
     public GameObject librarycardPrefab;
@@ -70,6 +70,10 @@ public partial class DeckManager : MonoBehaviour
     private GameObject defaultLibraryCardPrefab;
     private GameObject runtimeLibraryTemplate;
     private GameObject runtimeDeckTemplate;
+    /// <summary>Buildbeck：Canvas 直層上的「DeckGen_Library」場景原型（執行期會關閉，僅供 Instantiate 到各張館藏卡）。</summary>
+    private GameObject _buildbeckLibraryDeckGenCanvasPrototype;
+    /// <summary>Buildbeck：Canvas 直層上的「DeckGen_Deck」場景原型（執行期會關閉，僅供 Instantiate 到各張牌組列卡片的 <c>DeckCardInfoStrip</c> 下）。</summary>
+    private GameObject _buildbeckDeckStripStackCanvasPrototype;
 
     private Dictionary<int, GameObject> libraryDic = new Dictionary<int, GameObject>();
     private Dictionary<int, GameObject> deckDic = new Dictionary<int, GameObject>();
@@ -91,6 +95,23 @@ public partial class DeckManager : MonoBehaviour
     private bool _deckScrollUserSessionActive;
     /// <summary>While true, deck arc layout and deck force-rebuild are skipped so remove + shift animation can own anchored positions.</summary>
     private bool _deckCardRemoveAnimationActive;
+    // #region agent log
+    private static int _agentDbgArcBlockCount;
+    private static int _agentDbgLateArcSkipCount;
+    private static void AgentDbgNdjson(string hypothesisId, string location, string message, string dataJson)
+    {
+        try
+        {
+            long ts = (long)(System.DateTime.UtcNow - new System.DateTime(1970, 1, 1, 0, 0, 0, System.DateTimeKind.Utc)).TotalMilliseconds;
+            string line = "{\"sessionId\":\"8cdc3f\",\"hypothesisId\":\"" + hypothesisId + "\",\"location\":\"" + location +
+                         "\",\"message\":\"" + message + "\",\"data\":" + dataJson + ",\"timestamp\":" + ts + "}\n";
+            File.AppendAllText(Path.Combine(Application.dataPath, "..", "debug-8cdc3f.log"), line);
+        }
+        catch
+        {
+        }
+    }
+    // #endregion
     private Coroutine _sceneBuildbeckReloadCo;
     private bool _buildbeckDiagLogged;
     private DeckDataController _deckDataController;
@@ -104,6 +125,17 @@ public partial class DeckManager : MonoBehaviour
     private const float DeckScrollElasticity = 0.12f;
     private const float DeckScrollDecelerationRate = 0.22f;
     private const float DeckScrollWheelSensitivity = 26f;
+    /// <summary>牌組直向列表：慣性衰減（愈低放手後愈快停，阻尼愈重）。</summary>
+    private const float DeckListDecelerationRate = 0.04f;
+    /// <summary>牌組列表滾輪靈敏度（略低＝單格位移較小，手感較沉）。</summary>
+    private const float DeckListWheelSensitivity = 18f;
+    /// <summary>牌組刪卡：最底列淡出／非最底列左移淡出共用秒數。</summary>
+    private const float DeckListRemoveCardFadeSeconds = 0.18f;
+    /// <summary>復歸捲動最短／最長秒數（依實際位移在兩者間內插）。</summary>
+    private const float DeckListRecoveryScrollDurationMin = 0.26f;
+    private const float DeckListRecoveryScrollDurationMax = 0.52f;
+    /// <summary>最底列：復歸捲動從淡出進度的何處開始（0.52 ≈ 與淡出尾段重疊，縮短整體節奏）。</summary>
+    private const float DeckListRemoveBottomRecoveryOverlap = 0.52f;
     private const float DeckScrollEdgePulseScale = 1.008f;
     private const float DeckScrollEdgeFeelCooldown = 0.2f;
     private const float DeckArcUserScrollSessionVelocityCutoff = 18f;
@@ -131,7 +163,6 @@ public partial class DeckManager : MonoBehaviour
     private int _lastDeckListStatHalfGapLevel;
     private float _lastDeckArcParentOffsetX;
     private float _lastDeckArcParentOffsetY;
-    private float _lastBuildbeckDeckViewportRightEdge = float.NaN;
     private float _deckListParentAnchoredYBaseline;
     private bool _deckListParentAnchoredYBaselineCaptured;
     private const float NewLayoutNamePlateRatio = 1f;
@@ -142,6 +173,50 @@ public partial class DeckManager : MonoBehaviour
     private const float NewLayoutStatOffsetY = 0f;
     private const float NewLayoutDeckCellWidth = 430f;
     private const float NewLayoutDeckCellHeight = 140f;
+    private const int NewLayoutDeckCellWidthPx = 430;
+    /// <summary>
+    /// Buildbeck：牌組 Scroll 視窗固定整數邏輯像素（與 CanvasScaler 參考解析度同一 UI 空間），
+    /// 以父層右下角為錨靠右對齊；右內縮 231、寬 762 與舊版左緣 927 之矩形在 1920 寬下相同。
+    /// </summary>
+    private const int BuildbeckDeckViewportWidthPx = 762;
+    private const int BuildbeckDeckViewportHeightPx = 788;
+    private const int BuildbeckDeckViewportRightInsetPx = 231;
+    private const int BuildbeckDeckViewportBottomPx = 151;
+    /// <summary>
+    /// Buildbeck：左側「Library Grid」ScrollRect 視窗固定邏輯像素（錨定左下 + sizeDelta），
+    /// 不經由錨點比例伸縮或額外縮放倍率函式推算尺寸。
+    /// </summary>
+    public const int BuildbeckLibraryGridViewportWidthPx = 928;
+    public const int BuildbeckLibraryGridViewportHeightPx = 1048;
+    /// <summary>與父層左緣的基礎內縮（像素）。</summary>
+    public const int BuildbeckLibraryGridViewportLeftInsetPx = 16;
+    /// <summary>靠左對齊時額外留白（邏輯像素；與 <see cref="BuildbeckLibraryGridViewportLeftInsetPx"/>、<see cref="BuildbeckLibraryGridViewportCenterPointOffsetXPx"/>、<see cref="BuildbeckLibraryGridViewportExtraOffsetXPx"/> 一併加總為 anchoredPosition.x）。</summary>
+    public const int BuildbeckLibraryGridViewportLeftBreathingPx = 32;
+    /// <summary>控制視窗水平位置：相對於內縮＋呼吸距離後，再將參考中心在 x 軸平移的邏輯像素（目前錨點為左下，等同整體右移）。</summary>
+    public const int BuildbeckLibraryGridViewportCenterPointOffsetXPx = 100;
+    /// <summary>額外水平右移（邏輯像素；錨左下時 x 增大）。與其餘常數一併加總為 <see cref="RectTransform.anchoredPosition"/>.x。</summary>
+    public const int BuildbeckLibraryGridViewportExtraOffsetXPx = 100;
+    public const int BuildbeckLibraryGridViewportBottomInsetPx = 16;
+    private const string BuildbeckLibraryDeckGenRootName = "DeckGen_Library";
+    private const string BuildbeckLibraryDeckGenDefaultName = "DeckGen_Library_df";
+    private const string BuildbeckLibraryDeckGenOverlayOiName = "DeckGen_Library_oi";
+    private const string BuildbeckLibraryDeckGenOverlayOlLegacyName = "DeckGen_Library_ol";
+    private const int BuildbeckLibraryDeckGenStackDisplayMin = 2;
+    private const int BuildbeckLibraryDeckGenStackDisplayMax = 99;
+    private const string BuildbeckDeckStripPrototypeCanvasName = "DeckGen_Deck";
+    /// <summary>Buildbeck：掛在 Canvas 直層、內含 <c>mt_df</c>／<c>mt_oi</c> 的條原型（與卡片 prefab 內同名節點區隔：後者不在 Canvas 直層）。</summary>
+    private const string BuildbeckDeckStripCanvasTemplateDirectChildName = "DeckCardInfoStrip";
+    private const string BuildbeckDeckStripMtDefaultName = "DeckCardInfoStrip_mt_df";
+    private const string BuildbeckDeckStripMtOverlayName = "DeckCardInfoStrip_mt_oi";
+    private const int BuildbeckDeckStripStackDisplayMin = 2;
+    private const int BuildbeckDeckStripStackDisplayMax = 99;
+    /// <summary><see cref="DeckCardInfoStrip_mt_oi"/> 下顯示疊加數（2–99）的區域節點名稱（其下含 TMP）。</summary>
+    private const string BuildbeckDeckStripStackOiRegionName = "oi";
+    private const string BuildbeckDeckStripMtCardNameChild = "card name";
+    private const string BuildbeckDeckStripMtAtkChild = "ATK";
+    private const string BuildbeckDeckStripMtHpChild = "HP";
+    /// <summary>Instantiate 自 <see cref="BuildbeckDeckStripPrototypeCanvasName"/> 後掛在 <c>DeckCardInfoStrip</c> 下的根節點名稱（避免與遞迴清除的舊名 <c>DeckGen_Deck</c> 衝突）。</summary>
+    private const string BuildbeckDeckStripStackInstantiatedRootName = "DeckStripStack";
     private const bool NewLayoutEnableDeckArc = true;
     private static readonly Vector2 NewLayoutDeckViewportAnchorMin = new Vector2(0.46f, 0.14f);
     private static readonly Vector2 NewLayoutDeckViewportAnchorMax = new Vector2(0.99f, 0.87f);
@@ -157,7 +232,7 @@ public partial class DeckManager : MonoBehaviour
     [Tooltip("Vertical gap between deck rows (Grid spacing). Integer only. Negative values pull rows closer / overlap.")]
     public int deckListCellSpacingY = 6;
     [Range(50, 200)]
-    [Tooltip("Uniform scale of the whole deck card list (ScrollRect content), as percent. 100 = 100% size. Parent-style control of list size.")]
+    [Tooltip("非 Buildbeck：牌組清單整體縮放百分比（50–200）。Buildbeck 固定為 100%（不套用此欄）。")]
     public int deckListContentScalePercent = 100;
     private const float DeckListStatHalfGapPxMin = 115f;
     private const float DeckListStatHalfGapPxMax = 186f;
@@ -190,10 +265,10 @@ public partial class DeckManager : MonoBehaviour
     public float deckArcScrollVelocityRef = 2200f;
     [Header("Deck Arc Parent Offset")]
     [Range(-400f, 400f)]
-    [Tooltip("Deck viewport parent shift on X (pixels). Adds to fixed layout offsets.")]
+    [Tooltip("非 Buildbeck：Deck 視窗水平位移（像素），加在 stretch offset 上。Buildbeck 已併入固定視窗常數，此欄不影響 Buildbeck 視窗寬度。")]
     public float deckArcParentOffsetX = 72f;
     [Range(-400f, 400f)]
-    [Tooltip("Deck card-list parent (deckPanel.parent) anchoredPosition.y offset (pixels). Uses parent Y, not viewport stretch offsets.")]
+    [Tooltip("Buildbeck：整數化後加在牌組視窗底邊（BuildbeckDeckViewportBottomPx）。非 Buildbeck：deckPanel.parent 的 anchoredPosition.y 加值。")]
     public float deckArcParentOffsetY = 0f;
     [Tooltip("X offset fine-tune by slot id. Index 0 = Slot#1, Index 1 = Slot#2 ...")]
     public List<float> deckArcSlotXOffsetById = new List<float>();
@@ -244,19 +319,44 @@ public partial class DeckManager : MonoBehaviour
         return null;
     }
 
+    /// <summary>
+    /// 在 <paramref name="deckGen"/> 底下，回傳 <paramref name="node"/> 往上直到父為 <paramref name="deckGen"/> 的那一層（用於 df/oi 外包一層如 <c>DeckGen_Library_堆疊數為1</c> 時整段啟停）。
+    /// </summary>
+    private static Transform LibraryDeckGenDirectBranchUnder(Transform deckGen, Transform node)
+    {
+        if (deckGen == null || node == null) return null;
+        Transform t = node;
+        while (t.parent != null && t.parent != deckGen)
+            t = t.parent;
+        return t;
+    }
+
+    /// <summary>若統計 TMP 在 <see cref="DeckCardInfoStrip_mt_df"/> 內，不可改父節點（舊邏輯會拉到 Strip 根而離開底圖／被遮擋）。</summary>
+    private static bool IsUnderDeckCardInfoStripMtDf(Transform t)
+    {
+        for (Transform c = t; c != null; c = c.parent)
+        {
+            if (c.name == BuildbeckDeckStripMtDefaultName) return true;
+        }
+
+        return false;
+    }
+
+    private static readonly string[] LibraryPanelPreferredNames = { "Library Grid", "Library" };
+
     private void TryResolveLibraryPanelByName()
     {
         if (libraryPanel != null) return;
         Scene scene = SceneManager.GetActiveScene();
-        GameObject lib = SceneSearchUtil.FindSceneObject(scene, "Library Grid");
-        if (lib != null)
+        for (int i = 0; i < LibraryPanelPreferredNames.Length; i++)
         {
-            libraryPanel = lib.transform;
-            return;
+            GameObject lib = SceneSearchUtil.FindSceneObject(scene, LibraryPanelPreferredNames[i]);
+            if (lib != null)
+            {
+                libraryPanel = lib.transform;
+                return;
+            }
         }
-        lib = SceneSearchUtil.FindSceneObject(scene, "Library");
-        if (lib != null)
-            libraryPanel = lib.transform;
     }
 
     private void TryResolveLibraryPanelUnderCanvas()
@@ -264,15 +364,15 @@ public partial class DeckManager : MonoBehaviour
         if (libraryPanel != null) return;
         Canvas canvas = GetCachedRuntimeUiCanvas();
         if (canvas == null) return;
-        Transform t = FindDeepChildByName(canvas.transform, "Library Grid");
-        if (t != null)
+        for (int i = 0; i < LibraryPanelPreferredNames.Length; i++)
         {
-            libraryPanel = t;
-            return;
+            Transform t = FindDeepChildByName(canvas.transform, LibraryPanelPreferredNames[i]);
+            if (t != null)
+            {
+                libraryPanel = t;
+                return;
+            }
         }
-        t = FindDeepChildByName(canvas.transform, "Library");
-        if (t != null)
-            libraryPanel = t;
     }
 
     private void TryResolveDeckPanelByName()
@@ -465,6 +565,7 @@ public partial class DeckManager : MonoBehaviour
                 BuildbeckLayoutAutoBinder.TryWireReadyBattleButton();
                 SceneLoader loader = GetCachedSceneLoader();
                 if (loader != null) loader.RefreshEnterBattleState();
+                BuildbeckLayoutAutoBinder.BringBuildbeckReturnButtonToFront();
             }
         }
         finally
@@ -721,15 +822,13 @@ public partial class DeckManager : MonoBehaviour
         ApplyNewLayoutRuntimeDefaults();
         if (!HasDeckLayoutTuningChanged()) return;
         bool spacingChanged = _lastDeckListCellSpacingY != deckListCellSpacingY;
-        bool scaleChanged = _lastDeckListContentScalePercent != deckListContentScalePercent;
-        bool parentOffsetChanged =
-            !Mathf.Approximately(_lastDeckArcParentOffsetX, deckArcParentOffsetX) ||
-            !Mathf.Approximately(_lastDeckArcParentOffsetY, deckArcParentOffsetY);
-        bool buildbeckDeckWidthChanged = IsBuildbeckSceneActive() &&
-            (float.IsNaN(_lastBuildbeckDeckViewportRightEdge) ||
-             !Mathf.Approximately(_lastBuildbeckDeckViewportRightEdge, buildbeckDeckViewportRightEdgeNormalized));
+        bool scaleChanged = !IsBuildbeckSceneActive() && _lastDeckListContentScalePercent != deckListContentScalePercent;
+        bool parentOffsetChanged = IsBuildbeckSceneActive()
+            ? Mathf.RoundToInt(_lastDeckArcParentOffsetY) != Mathf.RoundToInt(deckArcParentOffsetY)
+            : (!Mathf.Approximately(_lastDeckArcParentOffsetX, deckArcParentOffsetX) ||
+               !Mathf.Approximately(_lastDeckArcParentOffsetY, deckArcParentOffsetY));
         CacheDeckLayoutTuningValues();
-        if (parentOffsetChanged || buildbeckDeckWidthChanged)
+        if (parentOffsetChanged)
             ApplyDeckParentLayoutOffsets();
         if (spacingChanged || scaleChanged)
         {
@@ -774,12 +873,12 @@ public partial class DeckManager : MonoBehaviour
             !Mathf.Approximately(_lastHealthStatOffsetX, healthStatOffsetX) ||
             !Mathf.Approximately(_lastStatOffsetY, statOffsetY) ||
             _lastDeckListCellSpacingY != deckListCellSpacingY ||
-            _lastDeckListContentScalePercent != deckListContentScalePercent ||
+            (!IsBuildbeckSceneActive() && _lastDeckListContentScalePercent != deckListContentScalePercent) ||
             _lastDeckListStatHalfGapLevel != deckListStatHalfGapLevel ||
-            !Mathf.Approximately(_lastDeckArcParentOffsetX, deckArcParentOffsetX) ||
-            !Mathf.Approximately(_lastDeckArcParentOffsetY, deckArcParentOffsetY) ||
-            (IsBuildbeckSceneActive() && (float.IsNaN(_lastBuildbeckDeckViewportRightEdge) ||
-             !Mathf.Approximately(_lastBuildbeckDeckViewportRightEdge, buildbeckDeckViewportRightEdgeNormalized)));
+            (IsBuildbeckSceneActive()
+                ? Mathf.RoundToInt(_lastDeckArcParentOffsetY) != Mathf.RoundToInt(deckArcParentOffsetY)
+                : (!Mathf.Approximately(_lastDeckArcParentOffsetX, deckArcParentOffsetX) ||
+                   !Mathf.Approximately(_lastDeckArcParentOffsetY, deckArcParentOffsetY)));
     }
 
     private void CacheDeckLayoutTuningValues()
@@ -795,17 +894,16 @@ public partial class DeckManager : MonoBehaviour
         _lastDeckListStatHalfGapLevel = deckListStatHalfGapLevel;
         _lastDeckArcParentOffsetX = deckArcParentOffsetX;
         _lastDeckArcParentOffsetY = deckArcParentOffsetY;
-        _lastBuildbeckDeckViewportRightEdge = buildbeckDeckViewportRightEdgeNormalized;
     }
 
     private void ApplyDeckLayoutToExistingCards()
     {
         if (deckPanel == null) return;
-        for (int i = 0; i < deckPanel.childCount; i++)
+        int n = deckPanel.childCount;
+        for (int i = 0; i < n; i++)
         {
             Transform child = deckPanel.GetChild(i);
-            if (child == null) continue;
-            CardDisplay display = child.GetComponentInChildren<CardDisplay>(true);
+            CardDisplay display = FindCardDisplayOnRow(child);
             if (display == null) continue;
 
             Card c = display.card;
@@ -1050,6 +1148,415 @@ public partial class DeckManager : MonoBehaviour
         if (deckHintLegacyText != null) deckHintLegacyText.transform.SetParent(obj.transform, false);
     }
 
+    /// <summary>
+    /// Buildbeck：Canvas 直層上的場景用「DeckGen_Library」僅作為 prototype；進入 UI 後關閉，避免與複製到各卡上的實例重疊顯示。
+    /// </summary>
+    public void HideBuildbeckLibraryDeckGenCanvasPrototypeForRuntime()
+    {
+        if (!IsBuildbeckSceneActive()) return;
+        GameObject proto = ResolveBuildbeckLibraryDeckGenCanvasPrototype();
+        if (proto == null) return;
+        DestroyDeckGenLibraryLegacyIdUnder(proto.transform);
+        proto.SetActive(false);
+    }
+
+    private GameObject ResolveBuildbeckLibraryDeckGenCanvasPrototype()
+    {
+        if (_buildbeckLibraryDeckGenCanvasPrototype != null) return _buildbeckLibraryDeckGenCanvasPrototype;
+        Canvas canvas = null;
+        if (libraryPanel != null)
+            canvas = libraryPanel.GetComponentInParent<Canvas>(true)?.rootCanvas;
+        if (canvas == null)
+            canvas = GetCachedRuntimeUiCanvas();
+        if (canvas == null) return null;
+        Transform root = canvas.transform;
+        for (int i = 0; i < root.childCount; i++)
+        {
+            Transform c = root.GetChild(i);
+            if (c == null) continue;
+            if (c.name != BuildbeckLibraryDeckGenRootName) continue;
+            _buildbeckLibraryDeckGenCanvasPrototype = c.gameObject;
+            return _buildbeckLibraryDeckGenCanvasPrototype;
+        }
+
+        return null;
+    }
+
+    private void EnsureLibraryCardDeckGenHierarchyForBuildbeck(GameObject libraryCardRoot)
+    {
+        if (!IsBuildbeckSceneActive() || libraryCardRoot == null) return;
+        if (FindDeepChildByName(libraryCardRoot.transform, BuildbeckLibraryDeckGenRootName) != null) return;
+
+        GameObject proto = ResolveBuildbeckLibraryDeckGenCanvasPrototype();
+        if (proto == null) return;
+
+        GameObject inst = Instantiate(proto, libraryCardRoot.transform, false);
+        inst.name = BuildbeckLibraryDeckGenRootName;
+        inst.SetActive(true);
+        inst.transform.SetAsLastSibling();
+        DestroyDeckGenLibraryLegacyIdUnder(inst.transform);
+    }
+
+    private static void CollectTransformsNamedExact(Transform t, string exactName, List<Transform> acc)
+    {
+        if (t == null || string.IsNullOrEmpty(exactName)) return;
+        if (t.name == exactName) acc.Add(t);
+        for (int i = 0; i < t.childCount; i++)
+            CollectTransformsNamedExact(t.GetChild(i), exactName, acc);
+    }
+
+    /// <summary>
+    /// 已棄用節點 <c>DeckGen_Library_id</c>（舊縮圖層）；於整棵子樹遞迴尋找並銷毀（不限直層）。請只使用 df/oi。
+    /// </summary>
+    private static void DestroyDeckGenLibraryLegacyIdUnder(Transform searchRoot)
+    {
+        if (searchRoot == null) return;
+        const string legacyName = "DeckGen_Library_id";
+        List<Transform> hits = new List<Transform>(2);
+        CollectTransformsNamedExact(searchRoot, legacyName, hits);
+        for (int i = 0; i < hits.Count; i++)
+        {
+            if (hits[i] == null) continue;
+            Object.Destroy(hits[i].gameObject);
+        }
+    }
+
+    /// <summary>
+    /// 已棄用節點 <c>DeckGen_Deck</c>（舊牌組條縮圖層）；於整棵子樹遞迴尋找並銷毀。請使用 <c>DeckCardInfoStrip_mt_df</c>／<c>DeckCardInfoStrip_mt_oi</c>。
+    /// </summary>
+    private static void DestroyDeckGenDeckLegacyUnder(Transform searchRoot)
+    {
+        if (searchRoot == null) return;
+        const string legacyName = "DeckGen_Deck";
+        List<Transform> hits = new List<Transform>(4);
+        CollectTransformsNamedExact(searchRoot, legacyName, hits);
+        for (int i = 0; i < hits.Count; i++)
+        {
+            if (hits[i] == null) continue;
+            Object.Destroy(hits[i].gameObject);
+        }
+    }
+
+    /// <summary>
+    /// 館藏卡：依擁有數切換 <c>DeckGen_Library_df</c>（擁有數 &lt; 2，含 1 張／單張分支如 <c>DeckGen_Library_堆疊數為1</c>）與 <c>DeckGen_Library_oi</c>（疊加≥2，數字顯示於 oi 子階層 TMP，2–99）。
+    /// </summary>
+    public void ApplyLibraryDeckGenStackPresentation(GameObject libraryCardRoot, int ownedCount)
+    {
+        if (libraryCardRoot == null) return;
+        DestroyDeckGenLibraryLegacyIdUnder(libraryCardRoot.transform);
+
+        Transform deckGen = FindDeepChildByName(libraryCardRoot.transform, BuildbeckLibraryDeckGenRootName);
+        if (deckGen == null) return;
+
+        DestroyDeckGenLibraryLegacyIdUnder(deckGen);
+
+        Transform df = FindDeepChildByName(deckGen, BuildbeckLibraryDeckGenDefaultName);
+        Transform oi = FindDeepChildByName(deckGen, BuildbeckLibraryDeckGenOverlayOiName);
+        if (oi == null) oi = FindDeepChildByName(deckGen, BuildbeckLibraryDeckGenOverlayOlLegacyName);
+
+        bool hasNewChrome = df != null || oi != null;
+        CardCounter cc = libraryCardRoot.GetComponentInChildren<CardCounter>(true);
+        if (cc != null && cc.counterText != null)
+        {
+            if (hasNewChrome)
+                cc.counterText.gameObject.SetActive(false);
+            else
+                cc.counterText.gameObject.SetActive(true);
+        }
+
+        if (!hasNewChrome)
+            return;
+
+        CardDisplay cardDisplay = libraryCardRoot.GetComponentInChildren<CardDisplay>(true);
+        if (cardDisplay != null && cardDisplay.nameText != null)
+            cardDisplay.nameText.gameObject.SetActive(buildbeckLibraryDeckGenShowCardName);
+
+        // 僅 ≥2 張使用 oi；=1 張（含設計師將 df 包在「堆疊數為1」等子階層）一律走 df 分支。
+        bool useStackOverlayOi = ownedCount >= BuildbeckLibraryDeckGenStackDisplayMin;
+
+        if (df != null)
+        {
+            Transform dfBranch = LibraryDeckGenDirectBranchUnder(deckGen, df);
+            if (!useStackOverlayOi)
+            {
+                if (dfBranch != null) dfBranch.gameObject.SetActive(true);
+                df.gameObject.SetActive(true);
+            }
+            else if (dfBranch != null)
+            {
+                dfBranch.gameObject.SetActive(false);
+            }
+        }
+
+        if (oi != null)
+        {
+            Transform oiBranch = LibraryDeckGenDirectBranchUnder(deckGen, oi);
+            if (useStackOverlayOi)
+            {
+                if (oiBranch != null) oiBranch.gameObject.SetActive(true);
+                oi.gameObject.SetActive(true);
+                int shown = Mathf.Clamp(ownedCount, BuildbeckLibraryDeckGenStackDisplayMin, BuildbeckLibraryDeckGenStackDisplayMax);
+                TextMeshProUGUI tmp = oi.GetComponentInChildren<TextMeshProUGUI>(true);
+                if (tmp != null) tmp.text = shown.ToString();
+            }
+            else if (oiBranch != null)
+            {
+                oiBranch.gameObject.SetActive(false);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 在變更 <see cref="buildbeckLibraryDeckGenShowCardName"/> 後，重新套用所有館藏卡的名稱顯示（不重載資料）。
+    /// </summary>
+    public void RefreshLibraryDeckGenCardNameVisibility()
+    {
+        if (!IsBuildbeckSceneActive() || PlayerData == null) return;
+        foreach (var kv in libraryDic)
+        {
+            if (kv.Value == null) continue;
+            int n = PlayerData.GetCollectionCount(kv.Key);
+            ApplyLibraryDeckGenStackPresentation(kv.Value, n);
+        }
+    }
+
+    /// <summary>
+    /// Buildbeck：Canvas 直層上的牌組條原型（<c>DeckGen_Deck</c> 或含 mt 的 <c>DeckCardInfoStrip</c>）僅供複製；進入 UI 後關閉，避免與畫面重疊。
+    /// </summary>
+    public void HideBuildbeckDeckStripStackCanvasPrototypeForRuntime()
+    {
+        if (!IsBuildbeckSceneActive()) return;
+        GameObject proto = ResolveBuildbeckDeckStripStackCanvasPrototype();
+        if (proto == null) return;
+        proto.SetActive(false);
+    }
+
+    private GameObject ResolveBuildbeckDeckStripStackCanvasPrototype()
+    {
+        if (_buildbeckDeckStripStackCanvasPrototype != null) return _buildbeckDeckStripStackCanvasPrototype;
+        Canvas canvas = null;
+        if (deckPanel != null)
+            canvas = deckPanel.GetComponentInParent<Canvas>(true)?.rootCanvas;
+        if (canvas == null)
+            canvas = GetCachedRuntimeUiCanvas();
+        if (canvas == null) return null;
+        Transform root = canvas.transform;
+        for (int i = 0; i < root.childCount; i++)
+        {
+            Transform c = root.GetChild(i);
+            if (c == null) continue;
+            if (c.name != BuildbeckDeckStripPrototypeCanvasName) continue;
+            _buildbeckDeckStripStackCanvasPrototype = c.gameObject;
+            return _buildbeckDeckStripStackCanvasPrototype;
+        }
+
+        for (int i = 0; i < root.childCount; i++)
+        {
+            Transform c = root.GetChild(i);
+            if (c == null) continue;
+            if (c.name != BuildbeckDeckStripCanvasTemplateDirectChildName) continue;
+            if (FindDeepChildByName(c, BuildbeckDeckStripMtDefaultName) == null) continue;
+            if (FindDeepChildByName(c, BuildbeckDeckStripMtOverlayName) == null) continue;
+            _buildbeckDeckStripStackCanvasPrototype = c.gameObject;
+            return _buildbeckDeckStripStackCanvasPrototype;
+        }
+
+        return null;
+    }
+
+    private void EnsureDeckCardStripStackHierarchyForBuildbeck(GameObject deckCardRoot)
+    {
+        if (!IsBuildbeckSceneActive() || deckCardRoot == null) return;
+        Transform strip = FindDeepChildByName(deckCardRoot.transform, BuildbeckDeckStripCanvasTemplateDirectChildName);
+        if (strip == null) return;
+
+        Transform existingDf = FindDeepChildByName(strip, BuildbeckDeckStripMtDefaultName);
+        Transform existingOi = FindDeepChildByName(strip, BuildbeckDeckStripMtOverlayName);
+        if (existingDf != null && existingOi != null)
+        {
+            DestroyDeckGenDeckLegacyUnder(deckCardRoot.transform);
+            DestroyDeckGenDeckLegacyUnder(strip);
+            return;
+        }
+
+        DestroyDeckGenDeckLegacyUnder(deckCardRoot.transform);
+        DestroyDeckGenDeckLegacyUnder(strip);
+
+        GameObject proto = ResolveBuildbeckDeckStripStackCanvasPrototype();
+        if (proto == null) return;
+
+        if (proto.name == BuildbeckDeckStripCanvasTemplateDirectChildName)
+        {
+            Transform protoDf = FindDeepChildByName(proto.transform, BuildbeckDeckStripMtDefaultName);
+            Transform protoOi = FindDeepChildByName(proto.transform, BuildbeckDeckStripMtOverlayName);
+            if (protoDf == null || protoOi == null) return;
+            GameObject dfInst = Instantiate(protoDf.gameObject, strip, false);
+            dfInst.name = BuildbeckDeckStripMtDefaultName;
+            GameObject oiInst = Instantiate(protoOi.gameObject, strip, false);
+            oiInst.name = BuildbeckDeckStripMtOverlayName;
+            dfInst.SetActive(true);
+            oiInst.SetActive(true);
+            dfInst.transform.SetAsLastSibling();
+            oiInst.transform.SetAsLastSibling();
+            return;
+        }
+
+        GameObject inst = Instantiate(proto, strip, false);
+        inst.name = BuildbeckDeckStripStackInstantiatedRootName;
+        inst.SetActive(true);
+        inst.transform.SetAsLastSibling();
+        DestroyDeckGenDeckLegacyUnder(inst.transform);
+    }
+
+    private static TextMeshProUGUI ResolveDeckStripStackCountText(Transform mtOiRoot)
+    {
+        if (mtOiRoot == null) return null;
+        Transform region = FindDeepChildByName(mtOiRoot, BuildbeckDeckStripStackOiRegionName);
+        if (region != null)
+        {
+            TextMeshProUGUI t = region.GetComponentInChildren<TextMeshProUGUI>(true);
+            if (t != null) return t;
+        }
+
+        TextMeshProUGUI[] tmps = mtOiRoot.GetComponentsInChildren<TextMeshProUGUI>(true);
+        for (int i = 0; i < tmps.Length; i++)
+        {
+            TextMeshProUGUI u = tmps[i];
+            if (u == null) continue;
+            Transform par = u.transform.parent;
+            if (par != null && par.name == BuildbeckDeckStripStackOiRegionName)
+                return u;
+        }
+
+        for (int i = 0; i < tmps.Length; i++)
+        {
+            TextMeshProUGUI u = tmps[i];
+            if (u == null) continue;
+            string n = u.gameObject.name;
+            if (n == BuildbeckDeckStripMtCardNameChild || n == BuildbeckDeckStripMtAtkChild || n == BuildbeckDeckStripMtHpChild)
+                continue;
+            return u;
+        }
+
+        return null;
+    }
+
+    private static void CopyTmpDisplayState(TextMeshProUGUI src, TextMeshProUGUI dst)
+    {
+        if (src == null || dst == null) return;
+        dst.text = src.text;
+        dst.richText = src.richText;
+        dst.overflowMode = src.overflowMode;
+        dst.color = src.color;
+        dst.fontSize = src.fontSize;
+        dst.fontWeight = src.fontWeight;
+        dst.fontStyle = src.fontStyle;
+        dst.horizontalAlignment = src.horizontalAlignment;
+        dst.verticalAlignment = src.verticalAlignment;
+        dst.enableWordWrapping = src.enableWordWrapping;
+        dst.gameObject.SetActive(src.gameObject.activeSelf);
+    }
+
+    /// <summary>將 <c>mt_df</c> 上名稱／攻防 TMP 狀態複製到 <c>mt_oi</c> 對應節點（疊加顯示時內容一致）。</summary>
+    public void SyncBuildbeckDeckStripMtOiPrimaryTexts(GameObject deckCardRoot)
+    {
+        if (deckCardRoot == null || !IsBuildbeckSceneActive()) return;
+        Transform strip = FindDeepChildByName(deckCardRoot.transform, BuildbeckDeckStripCanvasTemplateDirectChildName);
+        if (strip == null) return;
+        Transform df = FindDeepChildByName(strip, BuildbeckDeckStripMtDefaultName);
+        Transform oi = FindDeepChildByName(strip, BuildbeckDeckStripMtOverlayName);
+        if (df == null || oi == null) return;
+
+        TextMeshProUGUI dfName = FindDeepChildByName(df, BuildbeckDeckStripMtCardNameChild)?.GetComponent<TextMeshProUGUI>();
+        TextMeshProUGUI oiName = FindDeepChildByName(oi, BuildbeckDeckStripMtCardNameChild)?.GetComponent<TextMeshProUGUI>();
+        CopyTmpDisplayState(dfName, oiName);
+
+        TextMeshProUGUI dfAtk = FindDeepChildByName(df, BuildbeckDeckStripMtAtkChild)?.GetComponent<TextMeshProUGUI>();
+        TextMeshProUGUI oiAtk = FindDeepChildByName(oi, BuildbeckDeckStripMtAtkChild)?.GetComponent<TextMeshProUGUI>();
+        CopyTmpDisplayState(dfAtk, oiAtk);
+
+        TextMeshProUGUI dfHp = FindDeepChildByName(df, BuildbeckDeckStripMtHpChild)?.GetComponent<TextMeshProUGUI>();
+        TextMeshProUGUI oiHp = FindDeepChildByName(oi, BuildbeckDeckStripMtHpChild)?.GetComponent<TextMeshProUGUI>();
+        CopyTmpDisplayState(dfHp, oiHp);
+    }
+
+    private void RewireBuildbeckDeckCardStripTextRefs(GameObject deckCardRoot)
+    {
+        if (deckCardRoot == null || !IsBuildbeckSceneActive()) return;
+        Transform mtDf = FindDeepChildByName(deckCardRoot.transform, BuildbeckDeckStripMtDefaultName);
+        if (mtDf == null) return;
+
+        TextMeshProUGUI nameTmp = FindDeepChildByName(mtDf, BuildbeckDeckStripMtCardNameChild)?.GetComponent<TextMeshProUGUI>();
+        TextMeshProUGUI atkTmp = FindDeepChildByName(mtDf, BuildbeckDeckStripMtAtkChild)?.GetComponent<TextMeshProUGUI>();
+        TextMeshProUGUI hpTmp = FindDeepChildByName(mtDf, BuildbeckDeckStripMtHpChild)?.GetComponent<TextMeshProUGUI>();
+
+        CardDisplay display = deckCardRoot.GetComponent<CardDisplay>();
+        if (display != null)
+        {
+            display.nameText = nameTmp;
+            display.attackText = atkTmp;
+            display.healthText = hpTmp;
+        }
+
+        DeckCardInfoStrip stripComp = deckCardRoot.GetComponentInChildren<DeckCardInfoStrip>(true);
+        if (stripComp != null)
+            stripComp.AssignReferences(nameTmp, atkTmp, hpTmp);
+    }
+
+    /// <summary>
+    /// 牌組列：依張數切換 <c>DeckCardInfoStrip_mt_df</c>（預設）與 <c>DeckCardInfoStrip_mt_oi</c>（疊加≥2，子階層 TMP 顯示 2–99）。
+    /// </summary>
+    public void ApplyDeckStripStackPresentation(GameObject deckCardRoot, int deckCount)
+    {
+        if (deckCardRoot == null || !IsBuildbeckSceneActive()) return;
+
+        DestroyDeckGenDeckLegacyUnder(deckCardRoot.transform);
+
+        Transform strip = FindDeepChildByName(deckCardRoot.transform, BuildbeckDeckStripCanvasTemplateDirectChildName);
+        if (strip == null) return;
+
+        DestroyDeckGenDeckLegacyUnder(strip);
+
+        Transform df = FindDeepChildByName(strip, BuildbeckDeckStripMtDefaultName);
+        Transform oi = FindDeepChildByName(strip, BuildbeckDeckStripMtOverlayName);
+        bool hasNewChrome = df != null || oi != null;
+
+        CardCounter cc = deckCardRoot.GetComponentInChildren<CardCounter>(true);
+        if (cc != null && cc.counterText != null)
+        {
+            if (hasNewChrome)
+                cc.counterText.gameObject.SetActive(false);
+            else
+                cc.counterText.gameObject.SetActive(true);
+        }
+
+        if (!hasNewChrome)
+            return;
+
+        bool stacks = deckCount >= BuildbeckDeckStripStackDisplayMin;
+        if (df != null) df.gameObject.SetActive(!stacks);
+        if (oi != null)
+        {
+            oi.gameObject.SetActive(stacks);
+            if (stacks)
+            {
+                int shown = Mathf.Clamp(deckCount, BuildbeckDeckStripStackDisplayMin, BuildbeckDeckStripStackDisplayMax);
+                TextMeshProUGUI stackTmp = ResolveDeckStripStackCountText(oi);
+                if (stackTmp != null) stackTmp.text = shown.ToString();
+            }
+        }
+
+        RefreshDeckStripThumbPortrait(deckCardRoot);
+    }
+
+    private void RefreshDeckStripThumbPortrait(GameObject deckCardRoot)
+    {
+        if (deckCardRoot == null) return;
+        CardDisplay display = deckCardRoot.GetComponentInChildren<CardDisplay>(true);
+        if (display == null || display.card == null) return;
+        display.ShowCard();
+    }
+
     public void CreateCard(int id, CardState state)
     {
         EnsureCoreRefs();
@@ -1100,7 +1607,20 @@ public partial class DeckManager : MonoBehaviour
         }
         if (targetDic.ContainsKey(id) && targetDic[id] != null)
         {
-            // Guard against duplicate UI card generation on re-entry/rebuild.
+            if (state == CardState.Deck)
+            {
+                GameObject existing = targetDic[id];
+                CardCounter existingCounter = existing.GetComponentInChildren<CardCounter>(true);
+                if (existingCounter != null) existingCounter.SetCounter(countForId);
+                if (IsBuildbeckSceneActive())
+                {
+                    ApplyDeckStripStackPresentation(existing, countForId);
+                    SyncBuildbeckDeckStripMtOiPrimaryTexts(existing);
+                }
+                else
+                    RefreshDeckStripThumbPortrait(existing);
+            }
+
             return;
         }
 
@@ -1150,6 +1670,15 @@ public partial class DeckManager : MonoBehaviour
         CardCounter counter = newCard.GetComponentInChildren<CardCounter>();
         if (counter != null) counter.SetCounter(countForId);
 
+        if (state == CardState.Library && IsBuildbeckSceneActive())
+            EnsureLibraryCardDeckGenHierarchyForBuildbeck(newCard);
+
+        if (state == CardState.Deck && IsBuildbeckSceneActive())
+        {
+            EnsureDeckCardStripStackHierarchyForBuildbeck(newCard);
+            RewireBuildbeckDeckCardStripTextRefs(newCard);
+        }
+
         var display = newCard.GetComponentInChildren<CardDisplay>();
         if (display != null)
         {
@@ -1164,7 +1693,17 @@ public partial class DeckManager : MonoBehaviour
                     EnsureDeckAttackValueRedBar(display);
                     EnsureDeckHealthValueGreenBar(display);
                 }
+
+                if (IsBuildbeckSceneActive())
+                    SyncBuildbeckDeckStripMtOiPrimaryTexts(newCard);
             }
+        }
+
+        if (state == CardState.Library)
+            ApplyLibraryDeckGenStackPresentation(newCard, countForId);
+        else if (state == CardState.Deck && IsBuildbeckSceneActive())
+        {
+            ApplyDeckStripStackPresentation(newCard, countForId);
         }
 
         targetDic[id] = newCard;
@@ -1211,13 +1750,32 @@ public partial class DeckManager : MonoBehaviour
         return Mathf.Lerp(DeckListStatHalfGapPxMin, DeckListStatHalfGapPxMax, (L - DeckListStatHalfGapLevelMin) / (float)span);
     }
 
+    private static RectTransform ResolveDeckCardInfoLayoutRoot(CardDisplay display)
+    {
+        if (display == null) return null;
+        DeckCardInfoStrip strip = display.GetComponentInChildren<DeckCardInfoStrip>(true);
+        if (strip != null)
+        {
+            RectTransform rt = strip.transform as RectTransform;
+            if (rt != null) return rt;
+        }
+
+        return display.GetComponent<RectTransform>();
+    }
+
     private void EnsureDeckAttackValueRedBar(CardDisplay display)
     {
         if (display == null || display.attackText == null) return;
-        RectTransform cardRt = display.GetComponent<RectTransform>();
-        if (cardRt == null) return;
         RectTransform attackRt = display.attackText.rectTransform;
         if (attackRt == null) return;
+        if (IsUnderDeckCardInfoStripMtDf(attackRt))
+        {
+            display.attackText.alignment = TextAlignmentOptions.Center;
+            return;
+        }
+
+        RectTransform layoutRoot = ResolveDeckCardInfoLayoutRoot(display);
+        if (layoutRoot == null) return;
 
         Transform existingBar = FindDeepChildByName(display.transform, AtkBadgeName);
         RectTransform barRt;
@@ -1231,17 +1789,17 @@ public partial class DeckManager : MonoBehaviour
         else
         {
             GameObject barObj = new GameObject(AtkBadgeName, typeof(RectTransform), typeof(Image));
-            barObj.transform.SetParent(cardRt, false);
+            barObj.transform.SetParent(layoutRoot, false);
             barRt = barObj.GetComponent<RectTransform>();
             barImg = barObj.GetComponent<Image>();
         }
 
         if (barRt == null || barImg == null) return;
 
-        if (attackRt.parent != cardRt)
-            attackRt.SetParent(cardRt, false);
-        if (barRt.parent != cardRt)
-            barRt.SetParent(cardRt, false);
+        if (attackRt.parent != layoutRoot)
+            attackRt.SetParent(layoutRoot, false);
+        if (barRt.parent != layoutRoot)
+            barRt.SetParent(layoutRoot, false);
 
         attackRt.anchorMin = new Vector2(0.5f, 0.5f);
         attackRt.anchorMax = new Vector2(0.5f, 0.5f);
@@ -1276,10 +1834,16 @@ public partial class DeckManager : MonoBehaviour
     private void EnsureDeckHealthValueGreenBar(CardDisplay display)
     {
         if (display == null || display.healthText == null) return;
-        RectTransform cardRt = display.GetComponent<RectTransform>();
-        if (cardRt == null) return;
         RectTransform healthRt = display.healthText.rectTransform;
         if (healthRt == null) return;
+        if (IsUnderDeckCardInfoStripMtDf(healthRt))
+        {
+            display.healthText.alignment = TextAlignmentOptions.Center;
+            return;
+        }
+
+        RectTransform layoutRoot = ResolveDeckCardInfoLayoutRoot(display);
+        if (layoutRoot == null) return;
 
         Transform existingBar = FindDeepChildByName(display.transform, HpBadgeName);
         RectTransform barRt;
@@ -1293,17 +1857,17 @@ public partial class DeckManager : MonoBehaviour
         else
         {
             GameObject barObj = new GameObject(HpBadgeName, typeof(RectTransform), typeof(Image));
-            barObj.transform.SetParent(cardRt, false);
+            barObj.transform.SetParent(layoutRoot, false);
             barRt = barObj.GetComponent<RectTransform>();
             barImg = barObj.GetComponent<Image>();
         }
 
         if (barRt == null || barImg == null) return;
 
-        if (healthRt.parent != cardRt)
-            healthRt.SetParent(cardRt, false);
-        if (barRt.parent != cardRt)
-            barRt.SetParent(cardRt, false);
+        if (healthRt.parent != layoutRoot)
+            healthRt.SetParent(layoutRoot, false);
+        if (barRt.parent != layoutRoot)
+            barRt.SetParent(layoutRoot, false);
 
         healthRt.anchorMin = new Vector2(0.5f, 0.5f);
         healthRt.anchorMax = new Vector2(0.5f, 0.5f);
@@ -1365,6 +1929,12 @@ public partial class DeckManager : MonoBehaviour
     private void ApplyDeckListContentScale()
     {
         if (deckPanel == null) return;
+        if (IsBuildbeckSceneActive())
+        {
+            deckPanel.localScale = Vector3.one;
+            return;
+        }
+
         int p = Mathf.Clamp(deckListContentScalePercent, 50, 200);
         float s = p / 100f;
         deckPanel.localScale = new Vector3(s, s, 1f);
@@ -1388,19 +1958,47 @@ public partial class DeckManager : MonoBehaviour
         grid.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
         grid.constraintCount = 1;
         grid.childAlignment = TextAnchor.UpperCenter;
-        grid.cellSize = new Vector2(NewLayoutDeckCellWidth, NewLayoutDeckCellHeight);
+        float cellH = ComputeDeckPanelGridCellHeight(grid);
+        int cellHInt = Mathf.Max(1, Mathf.RoundToInt(cellH));
+        grid.cellSize = new Vector2(NewLayoutDeckCellWidthPx, cellHInt);
         grid.spacing = new Vector2(0f, deckListCellSpacingY);
         // Grid handles list layout + spacing in container (including Y distribution).
         grid.enabled = true;
     }
 
-    private Vector2 ResolveDeckViewportAnchorMaxForScene()
+    /// <summary>
+    /// Deck list row height: prefer the layout constant, but never larger than the scroll viewport
+    /// (minus grid padding) so a row fits inside the visible deck area on small layouts.
+    /// </summary>
+    private float ComputeDeckPanelGridCellHeight(GridLayoutGroup grid)
     {
-        Vector2 baseMax = NewLayoutDeckViewportAnchorMax;
-        if (!IsBuildbeckSceneActive())
-            return baseMax;
-        float right = Mathf.Clamp(buildbeckDeckViewportRightEdgeNormalized, 0.55f, 0.999f);
-        return new Vector2(right, baseMax.y);
+        const float minCell = 56f;
+        const float inset = 8f;
+        float preferred = NewLayoutDeckCellHeight;
+        float vh = GetDeckListViewportHeight();
+        if (vh < 2f)
+            return preferred;
+
+        float padY = grid != null ? grid.padding.top + grid.padding.bottom : 0f;
+        float byViewport = vh - padY - inset;
+        if (byViewport < minCell)
+            return Mathf.Min(preferred, Mathf.Max(1f, vh - padY - 1f));
+
+        return Mathf.Min(preferred, Mathf.Max(minCell, byViewport));
+    }
+
+    private float GetDeckListViewportHeight()
+    {
+        if (_deckPanelScrollRect != null && _deckPanelScrollRect.viewport != null)
+            return Mathf.Max(0f, _deckPanelScrollRect.viewport.rect.height);
+        if (deckPanel != null && deckPanel.parent is RectTransform vp)
+            return Mathf.Max(0f, vp.rect.height);
+        return 0f;
+    }
+
+    private static Vector2 ResolveDeckViewportAnchorMaxForScene()
+    {
+        return NewLayoutDeckViewportAnchorMax;
     }
 
     private void ApplyDeckViewportForNewLayout()
@@ -1412,9 +2010,21 @@ public partial class DeckManager : MonoBehaviour
             viewport = deckPanel.parent as RectTransform;
         if (viewport == null) return;
 
+        if (IsBuildbeckSceneActive())
+        {
+            viewport.anchorMin = new Vector2(1f, 0f);
+            viewport.anchorMax = new Vector2(1f, 0f);
+            viewport.pivot = new Vector2(1f, 0f);
+            int yTune = Mathf.RoundToInt(deckArcParentOffsetY);
+            viewport.anchoredPosition = new Vector2(-BuildbeckDeckViewportRightInsetPx, BuildbeckDeckViewportBottomPx + yTune);
+            viewport.sizeDelta = new Vector2(BuildbeckDeckViewportWidthPx, BuildbeckDeckViewportHeightPx);
+            viewport.localEulerAngles = Vector3.zero;
+            viewport.localScale = Vector3.one;
+            return;
+        }
+
         viewport.anchorMin = NewLayoutDeckViewportAnchorMin;
         viewport.anchorMax = ResolveDeckViewportAnchorMaxForScene();
-        // Horizontal shift via viewport stretch offsets; vertical tuning uses deckPanel.parent anchoredPosition.y.
         Vector2 parentShift = new Vector2(deckArcParentOffsetX, 0f);
         viewport.offsetMin = NewLayoutDeckViewportOffsetMin + parentShift;
         viewport.offsetMax = NewLayoutDeckViewportOffsetMax + parentShift;
@@ -1423,6 +2033,8 @@ public partial class DeckManager : MonoBehaviour
     private void ApplyDeckListParentVerticalOffset()
     {
         if (deckPanel == null) return;
+        if (IsBuildbeckSceneActive()) return;
+
         RectTransform parentRt = deckPanel.parent as RectTransform;
         if (parentRt == null) return;
         if (!_deckListParentAnchoredYBaselineCaptured)
@@ -1440,6 +2052,43 @@ public partial class DeckManager : MonoBehaviour
     {
         ApplyDeckViewportForNewLayout();
         ApplyDeckListParentVerticalOffset();
+        ApplyDeckListContentScale();
+        ApplyBuildbeckLibraryGridViewportLayoutIfNeeded();
+    }
+
+    /// <summary>
+    /// Buildbeck：將「Library Grid Viewport」強制為<strong>真理座標</strong>——錨定左下單點、僅用
+    /// <see cref="RectTransform.anchoredPosition"/> 與 <see cref="RectTransform.sizeDelta"/> 的常數邏輯像素，
+    /// 不經比例伸縮、不寫 offsetMin/offsetMax 混用 stretch；並固定 <c>localScale</c>、<c>rotation</c>、<c>z</c>。
+    /// </summary>
+    public static void ApplyBuildbeckLibraryGridViewportTo(RectTransform viewport)
+    {
+        if (viewport == null) return;
+        viewport.anchorMin = new Vector2(0f, 0f);
+        viewport.anchorMax = new Vector2(0f, 0f);
+        viewport.pivot = new Vector2(0f, 0f);
+        viewport.localScale = Vector3.one;
+        viewport.localRotation = Quaternion.identity;
+        float x = BuildbeckLibraryGridViewportLeftInsetPx +
+                  BuildbeckLibraryGridViewportLeftBreathingPx +
+                  BuildbeckLibraryGridViewportCenterPointOffsetXPx +
+                  BuildbeckLibraryGridViewportExtraOffsetXPx;
+        float y = BuildbeckLibraryGridViewportBottomInsetPx;
+        viewport.anchoredPosition3D = new Vector3(x, y, 0f);
+        viewport.sizeDelta = new Vector2(BuildbeckLibraryGridViewportWidthPx, BuildbeckLibraryGridViewportHeightPx);
+        // 父層若有 LayoutGroup，避免每幀覆寫本視窗的 Rect；仍只信 sizeDelta / anchoredPosition。
+        LayoutElement le = viewport.GetComponent<LayoutElement>();
+        if (le == null)
+            le = viewport.gameObject.AddComponent<LayoutElement>();
+        le.ignoreLayout = true;
+    }
+
+    private void ApplyBuildbeckLibraryGridViewportLayoutIfNeeded()
+    {
+        if (!IsBuildbeckSceneActive()) return;
+        if (libraryPanel != null && IsHorizontalBagPanelName(libraryPanel)) return;
+        if (_libraryPanelScrollRect == null || _libraryPanelScrollRect.viewport == null) return;
+        ApplyBuildbeckLibraryGridViewportTo(_libraryPanelScrollRect.viewport);
     }
 
     private void AlignLibraryBottomToGoButtonTop()
@@ -1506,14 +2155,21 @@ public partial class DeckManager : MonoBehaviour
         return null;
     }
 
+    private static CardDisplay FindCardDisplayOnRow(Transform child)
+    {
+        if (child == null) return null;
+        CardDisplay d = child.GetComponent<CardDisplay>();
+        return d != null ? d : child.GetComponentInChildren<CardDisplay>(true);
+    }
+
     private GameObject FindCardTemplateInPanel(Transform panel)
     {
         if (panel == null) return null;
-        for (int i = 0; i < panel.childCount; i++)
+        int n = panel.childCount;
+        for (int i = 0; i < n; i++)
         {
             Transform child = panel.GetChild(i);
-            if (child == null) continue;
-            if (child.GetComponentInChildren<CardDisplay>(true) != null)
+            if (FindCardDisplayOnRow(child) != null)
                 return child.gameObject;
         }
         return null;
@@ -2037,6 +2693,8 @@ public partial class DeckManager : MonoBehaviour
             }
         }
 
+        if (isLibraryPanel && !isHorizontalLibrary && IsBuildbeckSceneActive() && viewport != null)
+            ApplyBuildbeckLibraryGridViewportTo(viewport);
     }
 
     /// <summary>
@@ -2113,18 +2771,39 @@ public partial class DeckManager : MonoBehaviour
     private void ApplyDeckPanelScrollFeel(ScrollRect sr, Transform panel)
     {
         if (sr == null) return;
-        sr.movementType = ScrollRect.MovementType.Elastic;
-        sr.elasticity = DeckScrollElasticity;
-        sr.inertia = true;
-        sr.decelerationRate = DeckScrollDecelerationRate;
-        sr.scrollSensitivity = DeckScrollWheelSensitivity;
+        bool isDeck = ReferenceEquals(panel, deckPanel);
+        bool isLibrary = ReferenceEquals(panel, libraryPanel);
+        // Buildbeck 左側直向館藏：移除 Elastic 橡皮筋，僅保留慣性捲動；觸底回饋見 HandleScrollEdgeFeel。
+        bool buildbeckVerticalLibrary =
+            isLibrary && !IsHorizontalBagPanelName(panel) && IsBuildbeckSceneActive();
 
-        if (ReferenceEquals(panel, libraryPanel))
+        if (isDeck)
+        {
+            sr.movementType = ScrollRect.MovementType.Clamped;
+            sr.decelerationRate = DeckListDecelerationRate;
+            sr.scrollSensitivity = DeckListWheelSensitivity;
+        }
+        else if (buildbeckVerticalLibrary)
+        {
+            sr.movementType = ScrollRect.MovementType.Clamped;
+            sr.decelerationRate = DeckScrollDecelerationRate;
+            sr.scrollSensitivity = DeckScrollWheelSensitivity;
+        }
+        else
+        {
+            sr.movementType = ScrollRect.MovementType.Elastic;
+            sr.elasticity = DeckScrollElasticity;
+            sr.decelerationRate = DeckScrollDecelerationRate;
+            sr.scrollSensitivity = DeckScrollWheelSensitivity;
+        }
+        sr.inertia = true;
+
+        if (isLibrary)
         {
             sr.onValueChanged.RemoveListener(OnLibraryPanelScrollFeel);
             sr.onValueChanged.AddListener(OnLibraryPanelScrollFeel);
         }
-        else if (ReferenceEquals(panel, deckPanel))
+        else if (isDeck)
         {
             sr.onValueChanged.RemoveListener(OnDeckPanelScrollFeel);
             sr.onValueChanged.AddListener(OnDeckPanelScrollFeel);
@@ -2153,24 +2832,33 @@ public partial class DeckManager : MonoBehaviour
         if (sr == null) return;
         bool useHorizontalAxis = sr.horizontal && !sr.vertical;
         float position = useHorizontalAxis ? normalized.x : normalized.y;
+        // Buildbeck 直向館藏：僅保留「捲到底」脈衝，不觸發捲到頂的回饋。
+        bool buildbeckVerticalLibrary =
+            isLibrary && ReferenceEquals(sr, _libraryPanelScrollRect) && IsBuildbeckSceneActive() &&
+            sr.vertical && !sr.horizontal;
+
         if (lastNormY >= 0f)
         {
             const float edgeEps = 0.004f;
             const float inner = 0.035f;
             bool hitMax = lastNormY < 1f - inner && position >= 1f - edgeEps;
             bool hitMin = lastNormY > inner && position <= edgeEps;
-            if (hitMax || hitMin)
+            bool edgeHit = hitMax || hitMin;
+            if (buildbeckVerticalLibrary)
+                edgeHit = hitMin;
+
+            if (edgeHit)
             {
                 if (Time.unscaledTime >= _scrollEdgeFeelCooldownUntilUnscaled)
                 {
                     _scrollEdgeFeelCooldownUntilUnscaled = Time.unscaledTime + DeckScrollEdgeFeelCooldown;
-                    RectTransform vp = sr.viewport;
-                    if (vp != null)
+                    RectTransform pulseTarget = ResolveScrollEdgePulseTarget(sr);
+                    if (pulseTarget != null)
                     {
                         if (pulseCo != null) StopCoroutine(pulseCo);
                         pulseGeneration++;
                         int gen = pulseGeneration;
-                        pulseCo = StartCoroutine(CoViewportScrollEdgePulse(vp, gen, isLibrary));
+                        pulseCo = StartCoroutine(CoViewportScrollEdgePulse(pulseTarget, gen, isLibrary));
                     }
                 }
             }
@@ -2178,12 +2866,24 @@ public partial class DeckManager : MonoBehaviour
         lastNormY = position;
     }
 
-    private IEnumerator CoViewportScrollEdgePulse(RectTransform viewport, int generation, bool isLibrary)
+    /// <summary>
+    /// 捲動邊緣「手感」脈衝只作用在捲動內容（<see cref="ScrollRect.content"/>），必要時才用 viewport 的第一個子 Rect；不縮放 viewport 父物件。
+    /// </summary>
+    private static RectTransform ResolveScrollEdgePulseTarget(ScrollRect sr)
+    {
+        if (sr == null) return null;
+        if (sr.content != null) return sr.content;
+        RectTransform vp = sr.viewport;
+        if (vp == null || vp.childCount <= 0) return null;
+        return vp.GetChild(0) as RectTransform;
+    }
+
+    private IEnumerator CoViewportScrollEdgePulse(RectTransform pulseTarget, int generation, bool isLibrary)
     {
         try
         {
-            if (viewport == null) yield break;
-            Vector3 s0 = viewport.localScale;
+            if (pulseTarget == null) yield break;
+            Vector3 s0 = pulseTarget.localScale;
             Vector3 peak = s0 * DeckScrollEdgePulseScale;
             float t = 0f;
             const float dur = 0.085f;
@@ -2192,7 +2892,7 @@ public partial class DeckManager : MonoBehaviour
                 t += Time.unscaledDeltaTime;
                 float u = Mathf.Clamp01(t / dur);
                 float eased = Mathf.Sin(u * Mathf.PI * 0.5f);
-                viewport.localScale = Vector3.Lerp(s0, peak, eased);
+                pulseTarget.localScale = Vector3.Lerp(s0, peak, eased);
                 yield return null;
             }
             t = 0f;
@@ -2201,10 +2901,10 @@ public partial class DeckManager : MonoBehaviour
                 t += Time.unscaledDeltaTime;
                 float u = Mathf.Clamp01(t / dur);
                 float eased = Mathf.Sin(u * Mathf.PI * 0.5f);
-                viewport.localScale = Vector3.Lerp(peak, s0, eased);
+                pulseTarget.localScale = Vector3.Lerp(peak, s0, eased);
                 yield return null;
             }
-            viewport.localScale = s0;
+            pulseTarget.localScale = s0;
         }
         finally
         {
@@ -2305,14 +3005,18 @@ public partial class DeckManager : MonoBehaviour
 
     private void NormalizeChildrenVisualState(RectTransform panelRt)
     {
-        for (int i = 0; i < panelRt.childCount; i++)
+        int n = panelRt.childCount;
+        for (int i = 0; i < n; i++)
         {
             RectTransform c = panelRt.GetChild(i) as RectTransform;
             if (c == null) continue;
-            c.localScale = Vector3.one;
-            c.localRotation = Quaternion.identity;
+            if ((c.localScale - Vector3.one).sqrMagnitude > 1e-8f)
+                c.localScale = Vector3.one;
+            if (Quaternion.Angle(c.localRotation, Quaternion.identity) > 0.05f)
+                c.localRotation = Quaternion.identity;
             CanvasGroup cg = c.GetComponent<CanvasGroup>();
-            if (cg != null) cg.alpha = 1f;
+            if (cg != null && !Mathf.Approximately(cg.alpha, 1f))
+                cg.alpha = 1f;
         }
     }
 
@@ -2343,84 +3047,221 @@ public partial class DeckManager : MonoBehaviour
         }
     }
 
-    private IEnumerator AnimateDeckCardRemove(GameObject cardObj)
+    /// <summary>
+    /// 是否為牌組清單最底一列（依 sibling 順序）。必須在從 <see cref="deckDic"/> 移除該卡之前呼叫。
+    /// </summary>
+    private bool ComputeDeckCardIsBottomListRow(GameObject cardObj)
     {
-        if (cardObj == null) yield break;
-        _deckCardRemoveAnimationActive = true;
-
-        RectTransform rt = cardObj.GetComponent<RectTransform>();
-        CanvasGroup cg = cardObj.GetComponent<CanvasGroup>();
-        if (cg == null) cg = cardObj.AddComponent<CanvasGroup>();
-
-        RectTransform parent = rt != null ? rt.parent as RectTransform : null;
-        GridLayoutGroup grid = parent != null ? parent.GetComponent<GridLayoutGroup>() : null;
-        int removedIndex = rt != null ? rt.GetSiblingIndex() : -1;
-
-        List<RectTransform> belowCards = new List<RectTransform>();
-        if (parent != null && removedIndex >= 0)
+        if (deckPanel == null || cardObj == null) return false;
+        Transform row = cardObj.transform;
+        if (row.parent != deckPanel) return false;
+        int my = row.GetSiblingIndex();
+        int highest = my;
+        foreach (var kv in deckDic)
         {
-            for (int i = removedIndex + 1; i < parent.childCount; i++)
-            {
-                RectTransform child = parent.GetChild(i) as RectTransform;
-                if (child == null) continue;
-                belowCards.Add(child);
-            }
+            if (kv.Value == null) continue;
+            Transform t = kv.Value.transform;
+            if (t.parent != deckPanel) continue;
+            highest = Mathf.Max(highest, t.GetSiblingIndex());
         }
 
-        if (grid != null) grid.enabled = false;
+        return my == highest;
+    }
 
-        float startAlpha = cg.alpha <= 0f ? 1f : cg.alpha;
-        Vector2 startPos = rt != null ? rt.anchoredPosition : Vector2.zero;
-        Vector2 endPos = startPos + new Vector2(-160f, 0f);
-        float shiftUp = 0f;
-        if (grid != null) shiftUp = grid.cellSize.y + grid.spacing.y;
-        else if (rt != null) shiftUp = rt.rect.height + 20f;
-
-        List<Vector2> belowStartPos = new List<Vector2>(belowCards.Count);
-        for (int i = 0; i < belowCards.Count; i++) belowStartPos.Add(belowCards[i].anchoredPosition);
-
-        float t = 0f;
-        const float duration = 0.2f;
-        while (t < duration && cardObj != null)
+    private void CompleteDeckCardRemovePostDestroy()
+    {
+        if (_deckPanelScrollRect != null)
         {
-            t += Time.unscaledDeltaTime;
-            float p = Mathf.Clamp01(t / duration);
-            float eased = p * p * (3f - 2f * p); // smoothstep
-            if (rt != null)
-            {
-                rt.anchoredPosition = Vector2.Lerp(startPos, endPos, eased);
-            }
-            for (int i = 0; i < belowCards.Count; i++)
-            {
-                RectTransform c = belowCards[i];
-                if (c == null) continue;
-                Vector2 to = belowStartPos[i] + new Vector2(0f, shiftUp);
-                c.anchoredPosition = Vector2.Lerp(belowStartPos[i], to, eased);
-            }
-            cg.alpha = Mathf.Lerp(startAlpha, 0f, eased);
-            yield return null;
+            _deckPanelScrollRect.StopMovement();
+            _deckPanelScrollRect.velocity = Vector2.zero;
         }
 
-        if (cardObj != null) Destroy(cardObj);
-        if (grid != null)
-        {
-            grid.enabled = true;
-            LayoutRebuilder.ForceRebuildLayoutImmediate(parent);
-        }
         _deckCardRemoveAnimationActive = false;
+        // #region agent log
+        AgentDbgNdjson("H4", "DeckManager.CompleteDeckCardRemovePostDestroy", "anim_flag_cleared",
+            "{\"arcApplyBlocked\":" + _agentDbgArcBlockCount + ",\"lateArcSkipped\":" + _agentDbgLateArcSkipCount + "}");
+        _agentDbgArcBlockCount = 0;
+        _agentDbgLateArcSkipCount = 0;
+        // #endregion
         RefreshScrollablePanels();
         RectTransform deckRt = deckPanel as RectTransform;
         if (deckRt != null)
         {
             NormalizeChildrenVisualState(deckRt);
             LayoutRebuilder.ForceRebuildLayoutImmediate(deckRt);
-            // Sync arc immediately: otherwise DeckArcSmoothUsesLateUpdate skips UnlessDeferred and the list
-            // renders one+ frames as straight Grid (短暫弧度失效).
             EnsureDeckArcPresenter();
             if (_deckArcPresenter != null) _deckArcPresenter.InvalidateLayoutState();
             RequestDeckArcLayout(deckRt, false);
         }
+
         Canvas.ForceUpdateCanvases();
+    }
+
+    /// <summary>
+    /// 最底一列移除：淡出與復歸捲動部分重疊、捲動時長依位移自適應，最後銷毀實體。
+    /// </summary>
+    private IEnumerator AnimateDeckCardRemoveBottomListRow(GameObject cardObj)
+    {
+        if (cardObj == null) yield break;
+        // #region agent log
+        _agentDbgArcBlockCount = 0;
+        _agentDbgLateArcSkipCount = 0;
+        AgentDbgNdjson("H3", "DeckManager.AnimateDeckCardRemoveBottomListRow", "bottom_remove_begin", "{}");
+        // #endregion
+        _deckCardRemoveAnimationActive = true;
+        if (_deckPanelScrollRect != null)
+        {
+            _deckPanelScrollRect.StopMovement();
+            _deckPanelScrollRect.velocity = Vector2.zero;
+        }
+
+        RectTransform rt = cardObj.GetComponent<RectTransform>();
+        RectTransform contentRt = deckPanel as RectTransform;
+        GridLayoutGroup grid = contentRt != null ? contentRt.GetComponent<GridLayoutGroup>() : null;
+        CanvasGroup cg = cardObj.GetComponent<CanvasGroup>();
+        if (cg == null) cg = cardObj.AddComponent<CanvasGroup>();
+        cg.blocksRaycasts = false;
+        cg.interactable = false;
+
+        float stepY = grid != null
+            ? grid.cellSize.y + grid.spacing.y
+            : (rt != null ? rt.rect.height + 20f : NewLayoutDeckCellHeight + deckListCellSpacingY);
+
+        float startAlpha = cg.alpha <= 0f ? 1f : cg.alpha;
+
+        float scrollStartY = 0f;
+        float scrollEndY = 0f;
+        float maxY = 0f;
+        bool doScroll = false;
+        if (contentRt != null && contentRt.gameObject.activeInHierarchy)
+        {
+            DeckListGetRecoveryScrollTargets(contentRt, stepY, out maxY, out scrollEndY);
+            scrollStartY = contentRt.anchoredPosition.y;
+            doScroll = Mathf.Abs(scrollEndY - scrollStartY) >= 1.25f;
+        }
+
+        ScrollRect sr = _deckPanelScrollRect;
+        float fadeDur = DeckListRemoveCardFadeSeconds;
+        float scrollPhaseStart = fadeDur * DeckListRemoveBottomRecoveryOverlap;
+        float scrollDur = doScroll
+            ? DeckListRecoveryScrollComputeDuration(Mathf.Abs(scrollEndY - scrollStartY), stepY)
+            : 0f;
+        float totalT = Mathf.Max(fadeDur, scrollPhaseStart + scrollDur);
+
+        float t = 0f;
+        while (t < totalT && cardObj != null && contentRt != null)
+        {
+            t += Time.unscaledDeltaTime;
+
+            float fadeU = Mathf.Clamp01(t / fadeDur);
+            float fadeE = fadeU * fadeU * (3f - 2f * fadeU);
+            cg.alpha = Mathf.Lerp(startAlpha, 0f, fadeE);
+
+            if (doScroll && t >= scrollPhaseStart && scrollDur > 1e-4f)
+            {
+                float su = Mathf.Clamp01((t - scrollPhaseStart) / scrollDur);
+                float se = 1f - Mathf.Pow(1f - su, 4f);
+                float y = Mathf.Lerp(scrollStartY, scrollEndY, se);
+                DeckListApplyScrollY(contentRt, y, sr, maxY);
+            }
+
+            yield return null;
+        }
+
+        if (cardObj != null)
+            cg.alpha = 0f;
+        if (doScroll && contentRt != null)
+            DeckListApplyScrollY(contentRt, scrollEndY, sr, maxY);
+
+        if (cardObj != null)
+            Destroy(cardObj);
+        CompleteDeckCardRemovePostDestroy();
+    }
+
+    private static void DeckListApplyScrollY(RectTransform contentRt, float y, ScrollRect sr, float maxY)
+    {
+        Vector2 p = contentRt.anchoredPosition;
+        p.y = y;
+        contentRt.anchoredPosition = p;
+        if (sr != null && maxY > 1e-4f)
+            sr.verticalNormalizedPosition = 1f - Mathf.Clamp01(y / maxY);
+    }
+
+    private static float DeckListRecoveryScrollComputeDuration(float absDy, float stepY)
+    {
+        float span = Mathf.Max(stepY, 48f);
+        return Mathf.Clamp(
+            DeckListRecoveryScrollDurationMin + (absDy / span) * 0.2f,
+            DeckListRecoveryScrollDurationMin,
+            DeckListRecoveryScrollDurationMax);
+    }
+
+    /// <summary>
+    /// 依目前內容高度計算復歸捲動目標（優先往上約一列；已在頂端則改往下約一列）。
+    /// </summary>
+    private static void DeckListGetRecoveryScrollTargets(
+        RectTransform contentRt,
+        float stepY,
+        out float maxY,
+        out float endY)
+    {
+        RectTransform vp = contentRt.parent as RectTransform;
+        float viewH = vp != null ? Mathf.Max(0f, vp.rect.height) : 0f;
+        maxY = Mathf.Max(0f, contentRt.sizeDelta.y - viewH);
+        float startY = contentRt.anchoredPosition.y;
+        endY = Mathf.Clamp(startY - stepY, 0f, maxY);
+        if (Mathf.Abs(endY - startY) < 1f)
+            endY = Mathf.Clamp(startY + stepY, 0f, maxY);
+    }
+
+    private IEnumerator AnimateDeckCardRemove(GameObject cardObj, bool bottomListRow)
+    {
+        if (cardObj == null) yield break;
+        if (bottomListRow)
+        {
+            yield return AnimateDeckCardRemoveBottomListRow(cardObj);
+            yield break;
+        }
+
+        // 非最底一列：左移淡出 → 刪除並版面重建（無復歸捲動；最底列仍保留復歸）。
+        _deckCardRemoveAnimationActive = true;
+        if (_deckPanelScrollRect != null)
+        {
+            _deckPanelScrollRect.StopMovement();
+            _deckPanelScrollRect.velocity = Vector2.zero;
+        }
+
+        RectTransform rt = cardObj.GetComponent<RectTransform>();
+        CanvasGroup cg = cardObj.GetComponent<CanvasGroup>();
+        if (cg == null) cg = cardObj.AddComponent<CanvasGroup>();
+        cg.blocksRaycasts = false;
+        cg.interactable = false;
+
+        RectTransform parent = rt != null ? rt.parent as RectTransform : null;
+        GridLayoutGroup grid = parent != null ? parent.GetComponent<GridLayoutGroup>() : null;
+
+        float startAlpha = cg.alpha <= 0f ? 1f : cg.alpha;
+        Vector2 startPos = rt != null ? rt.anchoredPosition : Vector2.zero;
+        Vector2 endPos = startPos + new Vector2(-160f, 0f);
+
+        float t = 0f;
+        while (t < DeckListRemoveCardFadeSeconds && cardObj != null)
+        {
+            t += Time.unscaledDeltaTime;
+            float p = Mathf.Clamp01(t / DeckListRemoveCardFadeSeconds);
+            float eased = p * p * (3f - 2f * p);
+            if (rt != null)
+                rt.anchoredPosition = Vector2.Lerp(startPos, endPos, eased);
+            cg.alpha = Mathf.Lerp(startAlpha, 0f, eased);
+            yield return null;
+        }
+
+        if (cardObj != null)
+            Destroy(cardObj);
+        if (parent != null && grid != null)
+            LayoutRebuilder.ForceRebuildLayoutImmediate(parent);
+
+        CompleteDeckCardRemovePostDestroy();
     }
 
     /// <summary>
@@ -2442,6 +3283,88 @@ public partial class DeckManager : MonoBehaviour
         return Mathf.Max(0f, contentTopY - topmostCardTop);
     }
 
+    /// <summary>Persistent 橫向背包列：依子卡寬度與 spacing 重算 content 寬並夾住 X。</summary>
+    private static void RefreshLibraryHorizontalBagGridContent(
+        RectTransform content, GridLayoutGroup grid, float viewHeight, float viewWidth)
+    {
+        int libChildCount = content.childCount;
+        float contentWidth = grid.padding.left + grid.padding.right;
+        if (libChildCount > 0)
+        {
+            contentWidth += libChildCount * grid.cellSize.x;
+            contentWidth += Mathf.Max(0, libChildCount - 1) * grid.spacing.x;
+        }
+
+        Vector2 libSize = content.sizeDelta;
+        libSize.x = libChildCount <= 0 ? viewWidth : Mathf.Max(viewWidth, contentWidth);
+        libSize.y = Mathf.Max(viewHeight, grid.padding.top + grid.padding.bottom + grid.cellSize.y);
+        content.sizeDelta = libSize;
+
+        Vector2 libPos = content.anchoredPosition;
+        float minX = -Mathf.Max(0f, libSize.x - viewWidth);
+        libPos.x = Mathf.Clamp(libPos.x, minX, 0f);
+        libPos.y = 0f;
+        content.anchoredPosition = libPos;
+    }
+
+    /// <summary>直向 Grid（Buildbeck 館藏多欄 + 牌組單欄）共用：重算 content 高度與捲動夾位。</summary>
+    private static void RefreshVerticalGridLayoutContentHeight(
+        RectTransform content, GridLayoutGroup grid, float viewHeight, bool singleColumnDeckLayout)
+    {
+        float width = Mathf.Max(1f, content.rect.width);
+        float usableWidth = Mathf.Max(1f, width - grid.padding.left - grid.padding.right);
+        float unitW = grid.cellSize.x + grid.spacing.x;
+        int childCount = content.childCount;
+        int columns = singleColumnDeckLayout
+            ? 1
+            : Mathf.Max(1, Mathf.FloorToInt((usableWidth + grid.spacing.x) / Mathf.Max(1f, unitW)));
+        int rows = childCount <= 0
+            ? 0
+            : (singleColumnDeckLayout ? childCount : Mathf.Max(1, Mathf.CeilToInt(childCount / (float)columns)));
+        float contentHeight =
+            grid.padding.top + grid.padding.bottom +
+            rows * grid.cellSize.y +
+            Mathf.Max(0, rows - 1) * grid.spacing.y;
+        // 不要用視窗高度當下限：否則卡牌少時仍可滑到底，底下會空一大塊。
+        float topComfortGap = MeasureContentTopToTopmostCardTopGap(content);
+        if (topComfortGap < 1f && childCount > 0)
+            topComfortGap = Mathf.Max(topComfortGap, grid.padding.top);
+        float targetH = childCount <= 0
+            ? viewHeight
+            : Mathf.Max(1f, contentHeight + topComfortGap);
+
+        Vector2 size = content.sizeDelta;
+        size.y = targetH;
+        content.sizeDelta = size;
+        Vector2 pos = content.anchoredPosition;
+        float maxY = Mathf.Max(0f, size.y - viewHeight);
+        pos.y = Mathf.Clamp(pos.y, 0f, maxY);
+        content.anchoredPosition = pos;
+    }
+
+    private static void RefreshPanelContentHeightWithoutGrid(RectTransform content, float viewHeight)
+    {
+        float maxY = 0f;
+        int n = content.childCount;
+        for (int i = 0; i < n; i++)
+        {
+            RectTransform child = content.GetChild(i) as RectTransform;
+            if (child == null) continue;
+            float y = Mathf.Abs(child.anchoredPosition.y) + child.rect.height;
+            if (y > maxY) maxY = y;
+        }
+
+        Vector2 size = content.sizeDelta;
+        const float bottomPad = 20f;
+        float topComfortGap = n > 0 ? MeasureContentTopToTopmostCardTopGap(content) : 0f;
+        size.y = n <= 0 ? viewHeight : Mathf.Max(1f, maxY + bottomPad + topComfortGap);
+        content.sizeDelta = size;
+        Vector2 pos = content.anchoredPosition;
+        float clampMaxY = Mathf.Max(0f, size.y - viewHeight);
+        pos.y = Mathf.Clamp(pos.y, 0f, clampMaxY);
+        content.anchoredPosition = pos;
+    }
+
     private void RefreshPanelContentHeight(Transform panel)
     {
         if (panel == null) return;
@@ -2450,96 +3373,64 @@ public partial class DeckManager : MonoBehaviour
 
         RectTransform viewport = content.parent as RectTransform;
         bool isLibrary = ReferenceEquals(panel, libraryPanel);
+        bool isDeck = ReferenceEquals(panel, deckPanel);
         bool isHorizontalLibrary = isLibrary && IsHorizontalBagPanelName(panel);
         float viewHeight = viewport != null ? viewport.rect.height : 0f;
         float viewWidth = viewport != null ? viewport.rect.width : 0f;
 
         GridLayoutGroup grid = content.GetComponent<GridLayoutGroup>();
-        bool isDeck = ReferenceEquals(panel, deckPanel);
         if (grid != null)
         {
             if (isHorizontalLibrary)
-            {
-                int libChildCount = content.childCount;
-                float contentWidth = grid.padding.left + grid.padding.right;
-                if (libChildCount > 0)
-                {
-                    contentWidth += libChildCount * grid.cellSize.x;
-                    contentWidth += Mathf.Max(0, libChildCount - 1) * grid.spacing.x;
-                }
-
-                Vector2 libSize = content.sizeDelta;
-                libSize.x = libChildCount <= 0 ? viewWidth : Mathf.Max(viewWidth, contentWidth);
-                libSize.y = Mathf.Max(viewHeight, grid.padding.top + grid.padding.bottom + grid.cellSize.y);
-                content.sizeDelta = libSize;
-
-                Vector2 libPos = content.anchoredPosition;
-                float minX = -Mathf.Max(0f, libSize.x - viewWidth);
-                libPos.x = Mathf.Clamp(libPos.x, minX, 0f);
-                libPos.y = 0f;
-                content.anchoredPosition = libPos;
-                return;
-            }
-
-            float width = Mathf.Max(1f, content.rect.width);
-            float usableWidth = Mathf.Max(1f, width - grid.padding.left - grid.padding.right);
-            float unitW = grid.cellSize.x + grid.spacing.x;
-            int columns = isDeck ? 1 : Mathf.Max(1, Mathf.FloorToInt((usableWidth + grid.spacing.x) / Mathf.Max(1f, unitW)));
-            int childCount = content.childCount;
-            int rows = childCount <= 0
-                ? 0
-                : Mathf.Max(1, Mathf.CeilToInt(childCount / (float)columns));
-            float contentHeight =
-                grid.padding.top + grid.padding.bottom +
-                rows * grid.cellSize.y +
-                Mathf.Max(0, rows - 1) * grid.spacing.y;
-            // 不要用視窗高度當下限：否則卡牌少時仍可滑到底，底下會空一大塊。
-            float topComfortGap = MeasureContentTopToTopmostCardTopGap(content);
-            if (topComfortGap < 1f && childCount > 0)
-                topComfortGap = Mathf.Max(topComfortGap, grid.padding.top);
-            float targetH = childCount <= 0
-                ? viewHeight
-                : Mathf.Max(1f, contentHeight + topComfortGap);
-
-            Vector2 size = content.sizeDelta;
-            size.y = targetH;
-            content.sizeDelta = size;
-            Vector2 pos = content.anchoredPosition;
-            float maxY = Mathf.Max(0f, size.y - viewHeight);
-            pos.y = Mathf.Clamp(pos.y, 0f, maxY);
-            content.anchoredPosition = pos;
+                RefreshLibraryHorizontalBagGridContent(content, grid, viewHeight, viewWidth);
+            else
+                RefreshVerticalGridLayoutContentHeight(content, grid, viewHeight, isDeck);
         }
         else
-        {
-            float maxY = 0f;
-            int n = content.childCount;
-            for (int i = 0; i < n; i++)
-            {
-                RectTransform child = content.GetChild(i) as RectTransform;
-                if (child == null) continue;
-                float y = Mathf.Abs(child.anchoredPosition.y) + child.rect.height;
-                if (y > maxY) maxY = y;
-            }
-            Vector2 size = content.sizeDelta;
-            const float bottomPad = 20f;
-            float topComfortGap = n > 0 ? MeasureContentTopToTopmostCardTopGap(content) : 0f;
-            size.y = n <= 0 ? viewHeight : Mathf.Max(1f, maxY + bottomPad + topComfortGap);
-            content.sizeDelta = size;
-            Vector2 pos = content.anchoredPosition;
-            float clampMaxY = Mathf.Max(0f, size.y - viewHeight);
-            pos.y = Mathf.Clamp(pos.y, 0f, clampMaxY);
-            content.anchoredPosition = pos;
-        }
+            RefreshPanelContentHeightWithoutGrid(content, viewHeight);
 
         if (isDeck)
             RequestDeckArcLayoutUnlessDeferredToLateUpdate(content, false);
+    }
+
+    /// <summary>與 <see cref="EnsureDeckPanelSingleColumnLayout"/> 對稱：館藏／牌組捲動區高度一次更新（含 Buildbeck Viewport）。</summary>
+    private void RefreshScrollablePanelHeightsLibraryThenDeck()
+    {
+        RefreshPanelContentHeight(libraryPanel);
+        if (IsBuildbeckSceneActive())
+            ApplyBuildbeckLibraryGridViewportLayoutIfNeeded();
+        RefreshPanelContentHeight(deckPanel);
+    }
+
+    private void ForceRebuildLibraryPanelLayout()
+    {
+        RectTransform libRt = libraryPanel as RectTransform;
+        if (libRt == null) return;
+        NormalizeChildrenVisualState(libRt);
+        LayoutRebuilder.ForceRebuildLayoutImmediate(libRt);
+        if (IsBuildbeckSceneActive())
+            ApplyBuildbeckLibraryGridViewportLayoutIfNeeded();
+    }
+
+    private void ForceRebuildDeckPanelLayoutAfterNormalize()
+    {
+        RectTransform deckRt = deckPanel as RectTransform;
+        if (deckRt == null) return;
+        NormalizeChildrenVisualState(deckRt);
+        LayoutRebuilder.ForceRebuildLayoutImmediate(deckRt);
+        RequestDeckArcLayoutUnlessDeferredToLateUpdate(deckRt, false);
     }
 
     private void RequestDeckArcLayout(RectTransform content, bool oncePerFrame)
     {
         if (content == null) return;
         if (_deckCardRemoveAnimationActive && deckPanel != null && ReferenceEquals(content, deckPanel))
+        {
+            // #region agent log
+            _agentDbgArcBlockCount++;
+            // #endregion
             return;
+        }
         EnsureDeckArcPresenter();
         if (_deckArcPresenter == null) return;
 
@@ -3369,7 +4260,8 @@ public partial class DeckManager : MonoBehaviour
             backpackInspectCardInstance = null;
         }
 
-        Sprite portrait = card.artworkSprite != null ? card.artworkSprite : TryLoadInspectPortraitSprite(card.id);
+        Sprite portrait = card.ResolveCardArtSprite();
+        if (portrait == null) portrait = TryLoadInspectPortraitSprite(card.id);
         if (portrait != null && backpackInspectArtImage != null)
         {
             backpackInspectArtImage.sprite = portrait;

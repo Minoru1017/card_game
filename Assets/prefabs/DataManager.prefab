@@ -71,81 +71,133 @@ MonoBehaviour:
   - id: 2
     artworkResourcePath: 
     artworkSprite: {fileID: -1594932792720625945, guid: 58bcba648277b4f4abe4b786587091b8, type: 3}
+    deckThumbResourcePath: 
+    deckThumbSprite: {fileID: 0}
   - id: -3
     artworkResourcePath: 
-    artworkSprite: {fileID: -8881082873504947782, guid: 7f3298e9a39abe446931ffde653070f0, type: 3}
+    artworkSprite: {fileID: -8881082873504947782, guid: 8a7740f793475c941bb549b580e7b65c, type: 3}
+    deckThumbResourcePath: 
+    deckThumbSprite: {fileID: -8881082873504947782, guid: 65e69f598955d99428d7310de9cecdce, type: 3}
   - id: 0
     artworkResourcePath: 
     artworkSprite: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+    deckThumbResourcePath: 
+    deckThumbSprite: {fileID: 0}
   - id: 1
     artworkResourcePath: 
     artworkSprite: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+    deckThumbResourcePath: 
+    deckThumbSprite: {fileID: 0}
   - id: 3
     artworkResourcePath: 
     artworkSprite: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+    deckThumbResourcePath: 
+    deckThumbSprite: {fileID: 0}
   - id: 4
     artworkResourcePath: 
     artworkSprite: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+    deckThumbResourcePath: 
+    deckThumbSprite: {fileID: 0}
   - id: 5
     artworkResourcePath: 
     artworkSprite: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+    deckThumbResourcePath: 
+    deckThumbSprite: {fileID: 0}
   - id: 6
     artworkResourcePath: 
     artworkSprite: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+    deckThumbResourcePath: 
+    deckThumbSprite: {fileID: 0}
   - id: 7
     artworkResourcePath: 
     artworkSprite: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+    deckThumbResourcePath: 
+    deckThumbSprite: {fileID: 0}
   - id: 8
     artworkResourcePath: 
     artworkSprite: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+    deckThumbResourcePath: 
+    deckThumbSprite: {fileID: 0}
   - id: 9
     artworkResourcePath: 
     artworkSprite: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+    deckThumbResourcePath: 
+    deckThumbSprite: {fileID: 0}
   - id: 10
     artworkResourcePath: 
     artworkSprite: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+    deckThumbResourcePath: 
+    deckThumbSprite: {fileID: 0}
   - id: 11
     artworkResourcePath: 
     artworkSprite: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+    deckThumbResourcePath: 
+    deckThumbSprite: {fileID: 0}
   - id: 12
     artworkResourcePath: 
     artworkSprite: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+    deckThumbResourcePath: 
+    deckThumbSprite: {fileID: 0}
   - id: 13
     artworkResourcePath: 
     artworkSprite: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+    deckThumbResourcePath: 
+    deckThumbSprite: {fileID: 0}
   - id: 14
     artworkResourcePath: 
     artworkSprite: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+    deckThumbResourcePath: 
+    deckThumbSprite: {fileID: 0}
   - id: 15
     artworkResourcePath: 
     artworkSprite: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+    deckThumbResourcePath: 
+    deckThumbSprite: {fileID: 0}
   - id: 16
     artworkResourcePath: 
     artworkSprite: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+    deckThumbResourcePath: 
+    deckThumbSprite: {fileID: 0}
   - id: 17
     artworkResourcePath: 
     artworkSprite: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+    deckThumbResourcePath: 
+    deckThumbSprite: {fileID: 0}
   - id: 18
     artworkResourcePath: 
     artworkSprite: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+    deckThumbResourcePath: 
+    deckThumbSprite: {fileID: 0}
   - id: 19
     artworkResourcePath: 
     artworkSprite: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+    deckThumbResourcePath: 
+    deckThumbSprite: {fileID: 0}
   - id: 20
     artworkResourcePath: 
     artworkSprite: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+    deckThumbResourcePath: 
+    deckThumbSprite: {fileID: 0}
   - id: 21
     artworkResourcePath: 
     artworkSprite: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+    deckThumbResourcePath: 
+    deckThumbSprite: {fileID: 0}
   - id: 22
     artworkResourcePath: 
     artworkSprite: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+    deckThumbResourcePath: 
+    deckThumbSprite: {fileID: 0}
   - id: -1
     artworkResourcePath: 
     artworkSprite: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+    deckThumbResourcePath: 
+    deckThumbSprite: {fileID: 0}
   - id: -2
     artworkResourcePath: 
     artworkSprite: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+    deckThumbResourcePath: 
+    deckThumbSprite: {fileID: 0}
 --- !u!114 &8760143160996283857
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -167,6 +219,14 @@ MonoBehaviour:
   deckSlotButton1: {fileID: 0}
   deckSlotButton2: {fileID: 0}
   deckSlotButton3: {fileID: 0}
+  deckSlotButton4: {fileID: 0}
+  deckSlotButton5: {fileID: 0}
+  saveDeckButton: {fileID: 0}
+  disbandDeckButton: {fileID: 0}
+  editDeckNameButton: {fileID: 0}
+  currentDeckDisplayNameText: {fileID: 0}
+  currentDeckDisplayNameLegacyText: {fileID: 0}
+  buildbeckLibraryDeckGenShowCardName: 1
   deckCardPrefab: {fileID: 8615206782087840715, guid: cc997b6bc279ed1428cc086ce460ec22, type: 3}
   librarycardPrefab: {fileID: 4089889603758645227, guid: a67c33adb4dd7564598306f3c830d8d4, type: 3}
   DataManager: {fileID: 5614242837407821449}
@@ -178,3 +238,16 @@ MonoBehaviour:
   attackStatOffsetX: -30
   healthStatOffsetX: 30
   statOffsetY: 0
+  deckListCellSpacingY: 6
+  deckListContentScalePercent: 100
+  deckListStatHalfGapLevel: 25
+  deckArcVisibleSlotCount: 7
+  deckArcCircleRadius: 520
+  deckArcChordHalfWidth: 260
+  deckArcShapeStrength: 0.5
+  deckArcVisibleRangePaddingSlots: 1.15
+  deckArcHorizontalSmoothTime: 0.12
+  deckArcScrollVelocityRef: 2200
+  deckArcParentOffsetX: 72
+  deckArcParentOffsetY: 0
+  deckArcSlotXOffsetById: []

@@ -4,10 +4,15 @@ public class Card
     public string cardName;
     /// <summary>Optional English name from CardList.csv; gameplay UI still uses <see cref="cardName"/>.</summary>
     public string cardNameEnglish = string.Empty;
-    /// <summary>Optional per-card artwork resource path (under Assets/Resources).</summary>
+    /// <summary>卡牌本體立繪（對戰、背包詳情等）。Resources 路徑，可留空。</summary>
     public string artworkResourcePath = string.Empty;
-    /// <summary>Optional resolved card artwork sprite.</summary>
+    /// <summary>卡牌本體立繪 Sprite。</summary>
     public UnityEngine.Sprite artworkSprite;
+
+    /// <summary>組建牌組／館藏縮圖（Buildbeck Library、DeckGen df/oi 的 Art 等）。</summary>
+    public string deckThumbResourcePath = string.Empty;
+    /// <summary>組建牌組／館藏縮圖 Sprite。</summary>
+    public UnityEngine.Sprite deckThumbSprite;
 
     /// <summary>Name shown in battle simulation debug readouts (English when available).</summary>
     public string DebugDisplayName =>
@@ -24,6 +29,18 @@ public class Card
         artworkResourcePath = string.IsNullOrWhiteSpace(resourcePath) ? string.Empty : resourcePath.Trim();
         artworkSprite = sprite;
     }
+
+    public void SetDeckThumb(string resourcePath, UnityEngine.Sprite sprite)
+    {
+        deckThumbResourcePath = string.IsNullOrWhiteSpace(resourcePath) ? string.Empty : resourcePath.Trim();
+        deckThumbSprite = sprite;
+    }
+
+    /// <summary>組建牌組區用圖（<c>Assets/UI/DeckThumb/</c>）；未綁定時為 null。</summary>
+    public UnityEngine.Sprite ResolveDeckThumbSprite() => deckThumbSprite;
+
+    /// <summary>對戰／詳情用圖。</summary>
+    public UnityEngine.Sprite ResolveCardArtSprite() => artworkSprite;
 }
 
 public class MonsterCard : Card

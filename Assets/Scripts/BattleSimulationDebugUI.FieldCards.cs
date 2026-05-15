@@ -47,6 +47,45 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         int ord = es is SpellCard sp ? sp.SpellOrdinal : 0;
         return System.HashCode.Combine(es.id, ord, rounds);
     }
+    /// <summary>僅更新既有場上卡的 sizeDelta／localScale（Inspector 調場上大小滑塊時）。</summary>
+    private void RefreshFieldCardLayoutsOnly()
+    {
+        ApplyLayoutToExistingFieldCard(playerFieldCardObj, false, false);
+        ApplyLayoutToExistingFieldCard(playerSpellFieldCardObj, false, true);
+        if (!deferEnemyFieldRefresh)
+        {
+            ApplyLayoutToExistingFieldCard(enemyFieldCardObj, true, false);
+        }
+        ApplyLayoutToExistingFieldCard(enemySpellFieldCardObj, true, true);
+    }
+
+    private void RefreshFieldCardVisualTuningOnly()
+    {
+        ApplyVisualTuningToFieldHolder(playerFieldCardObj, false, false);
+        ApplyVisualTuningToFieldHolder(playerSpellFieldCardObj, false, true);
+        if (!deferEnemyFieldRefresh)
+        {
+            ApplyVisualTuningToFieldHolder(enemyFieldCardObj, true, false);
+        }
+        ApplyVisualTuningToFieldHolder(enemySpellFieldCardObj, true, true);
+    }
+
+    private void ApplyLayoutToExistingFieldCard(GameObject holder, bool enemy, bool isSpell)
+    {
+        if (holder == null) return;
+        RectTransform rect = holder.GetComponent<RectTransform>();
+        if (rect != null) ApplyBattleFieldCardRectLayout(rect, enemy, isSpell);
+    }
+
+    private void ApplyVisualTuningToFieldHolder(GameObject holder, bool enemy, bool isSpell)
+    {
+        if (holder == null) return;
+        CardDisplay display = holder.GetComponentInChildren<CardDisplay>();
+        if (display == null) return;
+        ApplyPrefabVisualTuning(display, true, isSpell);
+        if (display.card != null) ApplyFieldDamageHealthColor(display, display.card);
+    }
+
     private void RefreshFieldCards()
     {
         Card playerCard = battleManager.GetPlayerFieldCard();
@@ -111,19 +150,18 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         rect.anchorMax = new Vector2(0.5f, 0.5f);
         rect.pivot = new Vector2(0.5f, 0.5f);
         rect.anchoredPosition = Vector2.zero;
-        if (fieldPrefab == battleCardPrefab) rect.sizeDelta = prefabCardSize;
-        float fieldScale = (battleManager != null) ? battleManager.fieldMonsterScale : 1.2f;
-        rect.localScale = (enemy ? new Vector3(0.95f, 0.95f, 1f) : Vector3.one) * fieldScale;
+        bool isSpell = card is SpellCard;
+        ApplyBattleFieldCardRectLayout(rect, enemy, isSpell);
 
         CardDisplay display = cardObj.GetComponentInChildren<CardDisplay>();
         if (display != null)
         {
             display.SetCard(card);
-            if (card is SpellCard && display.effectText != null)
+            if (isSpell && display.effectText != null)
             {
                 display.effectText.gameObject.SetActive(false);
             }
-            ApplyPrefabVisualTuning(display, true);
+            ApplyPrefabVisualTuning(display, true, isSpell);
             ApplyFieldDamageHealthColor(display, card);
         }
 
@@ -138,7 +176,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
 
         if (!existedBefore)
         {
-            StartCoroutine(AnimateSpawn(cardObj, enemy));
+            StartCoroutine(AnimateSpawn(cardObj, enemy, isSpell));
         }
     }
 
@@ -285,7 +323,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
             : Color.white;
     }
 
-    private IEnumerator AnimateSpawn(GameObject obj, bool enemy)
+    private IEnumerator AnimateSpawn(GameObject obj, bool enemy, bool isSpell)
     {
         if (obj == null) yield break;
         RectTransform rt = obj.GetComponent<RectTransform>();
@@ -294,8 +332,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         CanvasGroup cg = obj.GetComponent<CanvasGroup>();
         if (cg == null) cg = obj.AddComponent<CanvasGroup>();
 
-        float fieldScale = (battleManager != null) ? battleManager.fieldMonsterScale : 1.2f;
-        Vector3 endScale = (enemy ? new Vector3(0.95f, 0.95f, 1f) : Vector3.one) * fieldScale;
+        Vector3 endScale = Vector3.one * GetBattleFieldUniformScale(enemy, isSpell);
         Vector3 startScale = endScale * 0.72f;
         Vector2 endPos = Vector2.zero;
         Vector2 startPos = endPos;

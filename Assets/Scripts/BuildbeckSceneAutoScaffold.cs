@@ -14,7 +14,6 @@ public static class BuildbeckSceneAutoScaffold
     private const string RootName = "BuildbeckAutoScaffoldRoot";
     private static EventSystem cachedEventSystem;
     private static DeckManager cachedDeckManager;
-    private static SceneLoader cachedSceneLoader;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void EnsureScaffold()
@@ -54,7 +53,6 @@ public static class BuildbeckSceneAutoScaffold
 
         EnsurePanel("Library Grid", rootT, new Vector2(0f, 0f), new Vector2(0.55f, 1f), new Color(1f, 1f, 1f, 0.03f));
         EnsurePanel("Deck Grid", rootT, new Vector2(0.55f, 0.18f), new Vector2(1f, 1f), new Color(1f, 1f, 1f, 0.03f));
-        EnsureBackButton(rootT);
         EnsureSaveDeckButton(rootT);
         DeckManager dmSave = cachedDeckManager;
         if (dmSave == null) dmSave = Object.FindFirstObjectByType<DeckManager>();
@@ -125,7 +123,12 @@ public static class BuildbeckSceneAutoScaffold
             return;
 
         int columns = panelName.Contains("Library") ? 4 : 2;
-        BuildbeckUiHierarchyBuilder.CreateScrollableGridPanel(parent, panelName, anchorMin, anchorMax, tint, columns);
+        GameObject viewportGo = BuildbeckUiHierarchyBuilder.CreateScrollableGridPanel(parent, panelName, anchorMin, anchorMax, tint, columns);
+        if (viewportGo != null && panelName.IndexOf("Library", System.StringComparison.OrdinalIgnoreCase) >= 0)
+        {
+            RectTransform vpRt = viewportGo.GetComponent<RectTransform>();
+            DeckManager.ApplyBuildbeckLibraryGridViewportTo(vpRt);
+        }
     }
 
     private static bool TryInstantiateScrollGridFromPrefab(
@@ -150,10 +153,15 @@ public static class BuildbeckSceneAutoScaffold
         sr.content.name = panelName;
 
         RectTransform vpRt = viewport.GetComponent<RectTransform>();
-        vpRt.anchorMin = anchorMin;
-        vpRt.anchorMax = anchorMax;
-        vpRt.offsetMin = new Vector2(16f, 16f);
-        vpRt.offsetMax = new Vector2(-16f, -16f);
+        if (panelName.IndexOf("Library", System.StringComparison.OrdinalIgnoreCase) >= 0)
+            DeckManager.ApplyBuildbeckLibraryGridViewportTo(vpRt);
+        else
+        {
+            vpRt.anchorMin = anchorMin;
+            vpRt.anchorMax = anchorMax;
+            vpRt.offsetMin = new Vector2(16f, 16f);
+            vpRt.offsetMax = new Vector2(-16f, -16f);
+        }
 
         Image vpImage = viewport.GetComponent<Image>();
         if (vpImage != null) vpImage.color = tint;
@@ -163,34 +171,6 @@ public static class BuildbeckSceneAutoScaffold
             grid.constraintCount = panelName.Contains("Library") ? 4 : 2;
 
         return true;
-    }
-
-    private static void EnsureBackButton(Transform parent)
-    {
-        if (SceneSearchUtil.FindSceneObject(SceneManager.GetActiveScene(), "BackButton") != null) return;
-
-        GameObject prefab = Resources.Load<GameObject>(BuildbeckUiResourcePaths.BackButton);
-        GameObject btnObj;
-        if (prefab != null)
-            btnObj = Object.Instantiate(prefab, parent, false);
-        else
-            btnObj = BuildbeckUiHierarchyBuilder.CreateTextButton(
-                parent,
-                "BackButton",
-                "返回",
-                new Vector2(0f, 1f),
-                new Vector2(0f, 1f),
-                new Vector2(20f, -20f),
-                new Vector2(160f, 70f));
-
-        Button btn = btnObj.GetComponent<Button>();
-        SceneLoader loader = cachedSceneLoader;
-        if (loader == null) loader = Object.FindFirstObjectByType<SceneLoader>();
-        cachedSceneLoader = loader;
-        if (btn != null && loader != null)
-        {
-            btn.onClick.AddListener(loader.EnterPersistent);
-        }
     }
 
     private static void EnsureSaveDeckButton(Transform parent)

@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.SceneManagement;
 using TMPro;
 
 public class CardDisplay : MonoBehaviour
@@ -34,8 +35,9 @@ public class CardDisplay : MonoBehaviour
         if (card == null) return;
         if (nameText != null) nameText.text = card.cardName;
 
-        if (card.artworkSprite != null)
-            ApplyArtworkSprite(card.artworkSprite);
+        Sprite portrait = ResolvePortraitSpriteForCurrentContext();
+        if (portrait != null)
+            ApplyArtworkSprite(portrait);
 
         // ?????????}?]??????~???^
         if (attackText != null) attackText.gameObject.SetActive(true);
@@ -72,6 +74,39 @@ public class CardDisplay : MonoBehaviour
         }
     }
 
+    private static ClickCard ResolveClickCardInContext(MonoBehaviour host)
+    {
+        if (host == null) return null;
+        ClickCard onSelf = host.GetComponent<ClickCard>();
+        if (onSelf != null) return onSelf;
+        return host.GetComponentInParent<ClickCard>();
+    }
+
+    private Sprite ResolvePortraitSpriteForCurrentContext()
+    {
+        if (card == null) return null;
+        ClickCard clickCard = ResolveClickCardInContext(this);
+        bool isDeckCard = clickCard != null && clickCard.state == CardState.Deck;
+        if (isDeckCard)
+            return card.ResolveDeckThumbSprite();
+
+        bool isLibraryCard = clickCard != null && clickCard.state == CardState.Library;
+        // Buildbeck「Library Grid Viewport」館藏格：與牌組區一致使用 DeckThumb；其餘場景館藏仍用本體立繪。
+        if (isLibraryCard && IsBuildbeckLibraryGridContext())
+        {
+            Sprite thumb = card.ResolveDeckThumbSprite();
+            if (thumb != null) return thumb;
+        }
+
+        return card.ResolveCardArtSprite();
+    }
+
+    private static bool IsBuildbeckLibraryGridContext()
+    {
+        Scene s = SceneManager.GetActiveScene();
+        return s.IsValid() && s.name.Equals("Buildbeck", System.StringComparison.OrdinalIgnoreCase);
+    }
+
     private Image ResolveArtworkTargetImage()
     {
         if (backgroundImage != null) return backgroundImage;
@@ -106,24 +141,69 @@ public class CardDisplay : MonoBehaviour
     private void ApplyArtworkSprite(Sprite sprite)
     {
         if (sprite == null) return;
-        ClickCard clickCard = GetComponentInParent<ClickCard>();
+        ClickCard clickCard = ResolveClickCardInContext(this);
         bool isLibraryCard = clickCard != null && clickCard.state == CardState.Library;
         bool isDeckCard = clickCard != null && clickCard.state == CardState.Deck;
 
-        // User-requested behavior: Deck area keeps original style (no per-card artwork).
-        if (isDeckCard) return;
+        // 組建牌組區：僅 DeckThumb，套在 DeckCardInfoStrip mt 的 Art 上。
+        if (isDeckCard)
+        {
+            Image dfArt = FindDeckStripShellArtImage(DeckStripMtDfName);
+            Image oiArt = FindDeckStripShellArtImage(DeckStripMtOiName);
 
-        // User-requested behavior: Library thumbnail should use the green oval layer.
+            if (dfArt != null || oiArt != null)
+            {
+                ApplySpriteToDeckStripArtTarget(dfArt, sprite);
+                ApplySpriteToDeckStripArtTarget(oiArt, sprite);
+                backgroundImage = dfArt != null ? dfArt : oiArt;
+                return;
+            }
+
+            Image stripArt = FindNamedImage("Art");
+            if (stripArt != null && IsUnderDeckCardInfoStrip(stripArt.transform))
+            {
+                ApplySpriteToDeckStripArtTarget(stripArt, sprite);
+                backgroundImage = stripArt;
+            }
+
+            return;
+        }
+
+        // 館藏：Buildbeck Grid 上為 DeckThumb（與 ResolvePortrait 一致）；DeckGen 橢圓槽位 + 可選 Card Art 層。
         if (isLibraryCard)
         {
-            // Backpack card prefab uses "Card Art"; legacy library card uses "BGImage".
-            Image libraryTarget = FindNamedImage("Card Art");
-            if (libraryTarget == null) libraryTarget = FindNamedImage("BGImage");
+            Image libraryCardArt = FindNamedImage("Card Art");
+            if (libraryCardArt != null)
+            {
+                ApplyCardPresetArtSprite(libraryCardArt, sprite);
+                backgroundImage = libraryCardArt;
+            }
+
+            Image dfArt = FindDeckGenLibraryShellArtImage("DeckGen_Library_df");
+            Image oiArt = FindDeckGenLibraryShellArtImage("DeckGen_Library_oi");
+            if (oiArt == null) oiArt = FindDeckGenLibraryShellArtImage("DeckGen_Library_ol");
+
+            if (dfArt != null || oiArt != null)
+            {
+                ApplySpriteToLibraryArtTarget(dfArt, sprite);
+                ApplySpriteToLibraryArtTarget(oiArt, sprite);
+                if (backgroundImage == null)
+                    backgroundImage = dfArt != null ? dfArt : oiArt;
+                return;
+            }
+
+            if (backgroundImage != null) return;
+
+            Image libraryTarget = FindNamedImage("BGImage");
+            if (libraryTarget == null)
+            {
+                Transform libDf = FindDeepChildByName(transform, "DeckGen_Library_df");
+                if (libDf != null) libraryTarget = libDf.GetComponent<Image>();
+            }
+
             if (libraryTarget != null)
             {
-                libraryTarget.sprite = sprite;
-                libraryTarget.color = Color.white;
-                if (!libraryTarget.gameObject.activeSelf) libraryTarget.gameObject.SetActive(true);
+                ApplyCardPresetArtSprite(libraryTarget, sprite);
                 backgroundImage = libraryTarget;
                 return;
             }
@@ -142,16 +222,58 @@ public class CardDisplay : MonoBehaviour
         if (target == null) target = PickFirstNonNull(nbBg, role, bgImage, art, artwork, cardArt, ResolveArtworkTargetImage());
         if (target == null) return;
 
-        target.sprite = sprite;
-        target.color = Color.white;
-        if (!target.gameObject.activeSelf) target.gameObject.SetActive(true);
+        if (IsBattleSimulationPortraitContext())
+        {
+            ApplyBattlePortraitSprite(target, sprite);
+            backgroundImage = target;
+            return;
+        }
+
+        ApplyCardPresetArtSprite(target, sprite);
         backgroundImage = target;
     }
 
-    private Image FindNamedImage(string name)
+    private static bool IsBattleSimulationPortraitContext()
     {
-        Transform t = FindDeepChildByName(transform, name);
-        return t != null ? t.GetComponent<Image>() : null;
+        return SceneManager.GetActiveScene().name == "BattleSimulation";
+    }
+
+    /// <summary>對戰手牌／場上：只換圖、等比縮放，不改卡框比例。</summary>
+    private static void ApplyBattlePortraitSprite(Image target, Sprite sprite)
+    {
+        if (target == null || sprite == null) return;
+        target.sprite = sprite;
+        target.color = Color.white;
+        target.preserveAspect = true;
+        if (!target.gameObject.activeSelf) target.gameObject.SetActive(true);
+    }
+
+    /// <summary>本體立繪：背包／詳情等用 337×491。</summary>
+    private void ApplyCardPresetArtSprite(Image target, Sprite sprite)
+    {
+        if (target == null || sprite == null) return;
+
+        RectTransform rt = target.rectTransform;
+        if (rt != null && IsCardPresetArtLayer(target.transform))
+        {
+            rt.anchorMin = new Vector2(0.5f, 0.5f);
+            rt.anchorMax = new Vector2(0.5f, 0.5f);
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.anchoredPosition = Vector2.zero;
+            rt.sizeDelta = CardArtLayoutSpec.PresetArtSize;
+        }
+
+        target.sprite = sprite;
+        target.color = Color.white;
+        target.preserveAspect = false;
+        if (!target.gameObject.activeSelf) target.gameObject.SetActive(true);
+    }
+
+    private static bool IsCardPresetArtLayer(Transform t)
+    {
+        if (t == null) return false;
+        string n = t.name;
+        return n == "Role" || n == "Card Art" || n == "Artwork";
     }
 
     private static Image PickFirstVisible(params Image[] images)
@@ -174,6 +296,85 @@ public class CardDisplay : MonoBehaviour
             if (images[i] != null) return images[i];
         }
         return null;
+    }
+
+    private Image FindNamedImage(string name)
+    {
+        Transform t = FindDeepChildByName(transform, name);
+        return t != null ? t.GetComponent<Image>() : null;
+    }
+
+    private const string LibraryDeckGenArtChildName = "Art";
+    private const string DeckStripMtDfName = "DeckCardInfoStrip_mt_df";
+    private const string DeckStripMtOiName = "DeckCardInfoStrip_mt_oi";
+
+    /// <summary>在 <c>DeckCardInfoStrip_mt_df</c>／<c>mt_oi</c> 子階層的 <c>Art</c> 上解析縮圖用 <see cref="Image"/>。</summary>
+    private Image FindDeckStripShellArtImage(string shellExactName)
+    {
+        Transform shell = FindDeepChildByName(transform, shellExactName);
+        if (shell == null) return null;
+        Transform art = shell.Find(LibraryDeckGenArtChildName);
+        if (art == null) art = FindDeepChildByName(shell, LibraryDeckGenArtChildName);
+        if (art == null) return null;
+        Image onArt = art.GetComponent<Image>();
+        if (onArt != null) return onArt;
+        return art.GetComponentInChildren<Image>(true);
+    }
+
+    private static bool IsUnderDeckCardInfoStrip(Transform t)
+    {
+        for (Transform p = t; p != null; p = p.parent)
+        {
+            if (p.name == "DeckCardInfoStrip") return true;
+        }
+
+        return false;
+    }
+
+    private static void ApplySpriteToDeckStripArtTarget(Image target, Sprite sprite)
+    {
+        if (target == null || sprite == null) return;
+        for (Transform t = target.transform; t != null; t = t.parent)
+        {
+            if (!t.gameObject.activeSelf) t.gameObject.SetActive(true);
+            string n = t.name;
+            if (n == DeckStripMtDfName || n == DeckStripMtOiName || n == "DeckCardInfoStrip")
+                break;
+        }
+
+        target.sprite = sprite;
+        target.color = Color.white;
+        target.preserveAspect = false;
+        if (!target.gameObject.activeSelf) target.gameObject.SetActive(true);
+    }
+
+    /// <summary>在 <c>DeckGen_Library_df</c>／<c>DeckGen_Library_oi</c> 子階層的 <c>Art</c> 上解析立繪用 <see cref="Image"/>（Art 本體或子物件皆可）。</summary>
+    private Image FindDeckGenLibraryShellArtImage(string shellExactName)
+    {
+        Transform shell = FindDeepChildByName(transform, shellExactName);
+        if (shell == null) return null;
+        Transform art = shell.Find(LibraryDeckGenArtChildName);
+        if (art == null) art = FindDeepChildByName(shell, LibraryDeckGenArtChildName);
+        if (art == null) return null;
+        Image onArt = art.GetComponent<Image>();
+        if (onArt != null) return onArt;
+        return art.GetComponentInChildren<Image>(true);
+    }
+
+    private static void ApplySpriteToLibraryArtTarget(Image target, Sprite sprite)
+    {
+        if (target == null || sprite == null) return;
+        for (Transform t = target.transform; t != null; t = t.parent)
+        {
+            if (!t.gameObject.activeSelf) t.gameObject.SetActive(true);
+            string n = t.name;
+            if (n == "DeckGen_Library_df" || n == "DeckGen_Library_oi" || n == "DeckGen_Library_ol")
+                break;
+        }
+
+        target.sprite = sprite;
+        target.color = Color.white;
+        target.preserveAspect = false;
     }
 
     private static Transform FindDeepChildByName(Transform root, string exactName)

@@ -1,8 +1,6 @@
 using UnityEngine;
-using UnityEngine.UI;
 
-public partial class DeckManager
-{
+public partial class DeckManager{
     private sealed class DeckListView
     {
         private readonly DeckManager _owner;
@@ -43,6 +41,15 @@ public partial class DeckManager
 
             if (_owner.libraryPanel != null) DeckManager.EnsureHierarchyActive(_owner.libraryPanel);
             if (_owner.deckPanel != null) DeckManager.EnsureHierarchyActive(_owner.deckPanel);
+            if (_owner.libraryPanel != null)
+            {
+                Canvas libCanvas = _owner.libraryPanel.GetComponentInParent<Canvas>(true);
+                if (libCanvas != null)
+                {
+                    libCanvas.enabled = true;
+                    libCanvas.gameObject.SetActive(true);
+                }
+            }
             if (_owner.saveDeckButton != null)
             {
                 DeckManager.EnsureHierarchyActive(_owner.saveDeckButton.transform);
@@ -114,31 +121,24 @@ public partial class DeckManager
                 _owner.EnsureDisbandDeckButtonDrawOrder(null);
                 BuildbeckLayoutAutoBinder.TryBindCurrentDeckNameDisplay(_owner);
                 _owner.RefreshCurrentDeckDisplayName();
+                BuildbeckLayoutAutoBinder.TryWireBackButtonToPersistent();
+                BuildbeckLayoutAutoBinder.BringBuildbeckReturnButtonToFront();
+                _owner.HideBuildbeckLibraryDeckGenCanvasPrototypeForRuntime();
+                _owner.HideBuildbeckDeckStripStackCanvasPrototypeForRuntime();
             }
         }
 
         public void RefreshScrollablePanels()
         {
-            _owner.RefreshPanelContentHeight(_owner.libraryPanel);
-            _owner.RefreshPanelContentHeight(_owner.deckPanel);
+            _owner.RefreshScrollablePanelHeightsLibraryThenDeck();
         }
 
         public void ForceRebuildPanelsLayout(bool includeDeck = true)
         {
-            RectTransform libRt = _owner.libraryPanel as RectTransform;
-            if (libRt != null)
-            {
-                _owner.NormalizeChildrenVisualState(libRt);
-                LayoutRebuilder.ForceRebuildLayoutImmediate(libRt);
-            }
+            _owner.ForceRebuildLibraryPanelLayout();
             if (!includeDeck) return;
-            RectTransform deckRt = _owner.deckPanel as RectTransform;
-            if (deckRt != null)
-            {
-                _owner.NormalizeChildrenVisualState(deckRt);
-                LayoutRebuilder.ForceRebuildLayoutImmediate(deckRt);
-                _owner.RequestDeckArcLayoutUnlessDeferredToLateUpdate(deckRt, false);
-            }
+
+            _owner.ForceRebuildDeckPanelLayoutAfterNormalize();
             Canvas.ForceUpdateCanvases();
         }
 

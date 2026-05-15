@@ -29,5 +29,8 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Scenes/Gameprogress.unity
     guid: 8a8c9d16ec3fd65499958f5d72fcd42b
+  - enabled: 1
+    path: Assets/Scenes/Settings.unity
+    guid: db658c9d676ddee429b3be73cb5be69a
   m_configObjects: {}
   m_UseUCBPForAssetBundles: 0

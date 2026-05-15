@@ -36,16 +36,6 @@ public static class BuildbeckUiPrefabBaker
                 4);
             SavePrefab(scrollVp, UiFolder + "/BuildbeckScrollGrid.prefab");
 
-            GameObject back = BuildbeckUiHierarchyBuilder.CreateTextButton(
-                temp.transform,
-                "BackButton",
-                "返回",
-                new Vector2(0f, 1f),
-                new Vector2(0f, 1f),
-                new Vector2(20f, -20f),
-                new Vector2(160f, 70f));
-            SavePrefab(back, UiFolder + "/BuildbeckBackButton.prefab");
-
             GameObject guideRoot = BuildbeckUiHierarchyBuilder.CreateDeckSlotGuideDotsRoot(temp.transform);
             SavePrefab(guideRoot, UiFolder + "/DeckSlotGuideDotsRoot.prefab");
 
