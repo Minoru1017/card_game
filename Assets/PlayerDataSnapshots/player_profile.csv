@@ -1,11 +1,11 @@
 schema_version,1
-uuid,41678ae8a8ed40f4894c943c4b75788f
+uuid,9818680397494c9fb34cf02e3f25aabf
 role,遊戲測試員
-decks,哈哈:0張 | good:4張 | 牌組5:13張 | 牌組4:0張 | 牌組5:0張
-heroes,長弓兵、國王、死、赤紅惡龍、傳教士、飢荒、聖盾軍、城堡、王后、聖女、宗教審判官、聖盾、民兵、聖院騎士、王國騎兵、修女、戰爭、瘟疫、主教、教徒、護林鹿
-start_date,2026-05-01
-wins,18
-losses,4
-draws,1
-quits,6
-last_result,勝利
+decks,哈哈:0張 | good:22張 | 牌組5:0張 | 牌組4:0張 | 牌組5:0張
+heroes,長弓兵、國王、死、赤紅惡龍、傳教士、飢荒、聖盾軍、王后、聖女、聖盾、民兵、聖院騎士、王國騎兵、宗教審判官、戰爭、瘟疫、遠古雷鳥、教徒、修女、光明騎士、城堡、主教
+start_date,2026-05-16
+wins,2
+losses,2
+draws,2
+quits,10
+last_result,玩家中離

@@ -20,6 +20,8 @@ public class BattleHandDiscardDrag : MonoBehaviour, IPointerDownHandler, IPointe
     private int pointerId = int.MinValue;
     private Vector2 downScreenPos;
     private Vector2 startAnchoredPos;
+    private Vector3 restHandLocalScale = Vector3.one;
+    private Vector3 dragRootNeutralLocalScale = Vector3.one;
     private int startSibling;
     private RectTransform startParentRect;
     private RectTransform parentRect;
@@ -74,6 +76,7 @@ public class BattleHandDiscardDrag : MonoBehaviour, IPointerDownHandler, IPointe
         downScreenPos = eventData.position;
         eventCamera = eventData.pressEventCamera;
         startAnchoredPos = cardRect.anchoredPosition;
+        restHandLocalScale = cardRect.localScale;
         startSibling = cardRect.GetSiblingIndex();
 
         if (canvasGroup == null) canvasGroup = gameObject.GetComponent<CanvasGroup>();
@@ -98,6 +101,7 @@ public class BattleHandDiscardDrag : MonoBehaviour, IPointerDownHandler, IPointe
             canvasGroup.blocksRaycasts = false;
             SetHoldProgressActive(false);
             PromoteCardToTopLayer();
+            dragRootNeutralLocalScale = cardRect.localScale;
         }
 
         Vector2 localPoint;
@@ -126,12 +130,12 @@ public class BattleHandDiscardDrag : MonoBehaviour, IPointerDownHandler, IPointe
         }
         if (hoveringDropZone)
         {
-            cardRect.localScale = Vector3.Lerp(cardRect.localScale, Vector3.one * 0.94f, 0.4f);
+            cardRect.localScale = Vector3.Lerp(cardRect.localScale, dragRootNeutralLocalScale * 0.94f, 0.4f);
             cardRect.anchoredPosition = Vector2.Lerp(cardRect.anchoredPosition, baseAnchored + new Vector2(-10f, 0f), 0.45f);
         }
         else
         {
-            cardRect.localScale = Vector3.Lerp(cardRect.localScale, Vector3.one, 0.25f);
+            cardRect.localScale = Vector3.Lerp(cardRect.localScale, dragRootNeutralLocalScale, 0.25f);
             cardRect.anchoredPosition = Vector2.Lerp(cardRect.anchoredPosition, baseAnchored, 0.35f);
         }
     }
@@ -164,7 +168,7 @@ public class BattleHandDiscardDrag : MonoBehaviour, IPointerDownHandler, IPointe
         pressing = false;
         dragging = false;
         pointerId = int.MinValue;
-        if (!dropped && cardRect != null) cardRect.localScale = Vector3.one;
+        if (!dropped && cardRect != null) cardRect.localScale = restHandLocalScale;
         if (hoveringDropZone)
         {
             hoveringDropZone = false;
@@ -189,7 +193,7 @@ public class BattleHandDiscardDrag : MonoBehaviour, IPointerDownHandler, IPointe
         Vector2 fromPos = cardRect.anchoredPosition;
         Vector2 toPos = fromPos + new Vector2(-70f, 0f);
         Vector3 fromScale = cardRect.localScale;
-        Vector3 toScale = Vector3.one * 0.82f;
+        Vector3 toScale = dragRootNeutralLocalScale * 0.82f;
         if (canvasGroup == null) canvasGroup = gameObject.GetComponent<CanvasGroup>();
         float fromAlpha = canvasGroup != null ? canvasGroup.alpha : 1f;
         while (t < dur && cardRect != null)

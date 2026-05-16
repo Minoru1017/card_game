@@ -1,7 +1,19 @@
+/// <summary>CardList.csv 使用之稀有度（<c>N / R / SR / SSR / UR</c>）。</summary>
+public enum CardRarity
+{
+    N = 0,
+    R = 1,
+    SR = 2,
+    SSR = 3,
+    UR = 4
+}
+
 public class Card
 {
     public int id;
     public string cardName;
+    /// <summary>CSV「稀有度」欄；舊表未標示時載入為 <see cref="CardRarity.N"/>。</summary>
+    public CardRarity rarity = CardRarity.N;
     /// <summary>Optional English name from CardList.csv; gameplay UI still uses <see cref="cardName"/>.</summary>
     public string cardNameEnglish = string.Empty;
     /// <summary>卡牌本體立繪（對戰、背包詳情等）。Resources 路徑，可留空。</summary>

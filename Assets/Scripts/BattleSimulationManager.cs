@@ -2758,7 +2758,9 @@ public class BattleSimulationManager : MonoBehaviour
             MonsterCard display = new MonsterCard(m.id, m.cardName, field.attack, field.maxHp);
             display.healthPoint = field.currentHp;
             display.cardNameEnglish = m.cardNameEnglish;
+            display.rarity = m.rarity;
             display.SetArtwork(m.artworkResourcePath, m.artworkSprite);
+            display.SetDeckThumb(m.deckThumbResourcePath, m.deckThumbSprite);
             return display;
         }
 
@@ -2767,7 +2769,10 @@ public class BattleSimulationManager : MonoBehaviour
         if (source != null)
         {
             fallback.cardNameEnglish = source.cardNameEnglish;
+            fallback.rarity = source.rarity;
             fallback.SetArtwork(source.artworkResourcePath, source.artworkSprite);
+            if (source is MonsterCard mm)
+                fallback.SetDeckThumb(mm.deckThumbResourcePath, mm.deckThumbSprite);
         }
         return fallback;
     }

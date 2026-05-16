@@ -6,12 +6,51 @@ using TMPro;
 public class CardDisplay : MonoBehaviour
 {
     public TextMeshProUGUI nameText;
+    /// <summary>選填：顯示 <see cref="Card.rarity"/>（例如 N / SR）；Prefab 未綁定時略過。</summary>
+    public TextMeshProUGUI rarityText;
     public TextMeshProUGUI attackText;
     public TextMeshProUGUI healthText;
     public TextMeshProUGUI effectText;
 
     public Image backgroundImage;
     public Card card;
+
+    [Header("CardArt 稀有度框（僅 CardArt 脈絡顯示；組牌 DeckThumb 不顯示）")]
+    [Tooltip("選填。未指定時嘗試 Resources.Load(\"UI/Rarity/稀有度N\")（需將圖放於 Assets/Resources/UI/Rarity/）。")]
+    [SerializeField] private Sprite cardArtRarityFrameN;
+    [Tooltip("選填。未指定時嘗試 Resources.Load(\"UI/Rarity/稀有度R\")（檔於 Assets/Resources/UI/Rarity/）；其次 UI/Rarity/R。")]
+    [SerializeField] private Sprite cardArtRarityFrameR;
+    [Tooltip("選填。未指定時嘗試 Resources.Load(\"UI/Rarity/稀有度SR\")（檔於 Assets/Resources/UI/Rarity/）。")]
+    [SerializeField] private Sprite cardArtRarityFrameSr;
+    [Tooltip("選填。未指定時嘗試 Resources.Load(\"UI/Rarity/稀有度SSR\")（檔於 Assets/Resources/UI/Rarity/）。")]
+    [SerializeField] private Sprite cardArtRarityFrameSsr;
+    [Tooltip("選填。未指定時嘗試 Resources.Load(\"UI/Rarity/稀有度UR\")；其次 UI/Rarity/UR。")]
+    [SerializeField] private Sprite cardArtRarityFrameUr;
+
+    /// <summary>執行期共用 N 框 Sprite（由任一 CardDisplay 指定或 Resources 載入）。</summary>
+    private static Sprite s_sharedCardArtRarityFrameN;
+    /// <summary>執行期共用 R 框 Sprite（由任一 CardDisplay 指定或 Resources 載入）。</summary>
+    private static Sprite s_sharedCardArtRarityFrameR;
+    /// <summary>執行期共用 SR 框 Sprite（由任一 CardDisplay 指定或 Resources 載入）。</summary>
+    private static Sprite s_sharedCardArtRarityFrameSr;
+    /// <summary>執行期共用 SSR 框 Sprite（由任一 CardDisplay 指定或 Resources 載入）。</summary>
+    private static Sprite s_sharedCardArtRarityFrameSsr;
+    /// <summary>執行期共用 UR 框 Sprite（由任一 CardDisplay 指定或 Resources 載入）。</summary>
+    private static Sprite s_sharedCardArtRarityFrameUr;
+
+    void Awake()
+    {
+        if (cardArtRarityFrameN != null && s_sharedCardArtRarityFrameN == null)
+            s_sharedCardArtRarityFrameN = cardArtRarityFrameN;
+        if (cardArtRarityFrameR != null && s_sharedCardArtRarityFrameR == null)
+            s_sharedCardArtRarityFrameR = cardArtRarityFrameR;
+        if (cardArtRarityFrameSr != null && s_sharedCardArtRarityFrameSr == null)
+            s_sharedCardArtRarityFrameSr = cardArtRarityFrameSr;
+        if (cardArtRarityFrameSsr != null && s_sharedCardArtRarityFrameSsr == null)
+            s_sharedCardArtRarityFrameSsr = cardArtRarityFrameSsr;
+        if (cardArtRarityFrameUr != null && s_sharedCardArtRarityFrameUr == null)
+            s_sharedCardArtRarityFrameUr = cardArtRarityFrameUr;
+    }
 
     void Start()
     {
@@ -34,6 +73,11 @@ public class CardDisplay : MonoBehaviour
     {
         if (card == null) return;
         if (nameText != null) nameText.text = card.cardName;
+        if (rarityText != null)
+        {
+            rarityText.gameObject.SetActive(true);
+            rarityText.text = card.rarity.ToString();
+        }
 
         Sprite portrait = ResolvePortraitSpriteForCurrentContext();
         if (portrait != null)
@@ -72,6 +116,8 @@ public class CardDisplay : MonoBehaviour
             if (attackText != null) attackText.gameObject.SetActive(false);
             if (healthText != null) healthText.gameObject.SetActive(false);
         }
+
+        RefreshCardArtRarityOverlay();
     }
 
     private static ClickCard ResolveClickCardInContext(MonoBehaviour host)
@@ -99,6 +145,288 @@ public class CardDisplay : MonoBehaviour
         }
 
         return card.ResolveCardArtSprite();
+    }
+
+    /// <summary>
+    /// 本體立繪 CardArt 上才疊稀有度框：排除組牌 DeckThumb、Buildbeck 館藏格 DeckThumb。
+    /// 對戰場景下手牌（<c>HandArea</c>）與場上牌（<c>PlayerFieldArea</c>／<c>EnemyFieldArea</c>等）一律允許，
+    /// 含 Prefab 誤掛 <see cref="CardState.Deck"/> 導致肖像為縮圖時仍可顯示 N／R／SR／SSR／UR 框。
+    /// </summary>
+    private bool ShouldShowCardArtRarityOverlay()
+    {
+        if (card == null) return false;
+
+        if (IsBattleSimulationPortraitContext() &&
+            IsBattleSimulationHandOrFieldAreaForRarityOverlay(transform))
+        {
+            return ResolvePortraitSpriteForCurrentContext() != null || card.ResolveCardArtSprite() != null;
+        }
+
+        ClickCard clickCard = ResolveClickCardInContext(this);
+        if (clickCard != null && clickCard.state == CardState.Deck)
+            return false;
+
+        bool isLibraryCard = clickCard != null && clickCard.state == CardState.Library;
+        if (isLibraryCard && IsBuildbeckLibraryGridContext())
+            return false;
+
+        Sprite portrait = ResolvePortraitSpriteForCurrentContext();
+        Sprite fullArt = card.ResolveCardArtSprite();
+        if (portrait == null || fullArt == null) return false;
+        return ReferenceEquals(portrait, fullArt);
+    }
+
+    /// <summary>對戰 UI 在 <see cref="BattleSimulationDebugUI.ApplyPrefabVisualTuning"/> 之後呼叫，讓稀有度框對齊 Role（繼承縮放）並疊在立繪之上。</summary>
+    public void RefreshCardArtRarityOverlayExternal()
+    {
+        RefreshCardArtRarityOverlay();
+    }
+
+    private static bool IsTransformUnderNamedAncestor(Transform t, string ancestorName)
+    {
+        if (t == null || string.IsNullOrEmpty(ancestorName)) return false;
+        for (Transform p = t; p != null; p = p.parent)
+        {
+            if (p.name == ancestorName)
+                return true;
+        }
+        return false;
+    }
+
+    /// <summary>對戰 UI：手牌區或怪物／咒術場地區（與手牌相同稀有度框規則）。</summary>
+    private static bool IsBattleSimulationHandOrFieldAreaForRarityOverlay(Transform cardDisplayTransform)
+    {
+        if (cardDisplayTransform == null) return false;
+        return IsTransformUnderNamedAncestor(cardDisplayTransform, "HandArea") ||
+               IsTransformUnderNamedAncestor(cardDisplayTransform, "PlayerFieldArea") ||
+               IsTransformUnderNamedAncestor(cardDisplayTransform, "EnemyFieldArea") ||
+               IsTransformUnderNamedAncestor(cardDisplayTransform, "PlayerSpellFieldArea") ||
+               IsTransformUnderNamedAncestor(cardDisplayTransform, "EnemySpellFieldArea");
+    }
+
+    /// <summary>
+    /// 多 Slice 的稀有度圖在部分 Unity 版本下 <c>Resources.Load&lt;Sprite&gt;</c> 會為 null，改以 <c>LoadAll</c> 取第一個 Sprite。
+    /// </summary>
+    private static Sprite LoadRaritySpriteFromResources(ref Sprite cacheField, string resourcesPath)
+    {
+        if (cacheField != null)
+            return cacheField;
+        cacheField = Resources.Load<Sprite>(resourcesPath);
+        if (cacheField == null)
+        {
+            Sprite[] slices = Resources.LoadAll<Sprite>(resourcesPath);
+            if (slices != null)
+            {
+                for (int i = 0; i < slices.Length; i++)
+                {
+                    if (slices[i] != null)
+                    {
+                        cacheField = slices[i];
+                        break;
+                    }
+                }
+            }
+        }
+        return cacheField;
+    }
+
+    private Sprite ResolveCardArtRarityNFrameSprite()
+    {
+        if (cardArtRarityFrameN != null)
+            return cardArtRarityFrameN;
+        LoadRaritySpriteFromResources(ref s_sharedCardArtRarityFrameN, "UI/Rarity/稀有度N");
+        return s_sharedCardArtRarityFrameN;
+    }
+
+    private Sprite ResolveCardArtRarityRFrameSprite()
+    {
+        if (cardArtRarityFrameR != null)
+            return cardArtRarityFrameR;
+        return ResolveSharedCardArtRarityRFrameSprite();
+    }
+
+    /// <summary>與 N 框相同規則：主檔 <c>Resources/UI/Rarity/稀有度R</c>；無則嘗試 <c>UI/Rarity/R</c>。</summary>
+    private static Sprite ResolveSharedCardArtRarityRFrameSprite()
+    {
+        if (s_sharedCardArtRarityFrameR != null)
+            return s_sharedCardArtRarityFrameR;
+        LoadRaritySpriteFromResources(ref s_sharedCardArtRarityFrameR, "UI/Rarity/稀有度R");
+        if (s_sharedCardArtRarityFrameR == null)
+            LoadRaritySpriteFromResources(ref s_sharedCardArtRarityFrameR, "UI/Rarity/R");
+        return s_sharedCardArtRarityFrameR;
+    }
+
+    private Sprite ResolveCardArtRaritySrFrameSprite()
+    {
+        if (cardArtRarityFrameSr != null)
+            return cardArtRarityFrameSr;
+        return ResolveSharedCardArtRaritySrFrameSprite();
+    }
+
+    /// <summary>主檔 <c>Resources/UI/Rarity/稀有度SR</c>。</summary>
+    private static Sprite ResolveSharedCardArtRaritySrFrameSprite()
+    {
+        if (s_sharedCardArtRarityFrameSr != null)
+            return s_sharedCardArtRarityFrameSr;
+        LoadRaritySpriteFromResources(ref s_sharedCardArtRarityFrameSr, "UI/Rarity/稀有度SR");
+        return s_sharedCardArtRarityFrameSr;
+    }
+
+    private Sprite ResolveCardArtRaritySsrFrameSprite()
+    {
+        if (cardArtRarityFrameSsr != null)
+            return cardArtRarityFrameSsr;
+        return ResolveSharedCardArtRaritySsrFrameSprite();
+    }
+
+    /// <summary>主檔 <c>Resources/UI/Rarity/稀有度SSR</c>。</summary>
+    private static Sprite ResolveSharedCardArtRaritySsrFrameSprite()
+    {
+        if (s_sharedCardArtRarityFrameSsr != null)
+            return s_sharedCardArtRarityFrameSsr;
+        LoadRaritySpriteFromResources(ref s_sharedCardArtRarityFrameSsr, "UI/Rarity/稀有度SSR");
+        if (s_sharedCardArtRarityFrameSsr == null)
+            LoadRaritySpriteFromResources(ref s_sharedCardArtRarityFrameSsr, "UI/Rarity/SSR");
+        return s_sharedCardArtRarityFrameSsr;
+    }
+
+    private Sprite ResolveCardArtRarityUrFrameSprite()
+    {
+        if (cardArtRarityFrameUr != null)
+            return cardArtRarityFrameUr;
+        return ResolveSharedCardArtRarityUrFrameSprite();
+    }
+
+    /// <summary>主檔 <c>Resources/UI/Rarity/稀有度UR</c>；備援 <c>UI/Rarity/UR</c>。</summary>
+    private static Sprite ResolveSharedCardArtRarityUrFrameSprite()
+    {
+        if (s_sharedCardArtRarityFrameUr != null)
+            return s_sharedCardArtRarityFrameUr;
+        LoadRaritySpriteFromResources(ref s_sharedCardArtRarityFrameUr, "UI/Rarity/稀有度UR");
+        if (s_sharedCardArtRarityFrameUr == null)
+            LoadRaritySpriteFromResources(ref s_sharedCardArtRarityFrameUr, "UI/Rarity/UR");
+        return s_sharedCardArtRarityFrameUr;
+    }
+
+    private static Sprite ResolveCardArtRarityOverlaySpriteForCard(Card card, CardDisplay hostCd)
+    {
+        if (card == null) return null;
+        switch (card.rarity)
+        {
+            case CardRarity.N:
+                if (hostCd != null)
+                    return hostCd.ResolveCardArtRarityNFrameSprite();
+                LoadRaritySpriteFromResources(ref s_sharedCardArtRarityFrameN, "UI/Rarity/稀有度N");
+                return s_sharedCardArtRarityFrameN;
+            case CardRarity.R:
+                if (hostCd != null)
+                    return hostCd.ResolveCardArtRarityRFrameSprite();
+                return ResolveSharedCardArtRarityRFrameSprite();
+            case CardRarity.SR:
+                if (hostCd != null)
+                    return hostCd.ResolveCardArtRaritySrFrameSprite();
+                return ResolveSharedCardArtRaritySrFrameSprite();
+            case CardRarity.SSR:
+                if (hostCd != null)
+                    return hostCd.ResolveCardArtRaritySsrFrameSprite();
+                return ResolveSharedCardArtRaritySsrFrameSprite();
+            case CardRarity.UR:
+                if (hostCd != null)
+                    return hostCd.ResolveCardArtRarityUrFrameSprite();
+                return ResolveSharedCardArtRarityUrFrameSprite();
+            default:
+                return null;
+        }
+    }
+
+    /// <summary>背包 Inspect 等大圖僅有 Image 時，強制依 CardArt 規則疊加 N／R／SR／SSR／UR 框。</summary>
+    public static void SyncCardArtRarityOverlay(Image portraitImage, Card card)
+    {
+        ApplyCardArtRarityOverlayInternal(portraitImage, card, treatAsCardArtContext: true);
+    }
+
+    private void RefreshCardArtRarityOverlay()
+    {
+        Image artTarget = backgroundImage != null ? backgroundImage : ResolveArtworkTargetImage();
+        ApplyCardArtRarityOverlayInternal(artTarget, card, ShouldShowCardArtRarityOverlay());
+    }
+
+    private static void ApplyCardArtRarityOverlayInternal(Image portraitImage, Card card, bool treatAsCardArtContext)
+    {
+        const string overlayName = "CardArtRarityOverlay";
+        if (portraitImage == null)
+            return;
+
+        Transform portraitTf = portraitImage.transform;
+        Transform overlayParent = portraitTf;
+
+        void HideOverlay()
+        {
+            Transform nested = portraitTf.Find(overlayName);
+            if (nested != null)
+                nested.gameObject.SetActive(false);
+
+            Transform root = portraitTf.parent;
+            if (root != null)
+            {
+                Transform legacy = root.Find(overlayName);
+                if (legacy != null && legacy.parent == root)
+                    legacy.gameObject.SetActive(false);
+            }
+        }
+
+        if (!treatAsCardArtContext || card == null)
+        {
+            HideOverlay();
+            return;
+        }
+
+        CardDisplay hostCd = portraitImage.GetComponentInParent<CardDisplay>();
+        Sprite frame = ResolveCardArtRarityOverlaySpriteForCard(card, hostCd);
+
+        if (frame == null)
+        {
+            HideOverlay();
+            return;
+        }
+
+        Transform rootTf = portraitTf.parent;
+        if (rootTf != null)
+        {
+            Transform legacyOnCardRoot = rootTf.Find(overlayName);
+            if (legacyOnCardRoot != null && legacyOnCardRoot.parent == rootTf)
+                Object.Destroy(legacyOnCardRoot.gameObject);
+        }
+
+        Transform existingTf = overlayParent != null ? overlayParent.Find(overlayName) : null;
+        Image overlayImg;
+        if (existingTf == null)
+        {
+            GameObject go = new GameObject(overlayName, typeof(RectTransform), typeof(Image));
+            overlayImg = go.GetComponent<Image>();
+            RectTransform ort = go.GetComponent<RectTransform>();
+            ort.SetParent(overlayParent, false);
+            overlayImg.raycastTarget = false;
+            overlayImg.preserveAspect = true;
+        }
+        else
+        {
+            overlayImg = existingTf.GetComponent<Image>();
+            if (overlayImg == null)
+                overlayImg = existingTf.gameObject.AddComponent<Image>();
+        }
+
+        overlayImg.sprite = frame;
+        overlayImg.color = Color.white;
+        overlayImg.gameObject.SetActive(true);
+
+        RectTransform ortRt = overlayImg.rectTransform;
+        ortRt.anchorMin = Vector2.zero;
+        ortRt.anchorMax = Vector2.one;
+        ortRt.offsetMin = Vector2.zero;
+        ortRt.offsetMax = Vector2.zero;
+        ortRt.localScale = Vector3.one;
+        overlayImg.transform.SetAsLastSibling();
     }
 
     private static bool IsBuildbeckLibraryGridContext()

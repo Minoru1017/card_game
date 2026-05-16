@@ -4162,6 +4162,7 @@ public partial class DeckManager : MonoBehaviour
     private RectTransform backpackInspectPrefabMount;
     private Image backpackInspectArtImage;
     private TextMeshProUGUI backpackInspectTitleTmp;
+    private TextMeshProUGUI backpackInspectRarityTmp;
     private TextMeshProUGUI backpackInspectSubtitleTmp;
     private TextMeshProUGUI backpackInspectMetaTmp;
     private TextMeshProUGUI backpackInspectSwipeHintTmp;
@@ -4266,6 +4267,7 @@ public partial class DeckManager : MonoBehaviour
         {
             backpackInspectArtImage.sprite = portrait;
             backpackInspectArtImage.gameObject.SetActive(true);
+            CardDisplay.SyncCardArtRarityOverlay(backpackInspectArtImage, card);
             if (backpackInspectPrefabMount != null)
                 backpackInspectPrefabMount.gameObject.SetActive(false);
         }
@@ -4275,6 +4277,7 @@ public partial class DeckManager : MonoBehaviour
             {
                 backpackInspectArtImage.sprite = null;
                 backpackInspectArtImage.gameObject.SetActive(false);
+                CardDisplay.SyncCardArtRarityOverlay(backpackInspectArtImage, null);
             }
 
             GameObject prefab = librarycardPrefab != null ? librarycardPrefab : deckCardPrefab;
@@ -4316,6 +4319,8 @@ public partial class DeckManager : MonoBehaviour
 
         if (backpackInspectTitleTmp != null)
             backpackInspectTitleTmp.text = BuildBackpackInspectTitle(card);
+        if (backpackInspectRarityTmp != null)
+            backpackInspectRarityTmp.text = BuildBackpackInspectRarityLine(card);
         if (backpackInspectSubtitleTmp != null)
             backpackInspectSubtitleTmp.text = BuildBackpackInspectSubtitle(card);
         if (backpackInspectMetaTmp != null)
@@ -4490,6 +4495,22 @@ public partial class DeckManager : MonoBehaviour
         return string.IsNullOrWhiteSpace(card.cardName) ? "未命名卡牌" : card.cardName.Trim();
     }
 
+    private static string BuildBackpackInspectRarityLine(Card card)
+    {
+        if (card == null) return string.Empty;
+        string tier = card.rarity.ToString();
+        string hex = card.rarity switch
+        {
+            CardRarity.N => "#B8C4CC",
+            CardRarity.R => "#81C784",
+            CardRarity.SR => "#64B5F6",
+            CardRarity.SSR => "#BA68C8",
+            CardRarity.UR => "#FFB74D",
+            _ => "#ECEFF1"
+        };
+        return $"<color={hex}>稀有度：{tier}</color>";
+    }
+
     private string BuildBackpackInspectSubtitle(Card card)
     {
         if (card == null) return string.Empty;
@@ -4637,6 +4658,11 @@ public partial class DeckManager : MonoBehaviour
                 img.gameObject.SetActive(true);
                 continue;
             }
+            if (string.Equals(img.gameObject.name, "CardArtRarityOverlay", System.StringComparison.Ordinal))
+            {
+                img.gameObject.SetActive(true);
+                continue;
+            }
             img.gameObject.SetActive(false);
         }
 
@@ -4750,7 +4776,7 @@ public partial class DeckManager : MonoBehaviour
         titleRt.anchorMin = new Vector2(0f, 1f);
         titleRt.anchorMax = new Vector2(1f, 1f);
         titleRt.pivot = new Vector2(0.5f, 1f);
-        titleRt.offsetMin = new Vector2(18f, -86f);
+        titleRt.offsetMin = new Vector2(18f, -70f);
         titleRt.offsetMax = new Vector2(-18f, -14f);
         backpackInspectTitleTmp = titleObj.GetComponent<TextMeshProUGUI>();
         if (hintTMPFont != null) backpackInspectTitleTmp.font = hintTMPFont;
@@ -4761,14 +4787,32 @@ public partial class DeckManager : MonoBehaviour
         backpackInspectTitleTmp.enableWordWrapping = true;
         backpackInspectTitleTmp.text = "卡牌名稱";
 
+        GameObject rarityObj = new GameObject("InspectRarity", typeof(RectTransform), typeof(TextMeshProUGUI));
+        rarityObj.transform.SetParent(rightRegionObj.transform, false);
+        RectTransform rarityRt = rarityObj.GetComponent<RectTransform>();
+        rarityRt.anchorMin = new Vector2(0f, 1f);
+        rarityRt.anchorMax = new Vector2(1f, 1f);
+        rarityRt.pivot = new Vector2(0.5f, 1f);
+        rarityRt.offsetMin = new Vector2(18f, -106f);
+        rarityRt.offsetMax = new Vector2(-18f, -74f);
+        backpackInspectRarityTmp = rarityObj.GetComponent<TextMeshProUGUI>();
+        if (hintTMPFont != null) backpackInspectRarityTmp.font = hintTMPFont;
+        backpackInspectRarityTmp.fontSize = 26f;
+        backpackInspectRarityTmp.fontStyle = FontStyles.Bold;
+        backpackInspectRarityTmp.alignment = TextAlignmentOptions.TopLeft;
+        backpackInspectRarityTmp.color = new Color(0.95f, 0.88f, 0.62f, 1f);
+        backpackInspectRarityTmp.enableWordWrapping = true;
+        backpackInspectRarityTmp.richText = true;
+        backpackInspectRarityTmp.text = "稀有度：";
+
         GameObject subtitleObj = new GameObject("InspectSubtitle", typeof(RectTransform), typeof(TextMeshProUGUI));
         subtitleObj.transform.SetParent(rightRegionObj.transform, false);
         RectTransform subtitleRt = subtitleObj.GetComponent<RectTransform>();
         subtitleRt.anchorMin = new Vector2(0f, 1f);
         subtitleRt.anchorMax = new Vector2(1f, 1f);
         subtitleRt.pivot = new Vector2(0.5f, 1f);
-        subtitleRt.offsetMin = new Vector2(18f, -140f);
-        subtitleRt.offsetMax = new Vector2(-18f, -92f);
+        subtitleRt.offsetMin = new Vector2(18f, -162f);
+        subtitleRt.offsetMax = new Vector2(-18f, -112f);
         backpackInspectSubtitleTmp = subtitleObj.GetComponent<TextMeshProUGUI>();
         if (hintTMPFont != null) backpackInspectSubtitleTmp.font = hintTMPFont;
         backpackInspectSubtitleTmp.fontSize = 24f;
@@ -4783,7 +4827,7 @@ public partial class DeckManager : MonoBehaviour
             new Vector2(0f, 0f),
             new Vector2(1f, 1f),
             new Vector2(14f, 14f),
-            new Vector2(-14f, -146f));
+            new Vector2(-14f, -172f));
 
         GameObject swipeHintObj = new GameObject("InspectSwipeHint", typeof(RectTransform), typeof(TextMeshProUGUI));
         swipeHintObj.transform.SetParent(panel.transform, false);

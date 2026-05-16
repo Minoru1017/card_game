@@ -6,7 +6,7 @@ using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
 /// <summary>
-/// Settings 場景：巢狀選單（顯示比例／畫面品質）、離開回 hall、戰鬥預設一。
+/// Settings 場景：巢狀選單（顯示比例／畫面品質／關於）、離開回 hall、戰鬥預設一。
 /// </summary>
 public class SettingsSceneController : MonoBehaviour
 {
@@ -20,11 +20,20 @@ public class SettingsSceneController : MonoBehaviour
     private const string PresetNestedPanelName = "Preset nested panel";
     private const string QualityButtonRowName = "QualityButtonRow";
     private const string ParameterDetailsName = "Parameter details";
+    private const string AboutRootName = "about";
+    private const string AboutBgChildName = "BG";
+    private const string AboutSaveDetailsName = "About save details";
     private static readonly string[] ParameterTitleNames = { "title", "大標" };
     private static readonly string[] ParameterSubtitleNames = { "Sub-label", "副標" };
     private static readonly string[] ParameterBodyNames = { "content", "內文" };
     private const string ApplyFeedbackToastName = "Apply feedback toast";
     private const int PresetNestedCanvasSortOrder = 80;
+
+    private const string AboutSaveInfoTitle = "玩家存檔與資料安全";
+    private const string AboutSaveInfoSubtitle = "以下說明本遊戲如何盡量保護您的本機存檔，以及無法保證的部分。";
+    private const string AboutSaveInfoBody =
+        "我們做了什麼：存檔會先寫暫存檔再換正式檔，減少當機時寫到一半壞檔；並保留最近幾份備份，必要時可自動改用備份讀取。\n\n" +
+        "我們沒做／做不到什麼：資料在您的電腦／裝置上，沒有像銀行那樣的線上驗證；若有人手動改檔、重灌系統、刪資料夾，仍可能遺失或變更（若沒有自己備份整個存檔資料夾）。";
 
     private static bool subscribed;
 
@@ -34,6 +43,8 @@ public class SettingsSceneController : MonoBehaviour
     private GameObject battleSceneLabel;
     private GameObject imageQualityDetailBg;
     private GameObject presetNestedPanel;
+    private GameObject aboutRoot;
+    private GameObject aboutDetailBg;
     private readonly List<(Button button, string presetId)> presetChoiceButtons = new List<(Button, string)>();
     private readonly List<Button> qualityButtons = new List<Button>();
     private TMP_FontAsset settingsUiFont;
@@ -41,12 +52,17 @@ public class SettingsSceneController : MonoBehaviour
     private TextMeshProUGUI parameterTitleTmp;
     private TextMeshProUGUI parameterSubtitleTmp;
     private TextMeshProUGUI parameterBodyTmp;
+    private GameObject aboutSaveDetailsPanel;
+    private TextMeshProUGUI aboutTitleTmp;
+    private TextMeshProUGUI aboutSubtitleTmp;
+    private TextMeshProUGUI aboutBodyTmp;
     private GameObject applyFeedbackToast;
     private TextMeshProUGUI applyFeedbackToastText;
     private Coroutine applyFeedbackRoutine;
 
     private bool displayRatioTierOpen;
     private bool imageQualityTierOpen;
+    private bool aboutTierOpen;
     private bool presetNestedOpen;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -80,6 +96,7 @@ public class SettingsSceneController : MonoBehaviour
     private void Awake()
     {
         FixCanvasScale();
+        FixSettingsCanvasNonInteractiveRaycasts();
         CacheUiRefs();
         settingsUiFont = ResolveSettingsUiFont();
         EnsureParameterFeedbackUi();
@@ -88,6 +105,8 @@ public class SettingsSceneController : MonoBehaviour
         WireNavigationButtons();
         ApplyTierVisibility();
         BattleCardTuningUserSettings.ApplySavedQualityLevel();
+        EnsureAboutSaveInfoUi();
+        DisableTmpRaycastsUnderPanelSelection();
     }
 
     private void FixCanvasScale()
@@ -97,6 +116,45 @@ public class SettingsSceneController : MonoBehaviour
         RectTransform canvasRt = canvasGo.GetComponent<RectTransform>();
         if (canvasRt != null && canvasRt.localScale.sqrMagnitude < 0.001f)
             canvasRt.localScale = Vector3.one;
+    }
+
+    /// <summary>
+    /// Decorative full-screen or oversized Images with raycastTarget steal clicks from other controls.
+    /// </summary>
+    private void FixSettingsCanvasNonInteractiveRaycasts()
+    {
+        GameObject canvasGo = GameObject.Find("Canvas");
+        if (canvasGo != null)
+        {
+            Transform rootBg = canvasGo.transform.Find("BG");
+            if (rootBg != null)
+            {
+                Image img = rootBg.GetComponent<Image>();
+                if (img != null) img.raycastTarget = false;
+            }
+        }
+
+        GameObject aboutRoot = GameObject.Find(AboutRootName);
+        if (aboutRoot != null)
+        {
+            Transform aboutBg = aboutRoot.transform.Find(AboutBgChildName);
+            if (aboutBg != null)
+            {
+                Image outerImg = aboutBg.GetComponent<Image>();
+                if (outerImg != null) outerImg.raycastTarget = false;
+            }
+        }
+    }
+
+    private static void DisableTmpRaycastsUnderPanelSelection()
+    {
+        GameObject panelSel = GameObject.Find("Panel selection");
+        if (panelSel == null) return;
+        TextMeshProUGUI[] tmps = panelSel.GetComponentsInChildren<TextMeshProUGUI>(true);
+        for (int i = 0; i < tmps.Length; i++)
+        {
+            if (tmps[i] != null) tmps[i].raycastTarget = false;
+        }
     }
 
     private void CacheUiRefs()
@@ -113,6 +171,10 @@ public class SettingsSceneController : MonoBehaviour
 
         if (imageQualityRoot != null)
             imageQualityDetailBg = FindDirectChild(imageQualityRoot.transform, "BG");
+
+        aboutRoot = GameObject.Find(AboutRootName);
+        if (aboutRoot != null)
+            aboutDetailBg = FindDirectChild(aboutRoot.transform, AboutBgChildName);
     }
 
     private void WireNavigationButtons()
@@ -125,6 +187,9 @@ public class SettingsSceneController : MonoBehaviour
         GameObject imageQualityRoot = GameObject.Find(ImageQualityName);
         if (imageQualityRoot != null)
             BindButton(ResolveNavHitArea(imageQualityRoot), OnImageQualityNavClicked);
+
+        if (aboutRoot != null)
+            BindButton(ResolveNavHitArea(aboutRoot), OnAboutNavClicked);
 
         if (presetSetButton != null)
             BindButton(presetSetButton, OnPresetSetClicked);
@@ -236,6 +301,7 @@ public class SettingsSceneController : MonoBehaviour
         tmp.fontSize = 36;
         tmp.alignment = TextAlignmentOptions.Center;
         tmp.color = Color.white;
+        tmp.raycastTarget = false;
         ApplySettingsLabelFont(tmp);
 
         string capturedId = presetId;
@@ -313,6 +379,7 @@ public class SettingsSceneController : MonoBehaviour
         tmp.fontSize = 34;
         tmp.alignment = TextAlignmentOptions.Center;
         tmp.color = Color.white;
+        tmp.raycastTarget = false;
         if (font != null)
             tmp.font = font;
         else if (TMP_Settings.defaultFontAsset != null)
@@ -386,6 +453,12 @@ public class SettingsSceneController : MonoBehaviour
         ApplyTierVisibility();
     }
 
+    private void OnAboutNavClicked()
+    {
+        aboutTierOpen = !aboutTierOpen;
+        ApplyAboutTierVisibility();
+    }
+
     private void OnPresetSetClicked()
     {
         if (!displayRatioTierOpen)
@@ -433,6 +506,15 @@ public class SettingsSceneController : MonoBehaviour
 
         if (parameterDetailsPanel != null)
             parameterDetailsPanel.transform.SetAsLastSibling();
+
+        ApplyAboutTierVisibility();
+    }
+
+    private void ApplyAboutTierVisibility()
+    {
+        SetActive(aboutDetailBg, aboutTierOpen);
+        if (aboutDetailBg != null && aboutTierOpen)
+            aboutDetailBg.transform.SetAsLastSibling();
     }
 
     private void ApplyParameterDetailsPanelState()
@@ -524,6 +606,106 @@ public class SettingsSceneController : MonoBehaviour
         if (applyFeedbackToastText != null)
             ApplySettingsLabelFont(applyFeedbackToastText);
         SetActive(applyFeedbackToast, false);
+    }
+
+    private void EnsureAboutSaveInfoUi()
+    {
+        if (aboutRoot == null) aboutRoot = GameObject.Find(AboutRootName);
+        if (aboutRoot == null) return;
+
+        if (aboutDetailBg == null)
+            aboutDetailBg = FindDirectChild(aboutRoot.transform, AboutBgChildName);
+        if (aboutDetailBg == null) return;
+
+        aboutSaveDetailsPanel = FindDeepChild(aboutRoot.transform, AboutSaveDetailsName);
+        if (aboutSaveDetailsPanel == null)
+            aboutSaveDetailsPanel = CreateAboutSaveDetailsPanel(aboutDetailBg.transform);
+
+        if (aboutSaveDetailsPanel == null) return;
+
+        BindAboutSaveTextFieldsIfNeeded();
+        RectTransform panelRt = aboutSaveDetailsPanel.GetComponent<RectTransform>();
+        if (panelRt != null)
+            SettingsParameterDetailsLayout.Apply(panelRt, aboutTitleTmp, aboutSubtitleTmp, aboutBodyTmp);
+        ApplyAboutSaveInfoText();
+        aboutSaveDetailsPanel.transform.SetAsLastSibling();
+        SetActive(aboutSaveDetailsPanel, true);
+    }
+
+    private void BindAboutSaveTextFieldsIfNeeded()
+    {
+        if (aboutSaveDetailsPanel == null) return;
+
+        if (aboutTitleTmp == null) aboutTitleTmp = ResolveAboutTmp(ParameterTitleNames);
+        if (aboutSubtitleTmp == null) aboutSubtitleTmp = ResolveAboutTmp(ParameterSubtitleNames);
+        if (aboutBodyTmp == null) aboutBodyTmp = ResolveAboutTmp(ParameterBodyNames);
+
+        if (aboutTitleTmp != null) ApplySettingsLabelFont(aboutTitleTmp);
+        if (aboutSubtitleTmp != null) ApplySettingsLabelFont(aboutSubtitleTmp);
+        if (aboutBodyTmp != null) ApplySettingsLabelFont(aboutBodyTmp);
+    }
+
+    private TextMeshProUGUI ResolveAboutTmp(params string[] objectNames)
+    {
+        if (aboutSaveDetailsPanel == null || objectNames == null) return null;
+        for (int i = 0; i < objectNames.Length; i++)
+        {
+            string objectName = objectNames[i];
+            if (string.IsNullOrWhiteSpace(objectName)) continue;
+            TextMeshProUGUI tmp = FindTmpOnChild(aboutSaveDetailsPanel, objectName);
+            if (tmp != null) return tmp;
+        }
+
+        return null;
+    }
+
+    private GameObject CreateAboutSaveDetailsPanel(Transform parent)
+    {
+        GameObject panel = new GameObject(AboutSaveDetailsName, typeof(RectTransform), typeof(Image));
+        panel.transform.SetParent(parent, false);
+        RectTransform panelRt = panel.GetComponent<RectTransform>();
+        panelRt.anchorMin = Vector2.zero;
+        panelRt.anchorMax = Vector2.one;
+        panelRt.offsetMin = new Vector2(24f, 24f);
+        panelRt.offsetMax = new Vector2(-24f, -24f);
+        Image panelBg = panel.GetComponent<Image>();
+        panelBg.color = new Color(0.08f, 0.1f, 0.14f, 0.88f);
+        panelBg.raycastTarget = false;
+
+        aboutTitleTmp = CreateParameterText(panel.transform, ParameterTitleNames[0], 48f,
+            new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
+            new Vector2(0f, -24f), new Vector2(1200f, 72f), TextAlignmentOptions.Center);
+        aboutSubtitleTmp = CreateParameterText(panel.transform, ParameterSubtitleNames[0], 32f,
+            new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
+            new Vector2(0f, -96f), new Vector2(1200f, 48f), TextAlignmentOptions.Center);
+        aboutBodyTmp = CreateParameterText(panel.transform, ParameterBodyNames[0], 26f,
+            new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0.5f, 1f),
+            Vector2.zero, new Vector2(0f, 400f), TextAlignmentOptions.TopLeft);
+
+        SettingsParameterDetailsLayout.Apply(panelRt, aboutTitleTmp, aboutSubtitleTmp, aboutBodyTmp);
+        return panel;
+    }
+
+    private void ApplyAboutSaveInfoText()
+    {
+        if (aboutTitleTmp != null)
+        {
+            aboutTitleTmp.text = AboutSaveInfoTitle;
+            aboutTitleTmp.ForceMeshUpdate();
+        }
+
+        if (aboutSubtitleTmp != null)
+        {
+            aboutSubtitleTmp.text = AboutSaveInfoSubtitle;
+            aboutSubtitleTmp.ForceMeshUpdate();
+        }
+
+        if (aboutBodyTmp != null)
+        {
+            aboutBodyTmp.gameObject.SetActive(true);
+            aboutBodyTmp.text = AboutSaveInfoBody;
+            SettingsParameterDetailsLayout.RefreshAfterTextChanged(aboutBodyTmp);
+        }
     }
 
     private void BindParameterTextFields()

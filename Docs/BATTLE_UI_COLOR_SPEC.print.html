@@ -1,0 +1,2224 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8"/>
+<title>撠?湔 UI ?閬 ?????v1.2</title>
+<style>
+@page { size: A4; margin: 14mm 12mm; }
+@media print {
+  .no-print { display: none !important; }
+  h2 { page-break-before: always; }
+  h2:first-of-type { page-break-before: avoid; }
+  table { page-break-inside: avoid; }
+}
+body { font-family: "Microsoft JhengHei UI", "Microsoft JhengHei", "PingFang TC", sans-serif; font-size: 9.5pt; line-height: 1.45; color: #222; max-width: 190mm; margin: 0 auto; padding: 8mm; }
+.no-print { background: #f5e6c8; border: 1px solid #8b7355; padding: 10px 14px; margin-bottom: 16px; border-radius: 6px; }
+h1 { font-size: 18pt; border-bottom: 2px solid #9a7a55; padding-bottom: 6px; }
+h2 { font-size: 13pt; color: #5c4033; margin-top: 1.2em; }
+h3 { font-size: 11pt; color: #493f3b; }
+h4 { font-size: 10pt; }
+code { font-family: Consolas, monospace; font-size: 8.5pt; background: #f5f0e8; padding: 0 3px; }
+table.md-table { width: 100%; border-collapse: collapse; margin: 8px 0 12px; font-size: 8pt; }
+table.md-table th, table.md-table td { border: 1px solid #bbb; padding: 3px 5px; text-align: left; vertical-align: top; }
+table.md-table th { background: #e8dfd0; }
+table.md-table tr:nth-child(even) td { background: #faf8f4; }
+blockquote { margin: 8px 0; padding: 6px 12px; border-left: 3px solid #9a7a55; background: #faf6ef; font-size: 9pt; }
+.chart-replacement { background: #f0ebe3; padding: 8px; margin: 10px 0; font-size: 9pt; }
+.chart-replacement table { width: auto; min-width: 40%; }
+p { margin: 0.35em 0; }
+</style>
+</head>
+<body>
+<div class="no-print">
+<strong>?隤芣?</strong>嚗? <kbd>Ctrl+P</kbd>嚗ac嚗?kbd>?</kbd>嚗? ?啗”璈??摮?PDF?? 撱箄降 A4????閮准??strong>??耦</strong>嚗誑?啣銵冽摨嚗??啣??舫??迨??br/>
+靘?瑼?<code>BATTLE_UI_COLOR_SPEC.md</code> v1.2 繚 ?Ｙ???嚗?(Get-Date -Format 'yyyy-MM-dd HH:mm')
+</div>
+<h1>對戰場景 UI 配色規格（Battle Simulation）</h1>
+
+<table class="md-table">
+<thead><tr>
+<th>項目</th>
+<th>內容</th>
+</tr></thead><tbody>
+<tr>
+<td><strong>狀態</strong></td>
+<td>已定案，待程式／場景實作</td>
+</tr>
+<tr>
+<td><strong>場景</strong></td>
+<td><code>BattleSimulation</code>（及 <code>BattleSimulationDebugUI</code> 動態建立之 UI）</td>
+</tr>
+<tr>
+<td><strong>世界觀</strong></td>
+<td>學院魔法訓練廳（練習場對戰）</td>
+</tr>
+<tr>
+<td><strong>方案</strong></td>
+<td>書稿 <strong>#DIABLO</strong>（骨幹）+ <strong>#HEARTY</strong>（紙感）+ <strong>#DANGEROUS</strong>（敵我點綴，淡化）+ <strong>動物森友會 A 克制</strong>（奶油面板、軟木按鈕、鈴錢金強調）</td>
+</tr>
+<tr>
+<td><strong>目標感受</strong></td>
+<td>專注、可讀、偏暖；不過度柔和、不過度緊張</td>
+</tr>
+<tr>
+<td><strong>參考來源</strong></td>
+<td>見 <strong>&#167;2</strong>（三本配色書 + 動物森友會 UI；量化比例與圖表）</td>
+</tr>
+<tr>
+<td><strong>實作範圍</strong></td>
+<td>見 <strong>&#167;1</strong>（玩家向 HUD／面板；<strong>不含</strong>除錯、卡牌區、特效）</td>
+</tr>
+<tr>
+<td><strong>實作參考</strong></td>
+<td><code>Assets/Scripts/BattleSimulationDebugUI*.cs</code>、<code>Assets/Scenes/BattleSimulation.unity</code></td>
+</tr>
+</tbody></table>
+
+
+
+<h2>1. 範圍說明</h2>
+
+<h3>1.1 範圍原則（定案）</h3>
+
+<p>本規格書<strong>只規範「學院練習場」對戰中、玩家會看到的 UI chrome 配色</strong>。下列三大類<strong>一律不列入</strong>本書範圍，實作時<strong>勿依本規格修改</strong>其顏色：</p>
+
+<table class="md-table">
+<thead><tr>
+<th>類別</th>
+<th>定義</th>
+<th>代表內容</th>
+</tr></thead><tbody>
+<tr>
+<td><strong>A. 卡牌區</strong></td>
+<td>手牌、場上、牌背、與卡牌本體貼合的 UI</td>
+<td>見 &#167;1.2</td>
+</tr>
+<tr>
+<td><strong>B. 特效</strong></td>
+<td>非穩態 UI 的動畫、粒子、閃爍、飛行、全螢幕色偏</td>
+<td>見 &#167;1.2</td>
+</tr>
+<tr>
+<td><strong>C. 除錯／批次模擬</strong></td>
+<td>開發者工具、F3 除錯面板、勝率批次模擬進度 UI</td>
+<td>見 &#167;1.2</td>
+</tr>
+</tbody></table>
+
+
+<blockquote>`ShowBattleToast` 等訊息若僅顯示於除錯面板內文字，屬 **C 類**，不在本規格實作範圍。</blockquote>
+
+<h3>1.2 明確排除（不適用本規格）</h3>
+
+<h4>A. 卡牌區</h4>
+
+<table class="md-table">
+<thead><tr>
+<th>排除項目</th>
+<th>說明</th>
+</tr></thead><tbody>
+<tr>
+<td>玩家手牌區</td>
+<td><code>HandArea</code>、<code>BattleSimulationDebugUI.PlayerHand.cs</code>（<code>CardDisplay</code>、底圖、邊框、標籤）</td>
+</tr>
+<tr>
+<td>敵方手牌區</td>
+<td><code>EnemyHandArea</code> 內卡牌視覺</td>
+</tr>
+<tr>
+<td>場地牌區</td>
+<td><code>PlayerFieldArea</code> / <code>EnemyFieldArea</code> / Spell 場區；含場上 HP／傷害色、<code>FieldCards.cs</code> 選取光暈</td>
+</tr>
+<tr>
+<td>卡牌上互動</td>
+<td><code>BattleHandDiscardDrag</code> 長按進度 Fill、拖曳高亮等</td>
+</tr>
+<tr>
+<td>抽牌／出牌幽靈</td>
+<td>飛行中的牌背、暫態 <code>Image</code>（<code>PlayDrawAnimation</code> 等）</td>
+</tr>
+</tbody></table>
+
+
+<h4>B. 特效</h4>
+
+<table class="md-table">
+<thead><tr>
+<th>排除項目</th>
+<th>說明</th>
+</tr></thead><tbody>
+<tr>
+<td>天氣全螢幕 FX</td>
+<td><code>CreateWeatherScreenFx</code> 各層 tint、粒子、船／葉／雨等</td>
+</tr>
+<tr>
+<td>英雄受傷回饋 FX</td>
+<td><code>HeroDamageVignette</code>、<code>HeroDamageMonochromeFlash</code>、HP 閃爍 lerp（<code>HURT_FLASH</code> 僅語意參考，<strong>不實作</strong>）</td>
+</tr>
+<tr>
+<td>法術／攻擊演出</td>
+<td>出牌飛行、燃燒、震動等程式動態色</td>
+</tr>
+<tr>
+<td>場景背景圖</td>
+<td><code>戰鬥背景</code> 等 Sprite 美術本身（非 UI 色票）</td>
+</tr>
+</tbody></table>
+
+
+<h4>C. 除錯／批次模擬</h4>
+
+<table class="md-table">
+<thead><tr>
+<th>排除項目</th>
+<th>說明</th>
+</tr></thead><tbody>
+<tr>
+<td>除錯面板全區</td>
+<td><code>DebugBattlePanel</code>、<code>BattleDebugUIRoot</code>：<code>RoundText</code>、<code>FieldText</code>、<code>DeckText</code>、<code>StateText</code>、<code>BattleResultText</code>（除錯用小字）、<code>CloseDebugPanelButton</code> 等</td>
+</tr>
+<tr>
+<td>除錯專用 Rich Text</td>
+<td><code>fieldText</code> 內 Toast／AI 行（<code>#AAFFCC</code>、<code>#FFD580</code> 等）</td>
+</tr>
+<tr>
+<td>批次勝率模擬</td>
+<td><code>BattleAutoSimPlugin</code> 嵌入進度條、Win-rate 按鈕、批次結果面板</td>
+</tr>
+<tr>
+<td>除錯可見性邏輯</td>
+<td>開啟除錯時的 UI 顯色<strong>維持現狀</strong>，除非另開開發用規格</td>
+</tr>
+</tbody></table>
+
+
+<h3>1.3 本次配色包含（在範圍內）</h3>
+
+<table class="md-table">
+<thead><tr>
+<th>區塊</th>
+<th>元件（摘要）</th>
+</tr></thead><tbody>
+<tr>
+<td>英雄 HUD</td>
+<td><code>EnemyHeroHpHud</code>、<code>PlayerHeroHpHud</code></td>
+</tr>
+<tr>
+<td>回合提示</td>
+<td><code>BattleTurnBanner</code></td>
+</tr>
+<tr>
+<td>主操作</td>
+<td><code>結束回合</code>／<code>QuickEndTurnButton</code>、<code>PauseToggleButton</code>、<code>ActiveWeatherEffectButton</code></td>
+</tr>
+<tr>
+<td>暫停</td>
+<td><code>PausePanel</code>、<code>PauseCard</code>、Resume／Restart／Give up</td>
+</tr>
+<tr>
+<td>牌庫視覺</td>
+<td><code>PlayerDeckPile</code>、<code>EnemyDeckPile</code>（右側堆疊，非卡牌本體）</td>
+</tr>
+<tr>
+<td>開場</td>
+<td><code>OpeningRollPanel</code>、骰子文字（骰子 <strong>點陣</strong> Image 屬 &#167;1.2-B 特效／裝飾，不實作）</td>
+</tr>
+<tr>
+<td>天氣 UI</td>
+<td>預報遮罩／卡片、進行中 <code>ActiveWeatherEffectPanel</code></td>
+</tr>
+<tr>
+<td>棄牌流程 chrome</td>
+<td><code>DiscardDropZone</code>、<code>DiscardPromptPanel</code>（<strong>不含</strong>手牌本體）</td>
+</tr>
+<tr>
+<td>敵棄牌提示面板</td>
+<td><code>EnemyDiscardToast</code> 底與文字（面板 chrome，<strong>不含</strong> mount 內卡牌）</td>
+</tr>
+<tr>
+<td>結算／戰報</td>
+<td><code>EndBattlePanel</code>、對戰歷史對話框（<code>BattleHistoryOverlay</code>）</td>
+</tr>
+<tr>
+<td>場景靜態 UI</td>
+<td><code>結束回合</code> 等已列於 &#167;4 者（待場景清查補齊）</td>
+</tr>
+</tbody></table>
+
+
+<h3>1.4 預設未在「1+A」細談之決策</h3>
+
+<table class="md-table">
+<thead><tr>
+<th>項目</th>
+<th>定案</th>
+</tr></thead><tbody>
+<tr>
+<td><strong>結束回合按鈕</strong></td>
+<td><strong>實心軟木褐</strong>（<code>BTN_PRIMARY</code>），非奶油底描邊式</td>
+</tr>
+<tr>
+<td><strong>森友會程度</strong></td>
+<td><strong>A 克制</strong>：奶油面板 + 軟木主按鈕 + 鈴錢金回合字；我方 HP 用<strong>壓暗綠</strong>而非亮 <code>#88C9A0</code></td>
+</tr>
+</tbody></table>
+
+
+
+<h2>2. 色票參考來源、量化比例與圖表</h2>
+
+<h3>2.1 參考來源總覽</h3>
+
+<p>本規格之色票<strong>不是單一作品複製</strong>，而是以下四類來源加權融合，服務「學院練習場」：暖木背景上可讀、專注、不殺氣。</p>
+
+<table class="md-table">
+<thead><tr>
+<th>來源類別</th>
+<th>書名／作品</th>
+<th>擔當角色</th>
+<th>取用原則</th>
+</tr></thead><tbody>
+<tr>
+<td><strong>A</strong></td>
+<td>配色書 <strong>#DIABLO</strong>（金屬／機械／龐克／頹廢）</td>
+<td>結構骨幹</td>
+<td>深藍灰、古銅、遮罩、牌堆陰影；提供「訓練廳庄重感」</td>
+</tr>
+<tr>
+<td><strong>B</strong></td>
+<td>配色書 <strong>#HEARTY</strong>（爽快／純真／輕鬆／舒暢）</td>
+<td>紙感與清新點綴</td>
+<td>薄荷青標籤、淡金提示；<strong>避免</strong>整片高飽和黃粉</td>
+</tr>
+<tr>
+<td><strong>C</strong></td>
+<td>配色書 <strong>#DANGEROUS</strong>（恐怖／昏暗／危險／陰森）</td>
+<td>敵我與墨色（淡化）</td>
+<td>赭石敵方、深綠語意、軟墨副文；<strong>禁用</strong>血紅 9／12／15 作主色</td>
+</tr>
+<tr>
+<td><strong>D</strong></td>
+<td><strong>動物森友會</strong>（主要參考 *New Horizons* Nook 介面）</td>
+<td>練習場 UX 質感（A 克制）</td>
+<td>奶油面板、巧克力字、軟木按鈕、鈴錢金強調；<strong>不</strong>用亮果綠 <code>#88C9A0</code> 當 HP 主色</td>
+</tr>
+<tr>
+<td><strong>E</strong></td>
+<td><strong>原創／專案混合</strong></td>
+<td>可讀性與銜接</td>
+<td>Hover／Pressed 運算色、除錯深褐底、與大廳一致之 <code>HALL_WINE</code>、α 與對比調整</td>
+</tr>
+</tbody></table>
+
+
+<blockquote>**動物森友會**色值為社群／官方 UI 常見參考（非任天堂資產）；實作僅借用**配色與層級**（紙感、圓潤、低壓迫），不複製介面圖形。</blockquote>
+
+
+<h3>2.2 三本配色書：採用色票對照表</h3>
+
+<p>以下為本規格<strong>有明確對應</strong>之書稿色票（每本 20 色中擇用；未列出者代表本次<strong>刻意不採</strong>）。</p>
+
+<h4>#DIABLO（6 色）</h4>
+
+<table class="md-table">
+<thead><tr>
+<th>書內分類</th>
+<th>色票#</th>
+<th>書稿 RGB</th>
+<th>對應本規格代號</th>
+<th>調整說明</th>
+</tr></thead><tbody>
+<tr>
+<td>金屬</td>
+<td>1</td>
+<td>206, 185, 143</td>
+<td><code>BELL_GOLD</code>／<code>AI_HINT_GOLD</code> 鄰近</td>
+<td>強調色以動森鈴金為準，書稿作暖金參考</td>
+</tr>
+<tr>
+<td>金屬</td>
+<td>3</td>
+<td>13, 30, 53</td>
+<td><code>DECK_TOP</code>（50%）</td>
+<td>與動森天空灰藍混合為 <code>#4A6B7C</code></td>
+</tr>
+<tr>
+<td>機械</td>
+<td>7</td>
+<td>30, 44, 59</td>
+<td><code>BTN_SECONDARY</code>（50%）</td>
+<td>與動森 <code>#7EA9BF</code> 混合為 <code>#5A7A8F</code></td>
+</tr>
+<tr>
+<td>機械</td>
+<td>10</td>
+<td>137, 113, 73</td>
+<td><code>BTN_PRIMARY</code>（40%）</td>
+<td>與動森軟木褐混合為 <code>#9A7A55</code></td>
+</tr>
+<tr>
+<td>龐克</td>
+<td>15</td>
+<td>37, 35, 42</td>
+<td><code>DECK_SHADOW</code></td>
+<td>略提亮為 <code>#2E3542</code> 以配夜景背景</td>
+</tr>
+<tr>
+<td>頹廢</td>
+<td>20</td>
+<td>10, 3, 5</td>
+<td><code>DIM</code>／<code>DIM_HEAVY</code></td>
+<td>僅調整 alpha（50%／66%）</td>
+</tr>
+</tbody></table>
+
+
+<h4>#HEARTY（5 色）</h4>
+
+<table class="md-table">
+<thead><tr>
+<th>書內分類</th>
+<th>色票#</th>
+<th>書稿 RGB</th>
+<th>對應本規格代號</th>
+<th>調整說明</th>
+</tr></thead><tbody>
+<tr>
+<td>爽快</td>
+<td>1</td>
+<td>232, 187, 106</td>
+<td><code>AI_HINT_GOLD</code></td>
+<td>定案 <code>#E8BB6A</code>，略降飽和</td>
+</tr>
+<tr>
+<td>爽快</td>
+<td>2</td>
+<td>244, 219, 214</td>
+<td><code>PANEL_MILK</code>（30%）</td>
+<td>主體改動森對話米白 <code>#FFF8E7</code></td>
+</tr>
+<tr>
+<td>純真</td>
+<td>7</td>
+<td>168, 206, 198</td>
+<td><code>ALLY_LABEL</code>／<code>WeatherRemain</code></td>
+<td><strong>直接採用</strong></td>
+</tr>
+<tr>
+<td>純真</td>
+<td>8</td>
+<td>210, 229, 229</td>
+<td><code>TOAST_MINT</code></td>
+<td>定案 <code>#D2E5E5</code></td>
+</tr>
+<tr>
+<td>舒暢</td>
+<td>19</td>
+<td>234, 215, 198</td>
+<td><code>PANEL_CREAM</code> 鄰近</td>
+<td>動森奶油 <code>#F5E6C8</code> 優先</td>
+</tr>
+</tbody></table>
+
+
+<h4>#DANGEROUS（5 色；皆淡化）</h4>
+
+<table class="md-table">
+<thead><tr>
+<th>書內分類</th>
+<th>色票#</th>
+<th>書稿 RGB</th>
+<th>對應本規格代號</th>
+<th>調整說明</th>
+</tr></thead><tbody>
+<tr>
+<td>危險</td>
+<td>11</td>
+<td>140, 118, 93</td>
+<td><code>FOE_HP</code> 語意參考</td>
+<td>定案偏暖 <code>#B8846E</code>，避免灰褐過冷</td>
+</tr>
+<tr>
+<td>昏暗</td>
+<td>8</td>
+<td>138, 92, 93</td>
+<td><code>TURN_ENEMY</code> 語意參考</td>
+<td>定案改動森珊瑚 <code>#E0AA90</code></td>
+</tr>
+<tr>
+<td>危險</td>
+<td>13</td>
+<td>56, 75, 56</td>
+<td><code>ALLY_HP</code> 語意參考</td>
+<td>定案用動森綠壓暗 <code>#5F8F72</code></td>
+</tr>
+<tr>
+<td>陰森</td>
+<td>19</td>
+<td>73, 63, 59</td>
+<td><code>INK_SOFT</code></td>
+<td><strong>直接採用</strong></td>
+</tr>
+<tr>
+<td>恐怖</td>
+<td>5</td>
+<td>23, 22, 43</td>
+<td><code>DECK_TOP</code> 語意參考</td>
+<td>併入 DIABLO 深藍系</td>
+</tr>
+</tbody></table>
+
+
+<p><strong>刻意不採用之書稿色（例）</strong>：DANGEROUS 鮮紅 12 <code>139,32,54</code>、深血 9 <code>79,19,13</code>；HEARTY 純白 12、高飽和黃 9；DIABLO 頹廢血紅 17——避免「決鬥賽／恐怖副本」語意。</p>
+
+
+<h3>2.3 動物森友會 UI：採用對照表（A 克制）</h3>
+
+<table class="md-table">
+<thead><tr>
+<th>動森 UI 元素</th>
+<th>常見參考 RGB</th>
+<th>Hex</th>
+<th>本規格代號</th>
+<th>克制調整</th>
+</tr></thead><tbody>
+<tr>
+<td>Nook 介面奶油底</td>
+<td>245, 230, 200</td>
+<td><code>#F5E6C8</code></td>
+<td><code>PANEL_CREAM</code></td>
+<td>直接用於面板／暫停卡</td>
+</tr>
+<tr>
+<td>對話框／確認鈕字</td>
+<td>255, 248, 231</td>
+<td><code>#FFF8E7</code></td>
+<td><code>PANEL_MILK</code>、<code>BTN_PRIMARY_TEXT</code></td>
+<td>取代純白按鈕</td>
+</tr>
+<tr>
+<td>巧克力主文字</td>
+<td>92, 64, 51</td>
+<td><code>#5C4033</code></td>
+<td><code>INK</code></td>
+<td>主標題、天氣標題</td>
+</tr>
+<tr>
+<td>軟木／木質按鈕</td>
+<td>166, 124, 82</td>
+<td><code>#A67C52</code></td>
+<td><code>BTN_PRIMARY</code></td>
+<td>與 DIABLO 10 混合為 <code>#9A7A55</code></td>
+</tr>
+<tr>
+<td>鈴錢金強調</td>
+<td>248, 216, 120</td>
+<td><code>#F8D878</code></td>
+<td><code>BELL_GOLD</code>、<code>TURN_PLAYER</code></td>
+<td>回合提示，不用成功綠</td>
+</tr>
+<tr>
+<td>柔和按鈕綠</td>
+<td>136, 201, 160</td>
+<td><code>#88C9A0</code></td>
+<td><code>ALLY_HP</code></td>
+<td><strong>壓暗 30%</strong> → <code>#5F8F72</code>，避免幼幼感</td>
+</tr>
+<tr>
+<td>天空／次要藍</td>
+<td>126, 169, 191</td>
+<td><code>#7EA9BF</code></td>
+<td><code>BTN_SECONDARY</code></td>
+<td>與 DIABLO 7 混合為 <code>#5A7A8F</code></td>
+</tr>
+<tr>
+<td>珊瑚褐（次要暖）</td>
+<td>224, 170, 144</td>
+<td><code>#E0AA90</code></td>
+<td><code>FOE_LABEL</code>、<code>TURN_ENEMY</code></td>
+<td>敵方標籤，非警示紅</td>
+</tr>
+</tbody></table>
+
+
+
+<h3>2.4 量化方法說明</h3>
+
+<table class="md-table">
+<thead><tr>
+<th>項目</th>
+<th>定義</th>
+</tr></thead><tbody>
+<tr>
+<td><strong>統計單位</strong></td>
+<td>&#167;3 之 <strong>38 個 Design Token</strong>（<code>INK</code>～<code>HALL_WINE</code>）</td>
+</tr>
+<tr>
+<td><strong>量化範圍</strong></td>
+<td>僅描述 Token <strong>設計來源</strong>；<strong>不含</strong> &#167;1.2 排除之除錯／卡牌／特效實際像素面積</td>
+</tr>
+<tr>
+<td><strong>僅除錯用 Token</strong></td>
+<td><code>DEBUG_PANEL_BG</code>、<code>INK_MUTED</code>、<code>TOAST_MINT</code>、<code>AI_HINT_GOLD</code> 等保留定義，但標註 <strong>&#167;1.2-C 不實作</strong></td>
+</tr>
+<tr>
+<td><strong>單色加權</strong></td>
+<td>每個 Token 將「創作貢獻」拆成五類比例，加總 <strong>= 100%</strong></td>
+</tr>
+<tr>
+<td><strong>五類</strong></td>
+<td>DIABLO（A）、HEARTY（B）、DANGEROUS（C）、動物森友會（D）、原創／混合（E）</td>
+</tr>
+<tr>
+<td><strong>原創／混合（E）</strong></td>
+<td>含：Hover／Pressed 推算色、專案大廳 <code>HALL_WINE</code>、除錯深褐底、陰影黑、受傷閃爍、多色線性混合、alpha 與對比調校</td>
+</tr>
+<tr>
+<td><strong>彙總</strong></td>
+<td>38 個 Token 之加權平均 → 全案比例（見 &#167;2.5）</td>
+</tr>
+<tr>
+<td><strong>「外部參考」</strong></td>
+<td>A + B + C + D（三本書 + 動森）</td>
+</tr>
+<tr>
+<td><strong>「原創」</strong></td>
+<td>E</td>
+</tr>
+</tbody></table>
+
+
+<p><strong>混合色範例</strong>（歸屬拆分寫入 &#167;2.6）：</p>
+
+<p>- <code>BTN_PRIMARY</code> <code>#9A7A55</code> = 動森軟木 60% + DIABLO 機械 10 號 40%  </p>
+<p>- <code>DECK_TOP</code> <code>#4A6B7C</code> = 動森天空灰藍 50% + DIABLO 金屬 3 號 50%  </p>
+<p>- <code>FOE_HP</code> <code>#B8846E</code> = DANGEROUS 危險 11 號 50% + 動森珊瑚語意 30% + 原創暖化 20%  </p>
+
+
+<h3>2.5 量化結果（加權平均）</h3>
+
+<h4>圓餅圖：五類來源佔比</h4>
+
+<div class="chart-replacement page-break-inside-avoid">
+<p><strong>???啁??.5 ?” ??鈭?靘?雿?</strong></p>
+<table><tr><th>靘?</th><th>%</th></tr>
+<tr><td>DIABLO嚗嚗?/td><td>15</td></tr>
+<tr><td>HEARTY嚗嚗?/td><td>9</td></tr>
+<tr><td>DANGEROUS嚗嚗?/td><td>8</td></tr>
+<tr><td>?璉桀???UI</td><td>38</td></tr>
+<tr><td>?嚗毽??/td><td>30</td></tr></table>
+<p><strong>???啁???典???70% 繚 ? 30%</strong></p>
+<p><strong>???啁??憭批?憛?/strong> ????訾???32 繚 ?ㄝ 38 繚 ? 30</p>
+</div>
+
+<h4>圓餅圖：外部參考 vs 原創</h4>
+
+<div class="chart-replacement page-break-inside-avoid">
+<p><strong>???啁??.5 ?” ??鈭?靘?雿?</strong></p>
+<table><tr><th>靘?</th><th>%</th></tr>
+<tr><td>DIABLO嚗嚗?/td><td>15</td></tr>
+<tr><td>HEARTY嚗嚗?/td><td>9</td></tr>
+<tr><td>DANGEROUS嚗嚗?/td><td>8</td></tr>
+<tr><td>?璉桀???UI</td><td>38</td></tr>
+<tr><td>?嚗毽??/td><td>30</td></tr></table>
+<p><strong>???啁???典???70% 繚 ? 30%</strong></p>
+<p><strong>???啁??憭批?憛?/strong> ????訾???32 繚 ?ㄝ 38 繚 ? 30</p>
+</div>
+
+<table class="md-table">
+<thead><tr>
+<th>彙總類別</th>
+<th>佔比</th>
+<th>說明</th>
+</tr></thead><tbody>
+<tr>
+<td><strong>三本書合計</strong>（A+B+C）</td>
+<td><strong>32%</strong></td>
+<td>結構、紙感、敵我語意之「書法」基礎</td>
+</tr>
+<tr>
+<td><strong>動物森友會 UI</strong>（D）</td>
+<td><strong>38%</strong></td>
+<td>練習場性格主來源（A 克制後）</td>
+</tr>
+<tr>
+<td><strong>原創／混合</strong>（E）</td>
+<td><strong>30%</strong></td>
+<td>可讀性、狀態色、專案銜接、運算色</td>
+</tr>
+<tr>
+<td><strong>外部參考合計</strong>（A+B+C+D）</td>
+<td><strong>70%</strong></td>
+<td>皆有可追蹤之書稿或動森對照</td>
+</tr>
+<tr>
+<td><strong>原創合計</strong>（E）</td>
+<td><strong>30%</strong></td>
+<td>仍受學院場景與 WCAG 可讀性約束</td>
+</tr>
+</tbody></table>
+
+
+<h4>長條圖：五類來源佔比</h4>
+
+<div class="chart-replacement page-break-inside-avoid">
+<p><strong>???啁??.5 ?” ??鈭?靘?雿?</strong></p>
+<table><tr><th>靘?</th><th>%</th></tr>
+<tr><td>DIABLO嚗嚗?/td><td>15</td></tr>
+<tr><td>HEARTY嚗嚗?/td><td>9</td></tr>
+<tr><td>DANGEROUS嚗嚗?/td><td>8</td></tr>
+<tr><td>?璉桀???UI</td><td>38</td></tr>
+<tr><td>?嚗毽??/td><td>30</td></tr></table>
+<p><strong>???啁???典???70% 繚 ? 30%</strong></p>
+<p><strong>???啁??憭批?憛?/strong> ????訾???32 繚 ?ㄝ 38 繚 ? 30</p>
+</div>
+
+<h4>長條圖：三本書 vs 動森 vs 原創（三欄）</h4>
+
+<div class="chart-replacement page-break-inside-avoid">
+<p><strong>???啁??.5 ?” ??鈭?靘?雿?</strong></p>
+<table><tr><th>靘?</th><th>%</th></tr>
+<tr><td>DIABLO嚗嚗?/td><td>15</td></tr>
+<tr><td>HEARTY嚗嚗?/td><td>9</td></tr>
+<tr><td>DANGEROUS嚗嚗?/td><td>8</td></tr>
+<tr><td>?璉桀???UI</td><td>38</td></tr>
+<tr><td>?嚗毽??/td><td>30</td></tr></table>
+<p><strong>???啁???典???70% 繚 ? 30%</strong></p>
+<p><strong>???啁??憭批?憛?/strong> ????訾???32 繚 ?ㄝ 38 繚 ? 30</p>
+</div>
+
+<blockquote>若 Markdown 預覽不支援 `xychart-beta`，請以 **§2.5 表格** 與 **圓餅圖** 為準；或於 [Mermaid Live Editor](https://mermaid.live) 貼上程式碼檢視。</blockquote>
+
+
+<h3>2.6 各 Design Token 來源加權明細表</h3>
+
+<table class="md-table">
+<thead><tr>
+<th>代號</th>
+<th>DIABLO</th>
+<th>HEARTY</th>
+<th>DANGEROUS</th>
+<th>動森</th>
+<th>原創／混合</th>
+<th>主要書稿／動森錨點</th>
+</tr></thead><tbody>
+<tr>
+<td>INK</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td>100%</td>
+<td>—</td>
+<td>巧克力字</td>
+</tr>
+<tr>
+<td>INK_SOFT</td>
+<td>—</td>
+<td>—</td>
+<td>100%</td>
+<td>—</td>
+<td>—</td>
+<td>陰森 19</td>
+</tr>
+<tr>
+<td>INK_MUTED</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td>100%</td>
+<td>除錯 meta</td>
+</tr>
+<tr>
+<td>PANEL_CREAM</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td>100%</td>
+<td>—</td>
+<td>Nook 奶油</td>
+</tr>
+<tr>
+<td>PANEL_MILK</td>
+<td>—</td>
+<td>30%</td>
+<td>—</td>
+<td>70%</td>
+<td>—</td>
+<td>動森米白 + 爽快 2</td>
+</tr>
+<tr>
+<td>PANEL_EDGE</td>
+<td>30%</td>
+<td>—</td>
+<td>20%</td>
+<td>30%</td>
+<td>20%</td>
+<td>混合描邊</td>
+</tr>
+<tr>
+<td>BTN_PRIMARY</td>
+<td>40%</td>
+<td>—</td>
+<td>—</td>
+<td>60%</td>
+<td>—</td>
+<td>機械 10 + 軟木褐</td>
+</tr>
+<tr>
+<td>BTN_PRIMARY_H</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td>20%</td>
+<td>80%</td>
+<td>提亮運算</td>
+</tr>
+<tr>
+<td>BTN_PRIMARY_P</td>
+<td>70%</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td>30%</td>
+<td>機械 10 加深</td>
+</tr>
+<tr>
+<td>BTN_PRIMARY_TEXT</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td>100%</td>
+<td>—</td>
+<td>對話米白</td>
+</tr>
+<tr>
+<td>BTN_SECONDARY</td>
+<td>50%</td>
+<td>—</td>
+<td>—</td>
+<td>50%</td>
+<td>—</td>
+<td>機械 7 + 天空藍</td>
+</tr>
+<tr>
+<td>BTN_SECONDARY_H</td>
+<td>15%</td>
+<td>—</td>
+<td>—</td>
+<td>15%</td>
+<td>70%</td>
+<td>Hover 運算</td>
+</tr>
+<tr>
+<td>BTN_SECONDARY_P</td>
+<td>30%</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td>70%</td>
+<td>Pressed 運算</td>
+</tr>
+<tr>
+<td>BTN_SECONDARY_TEXT</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td>40%</td>
+<td>60%</td>
+<td>冷色淺字</td>
+</tr>
+<tr>
+<td>BTN_DISABLED_BG</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td>100%</td>
+<td>—</td>
+<td>同 PANEL_CREAM</td>
+</tr>
+<tr>
+<td>BTN_DISABLED_TEXT</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td>100%</td>
+<td>同 INK_MUTED</td>
+</tr>
+<tr>
+<td>ALLY_HP</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td>80%</td>
+<td>20%</td>
+<td>按鈕綠壓暗</td>
+</tr>
+<tr>
+<td>ALLY_LABEL</td>
+<td>—</td>
+<td>100%</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td>純真 7</td>
+</tr>
+<tr>
+<td>FOE_HP</td>
+<td>—</td>
+<td>—</td>
+<td>50%</td>
+<td>30%</td>
+<td>20%</td>
+<td>危險 11 暖化</td>
+</tr>
+<tr>
+<td>FOE_LABEL</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td>100%</td>
+<td>—</td>
+<td>珊瑚褐</td>
+</tr>
+<tr>
+<td>OUTLINE_HP</td>
+<td>—</td>
+<td>—</td>
+<td>40%</td>
+<td>—</td>
+<td>60%</td>
+<td>陰森 19 + α</td>
+</tr>
+<tr>
+<td>TURN_BG</td>
+<td>—</td>
+<td>—</td>
+<td>20%</td>
+<td>—</td>
+<td>80%</td>
+<td>暖灰褐自訂</td>
+</tr>
+<tr>
+<td>TURN_PLAYER</td>
+<td>—</td>
+<td>15%</td>
+<td>—</td>
+<td>85%</td>
+<td>—</td>
+<td>鈴金 + 爽快 1</td>
+</tr>
+<tr>
+<td>TURN_ENEMY</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td>100%</td>
+<td>—</td>
+<td>珊瑚褐</td>
+</tr>
+<tr>
+<td>TURN_BANNER_TEXT</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td>100%</td>
+<td>—</td>
+<td>對話米白</td>
+</tr>
+<tr>
+<td>BELL_GOLD</td>
+<td>—</td>
+<td>15%</td>
+<td>—</td>
+<td>85%</td>
+<td>—</td>
+<td>鈴金</td>
+</tr>
+<tr>
+<td>DECK_TOP</td>
+<td>50%</td>
+<td>—</td>
+<td>—</td>
+<td>50%</td>
+<td>—</td>
+<td>金屬 3 + 天空藍</td>
+</tr>
+<tr>
+<td>DECK_SHADOW</td>
+<td>90%</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td>10%</td>
+<td>龐克 15</td>
+</tr>
+<tr>
+<td>DIM</td>
+<td>100%</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td>頹廢 20（α 自訂）</td>
+</tr>
+<tr>
+<td>DIM_HEAVY</td>
+<td>85%</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td>15%</td>
+<td>頹廢 20（α 自訂）</td>
+</tr>
+<tr>
+<td>DEBUG_PANEL_BG</td>
+<td>—</td>
+<td>—</td>
+<td>30%</td>
+<td>—</td>
+<td>70%</td>
+<td>除錯深褐</td>
+</tr>
+<tr>
+<td>SHADOW_UI</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td>100%</td>
+<td>通用陰影</td>
+</tr>
+<tr>
+<td>TOAST_MINT</td>
+<td>—</td>
+<td>90%</td>
+<td>—</td>
+<td>10%</td>
+<td>—</td>
+<td>純真 8</td>
+</tr>
+<tr>
+<td>AI_HINT_GOLD</td>
+<td>—</td>
+<td>85%</td>
+<td>—</td>
+<td>15%</td>
+<td>—</td>
+<td>爽快 1</td>
+</tr>
+<tr>
+<td>WARN_GOLD</td>
+<td>—</td>
+<td>10%</td>
+<td>—</td>
+<td>90%</td>
+<td>—</td>
+<td>鈴金</td>
+</tr>
+<tr>
+<td>HURT_FLASH</td>
+<td>—</td>
+<td>—</td>
+<td>50%</td>
+<td>—</td>
+<td>50%</td>
+<td>昏暗 8 語意 + 自訂</td>
+</tr>
+<tr>
+<td>VIGNETTE</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td>100%</td>
+<td>受傷暗角</td>
+</tr>
+<tr>
+<td>HALL_WINE</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+<td>100%</td>
+<td>專案大廳 <code>SceneLoader</code></td>
+</tr>
+</tbody></table>
+
+
+<p><strong>加權平均驗算</strong>（38 Token）：DIABLO <strong>15%</strong> &#183; HEARTY <strong>9%</strong> &#183; DANGEROUS <strong>8%</strong> &#183; 動森 <strong>38%</strong> &#183; 原創 <strong>30%</strong>（合計 100%）。</p>
+
+
+<h2>3. 色票代號定義（Design Tokens）</h2>
+
+<h3>3.1 主色票一覽</h3>
+
+<table class="md-table">
+<thead><tr>
+<th>代號</th>
+<th>名稱</th>
+<th>Hex</th>
+<th>RGB</th>
+<th>Unity `Color` (R,G,B,A)</th>
+<th>來源／語意</th>
+</tr></thead><tbody>
+<tr>
+<td><strong>INK</strong></td>
+<td>巧克力字</td>
+<td><code>#5C4033</code></td>
+<td>92, 64, 51</td>
+<td><code>(0.361, 0.251, 0.200, 1)</code></td>
+<td>森友會主文字</td>
+</tr>
+<tr>
+<td><strong>INK_SOFT</strong></td>
+<td>軟墨字</td>
+<td><code>#493F3B</code></td>
+<td>73, 63, 59</td>
+<td><code>(0.286, 0.247, 0.231, 1)</code></td>
+<td>書 DANGEROUS 陰森 19、副文</td>
+</tr>
+<tr>
+<td><strong>INK_MUTED</strong></td>
+<td>淡墨字</td>
+<td><code>#6B5F58</code></td>
+<td>107, 95, 88</td>
+<td><code>(0.420, 0.373, 0.345, 1)</code></td>
+<td>除錯 meta；<strong>&#167;1.2-C 不實作</strong></td>
+</tr>
+<tr>
+<td><strong>PANEL_CREAM</strong></td>
+<td>Nook 奶油面板</td>
+<td><code>#F5E6C8</code></td>
+<td>245, 230, 200</td>
+<td><code>(0.961, 0.902, 0.784, 1)</code></td>
+<td>森友會面板底</td>
+</tr>
+<tr>
+<td><strong>PANEL_MILK</strong></td>
+<td>對話框米白</td>
+<td><code>#FFF8E7</code></td>
+<td>255, 248, 231</td>
+<td><code>(1.000, 0.973, 0.906, 1)</code></td>
+<td>天氣卡、開場骰子卡（可選更亮面板）</td>
+</tr>
+<tr>
+<td><strong>PANEL_EDGE</strong></td>
+<td>軟木描邊</td>
+<td><code>#8B7355</code></td>
+<td>139, 115, 85</td>
+<td><code>(0.545, 0.451, 0.333, 1)</code></td>
+<td>Outline／分隔線（常用 <strong>40% alpha</strong>）</td>
+</tr>
+<tr>
+<td><strong>BTN_PRIMARY</strong></td>
+<td>軟木褐主按鈕</td>
+<td><code>#9A7A55</code></td>
+<td>154, 122, 85</td>
+<td><code>(0.604, 0.478, 0.333, 1)</code></td>
+<td>森軟木 + DIABLO 機械 10</td>
+</tr>
+<tr>
+<td><strong>BTN_PRIMARY_H</strong></td>
+<td>主按鈕 Hover</td>
+<td><code>#AE8E66</code></td>
+<td>174, 142, 102</td>
+<td><code>(0.682, 0.557, 0.400, 1)</code></td>
+<td>略提亮</td>
+</tr>
+<tr>
+<td><strong>BTN_PRIMARY_P</strong></td>
+<td>主按鈕 Pressed</td>
+<td><code>#6F5A3A</code></td>
+<td>111, 90, 58</td>
+<td><code>(0.435, 0.353, 0.227, 1)</code></td>
+<td>DIABLO 加深</td>
+</tr>
+<tr>
+<td><strong>BTN_PRIMARY_TEXT</strong></td>
+<td>主按鈕字</td>
+<td><code>#FFF8E7</code></td>
+<td>255, 248, 231</td>
+<td><code>(1.000, 0.973, 0.906, 1)</code></td>
+<td>森對話框米白</td>
+</tr>
+<tr>
+<td><strong>BTN_SECONDARY</strong></td>
+<td>天空灰藍次按鈕</td>
+<td><code>#5A7A8F</code></td>
+<td>90, 122, 143</td>
+<td><code>(0.353, 0.478, 0.561, 1)</code></td>
+<td>森 + DIABLO 7</td>
+</tr>
+<tr>
+<td><strong>BTN_SECONDARY_H</strong></td>
+<td>次按鈕 Hover</td>
+<td><code>#6B8FA3</code></td>
+<td>107, 143, 163</td>
+<td><code>(0.420, 0.561, 0.639, 1)</code></td>
+<td></td>
+</tr>
+<tr>
+<td><strong>BTN_SECONDARY_P</strong></td>
+<td>次按鈕 Pressed</td>
+<td><code>#465F6F</code></td>
+<td>70, 95, 111</td>
+<td><code>(0.275, 0.373, 0.435, 1)</code></td>
+<td></td>
+</tr>
+<tr>
+<td><strong>BTN_SECONDARY_TEXT</strong></td>
+<td>次按鈕字</td>
+<td><code>#E8F2F6</code></td>
+<td>232, 242, 246</td>
+<td><code>(0.910, 0.949, 0.965, 1)</code></td>
+<td></td>
+</tr>
+<tr>
+<td><strong>BTN_DISABLED_BG</strong></td>
+<td>停用按鈕底</td>
+<td><code>#F5E6C8</code></td>
+<td>245, 230, 200</td>
+<td><code>(0.961, 0.902, 0.784, 0.5)</code></td>
+<td>alpha <strong>0.5</strong></td>
+</tr>
+<tr>
+<td><strong>BTN_DISABLED_TEXT</strong></td>
+<td>停用按鈕字</td>
+<td><code>#6B5F58</code></td>
+<td>107, 95, 88</td>
+<td><code>(0.420, 0.373, 0.345, 0.7)</code></td>
+<td>alpha <strong>0.7</strong></td>
+</tr>
+<tr>
+<td><strong>ALLY_HP</strong></td>
+<td>我方 HP 數字</td>
+<td><code>#5F8F72</code></td>
+<td>95, 143, 114</td>
+<td><code>(0.373, 0.561, 0.447, 1)</code></td>
+<td>森綠壓暗（非 <code>#88C9A0</code>）</td>
+</tr>
+<tr>
+<td><strong>ALLY_LABEL</strong></td>
+<td>我方標籤</td>
+<td><code>#A8CEC6</code></td>
+<td>168, 206, 198</td>
+<td><code>(0.659, 0.808, 0.776, 1)</code></td>
+<td>森／HEARTY 7</td>
+</tr>
+<tr>
+<td><strong>FOE_HP</strong></td>
+<td>敵方 HP 數字</td>
+<td><code>#B8846E</code></td>
+<td>184, 132, 110</td>
+<td><code>(0.722, 0.518, 0.431, 1)</code></td>
+<td>參考 DANGEROUS 11 + 暖化（&#167;2.2）</td>
+</tr>
+<tr>
+<td><strong>FOE_LABEL</strong></td>
+<td>敵方標籤</td>
+<td><code>#E0AA90</code></td>
+<td>224, 170, 144</td>
+<td><code>(0.878, 0.667, 0.565, 1)</code></td>
+<td>森珊瑚褐</td>
+</tr>
+<tr>
+<td><strong>OUTLINE_HP</strong></td>
+<td>HP 描邊</td>
+<td><code>#382624</code></td>
+<td>56, 38, 36</td>
+<td><code>(0.220, 0.149, 0.141, 0.55)</code></td>
+<td>alpha <strong>0.55</strong>，取代純黑 92%</td>
+</tr>
+<tr>
+<td><strong>TURN_BG</strong></td>
+<td>回合橫幅底</td>
+<td><code>#3D3835</code></td>
+<td>61, 56, 53</td>
+<td><code>(0.239, 0.220, 0.208, 0.85)</code></td>
+<td>alpha <strong>0.85</strong></td>
+</tr>
+<tr>
+<td><strong>TURN_PLAYER</strong></td>
+<td>你的回合字</td>
+<td><code>#F8D878</code></td>
+<td>248, 216, 120</td>
+<td><code>(0.973, 0.847, 0.471, 1)</code></td>
+<td>森鈴錢金</td>
+</tr>
+<tr>
+<td><strong>TURN_ENEMY</strong></td>
+<td>敵方操作字</td>
+<td><code>#E0AA90</code></td>
+<td>224, 170, 144</td>
+<td><code>(0.878, 0.667, 0.565, 1)</code></td>
+<td>同 FOE_LABEL</td>
+</tr>
+<tr>
+<td><strong>TURN_BANNER_TEXT</strong></td>
+<td>橫幅預設字</td>
+<td><code>#FFF8E7</code></td>
+<td>255, 248, 231</td>
+<td><code>(1.000, 0.973, 0.906, 1)</code></td>
+<td>橫幅靜態底字（若需）</td>
+</tr>
+<tr>
+<td><strong>BELL_GOLD</strong></td>
+<td>鈴錢金強調</td>
+<td><code>#F8D878</code></td>
+<td>248, 216, 120</td>
+<td><code>(0.973, 0.847, 0.471, 1)</code></td>
+<td>回合橫幅、開場先手（&#167;1.3）</td>
+</tr>
+<tr>
+<td><strong>DECK_TOP</strong></td>
+<td>牌堆上層</td>
+<td><code>#4A6B7C</code></td>
+<td>74, 107, 124</td>
+<td><code>(0.290, 0.420, 0.486, 1)</code></td>
+<td>森藍灰 + DIABLO 3</td>
+</tr>
+<tr>
+<td><strong>DECK_SHADOW</strong></td>
+<td>牌堆下層</td>
+<td><code>#2E3542</code></td>
+<td>46, 53, 66</td>
+<td><code>(0.180, 0.208, 0.259, 0.92)</code></td>
+<td>書 DIABLO 龐克 15</td>
+</tr>
+<tr>
+<td><strong>DIM</strong></td>
+<td>全螢幕遮罩</td>
+<td><code>#0A0305</code></td>
+<td>10, 3, 5</td>
+<td><code>(0.039, 0.012, 0.020, 0.50)</code></td>
+<td>alpha <strong>0.50</strong>；暫停／天氣預報</td>
+</tr>
+<tr>
+<td><strong>DIM_HEAVY</strong></td>
+<td>深遮罩</td>
+<td><code>#0A0305</code></td>
+<td>10, 3, 5</td>
+<td><code>(0.039, 0.012, 0.020, 0.66)</code></td>
+<td>結算凍結、戰報對話</td>
+</tr>
+<tr>
+<td><strong>DEBUG_PANEL_BG</strong></td>
+<td>除錯面板底</td>
+<td><code>#322C26</code></td>
+<td>50, 44, 38</td>
+<td><code>(0.196, 0.173, 0.149, 0.85)</code></td>
+<td><strong>&#167;1.2-C 不實作</strong>（保留定義供日後）</td>
+</tr>
+<tr>
+<td><strong>SHADOW_UI</strong></td>
+<td>UI 陰影</td>
+<td><code>#000000</code></td>
+<td>0, 0, 0</td>
+<td><code>(0, 0, 0, 0.45)</code></td>
+<td>Shadow effectColor</td>
+</tr>
+<tr>
+<td><strong>TOAST_MINT</strong></td>
+<td>Toast／提示</td>
+<td><code>#D2E5E5</code></td>
+<td>210, 229, 229</td>
+<td><code>(0.824, 0.898, 0.898, 1)</code></td>
+<td><strong>&#167;1.2-C 不實作</strong></td>
+</tr>
+<tr>
+<td><strong>AI_HINT_GOLD</strong></td>
+<td>AI 量化提示</td>
+<td><code>#E8BB6A</code></td>
+<td>232, 187, 106</td>
+<td><code>(0.910, 0.733, 0.416, 1)</code></td>
+<td><strong>&#167;1.2-C 不實作</strong></td>
+</tr>
+<tr>
+<td><strong>WARN_GOLD</strong></td>
+<td>鈴錢金強調</td>
+<td><code>#F8D878</code></td>
+<td>248, 216, 120</td>
+<td><code>(0.973, 0.847, 0.471, 1)</code></td>
+<td>開場先手、戰報標題強調（非除錯 <code>BattleResultText</code>）</td>
+</tr>
+<tr>
+<td><strong>HURT_FLASH</strong></td>
+<td>受傷閃爍</td>
+<td><code>#C07060</code></td>
+<td>192, 112, 96</td>
+<td><code>(0.753, 0.439, 0.376, 1)</code></td>
+<td><strong>&#167;1.2-B 不實作</strong>（語意參考）</td>
+</tr>
+<tr>
+<td><strong>VIGNETTE</strong></td>
+<td>受傷暗角</td>
+<td><code>#000000</code></td>
+<td>0, 0, 0</td>
+<td><code>(0, 0, 0, 0.75)</code></td>
+<td><strong>&#167;1.2-B 不實作</strong></td>
+</tr>
+<tr>
+<td><strong>HALL_WINE</strong></td>
+<td>大廳酒紅按鈕</td>
+<td><code>#714847</code></td>
+<td>113, 72, 71</td>
+<td><code>(0.443, 0.282, 0.247, 0.96)</code></td>
+<td>結算關閉、戰報（與 Buildbeck 一致）</td>
+</tr>
+</tbody></table>
+
+
+<h3>3.2 TMP Rich Text 用 Hex（程式內嵌字串）</h3>
+
+<p><strong>&#167;1 範圍內</strong>（實作）：</p>
+
+<table class="md-table">
+<thead><tr>
+<th>用途</th>
+<th>Rich Text</th>
+</tr></thead><tbody>
+<tr>
+<td>我方英雄標籤（<code>RefreshHeroHpHud</code>）</td>
+<td><code>&lt;color=#A8CEC6&gt;我方英雄&lt;/color&gt;</code></td>
+</tr>
+<tr>
+<td>敵方英雄標籤</td>
+<td><code>&lt;color=#E0AA90&gt;敵方英雄&lt;/color&gt;</code></td>
+</tr>
+</tbody></table>
+
+
+<p><strong>&#167;1.2 範圍外</strong>（本規格不修改）：<code>fieldText</code> Toast／AI 行等除錯用色。</p>
+
+<h3>3.3 面板底色選用（`PANEL_CREAM` vs `PANEL_MILK`）</h3>
+
+<table class="md-table">
+<thead><tr>
+<th>用途</th>
+<th>定案 Token</th>
+</tr></thead><tbody>
+<tr>
+<td>大張說明／預報卡、戰報對話、開場骰子面板</td>
+<td><code>PANEL_MILK</code></td>
+</tr>
+<tr>
+<td>暫停卡、結算 <code>EndBattlePanel</code>、棄牌提示、進行中天氣側欄</td>
+<td><code>PANEL_CREAM</code></td>
+</tr>
+</tbody></table>
+
+
+
+<h2>4. UI 元件配色總表（實作對照）</h2>
+
+<blockquote>**僅列 §1.3 範圍內元件**（共 **63** 列）。除錯／卡牌／特效見 §1.2，不在此表實作。  </blockquote>
+<blockquote>**欄位**：元件 → 屬性 → 色票（§3）→ Hex  </blockquote>
+
+<table class="md-table">
+<thead><tr>
+<th>#</th>
+<th>分類</th>
+<th>元件</th>
+<th>屬性</th>
+<th>色票</th>
+<th>Hex</th>
+<th>備註</th>
+</tr></thead><tbody>
+<tr>
+<td><strong>英雄 HP HUD</strong></td>
+</tr>
+<tr>
+<td>1</td>
+<td>英雄</td>
+<td><code>EnemyHeroHpHud</code></td>
+<td>TMP 主體（數字 <code>&lt;b&gt;</code>）</td>
+<td>FOE_HP</td>
+<td><code>#B8846E</code></td>
+<td><code>enemyHeroHpText.color</code></td>
+</tr>
+<tr>
+<td>2</td>
+<td>英雄</td>
+<td><code>EnemyHeroHpHud</code></td>
+<td>Rich Text「敵方英雄」</td>
+<td>FOE_LABEL</td>
+<td><code>#E0AA90</code></td>
+<td>見 &#167;3.2</td>
+</tr>
+<tr>
+<td>3</td>
+<td>英雄</td>
+<td><code>EnemyHeroHpHud</code></td>
+<td>Outline</td>
+<td>OUTLINE_HP</td>
+<td><code>#382624</code> @55%</td>
+<td><code>effectDistance</code> 建議 <code>(2, -2)</code></td>
+</tr>
+<tr>
+<td>4</td>
+<td>英雄</td>
+<td><code>PlayerHeroHpHud</code></td>
+<td>TMP 主體（數字）</td>
+<td>ALLY_HP</td>
+<td><code>#5F8F72</code></td>
+<td><code>playerHeroHpText.color</code></td>
+</tr>
+<tr>
+<td>5</td>
+<td>英雄</td>
+<td><code>PlayerHeroHpHud</code></td>
+<td>Rich Text「我方英雄」</td>
+<td>ALLY_LABEL</td>
+<td><code>#A8CEC6</code></td>
+<td></td>
+</tr>
+<tr>
+<td>6</td>
+<td>英雄</td>
+<td><code>PlayerHeroHpHud</code></td>
+<td>Outline</td>
+<td>OUTLINE_HP</td>
+<td><code>#382624</code> @55%</td>
+<td></td>
+</tr>
+<tr>
+<td><strong>回合橫幅</strong></td>
+</tr>
+<tr>
+<td>7</td>
+<td>回合</td>
+<td><code>BattleTurnBanner</code></td>
+<td>Image 底</td>
+<td>TURN_BG</td>
+<td><code>#3D3835</code> @85%</td>
+<td><code>bg.color</code></td>
+</tr>
+<tr>
+<td>8</td>
+<td>回合</td>
+<td><code>BattleTurnBanner</code></td>
+<td>Shadow</td>
+<td>SHADOW_UI</td>
+<td><code>#000</code> @45%</td>
+<td></td>
+</tr>
+<tr>
+<td>9</td>
+<td>回合</td>
+<td><code>TurnBannerText</code></td>
+<td>預設／靜態</td>
+<td>TURN_BANNER_TEXT</td>
+<td><code>#FFF8E7</code></td>
+<td>建立時</td>
+</tr>
+<tr>
+<td>10</td>
+<td>回合</td>
+<td><code>TurnBannerText</code></td>
+<td>你的回合</td>
+<td>TURN_PLAYER</td>
+<td><code>#F8D878</code></td>
+<td><code>ShowTurnBanner(PlayerTurn)</code></td>
+</tr>
+<tr>
+<td>11</td>
+<td>回合</td>
+<td><code>TurnBannerText</code></td>
+<td>敵方操作中</td>
+<td>TURN_ENEMY</td>
+<td><code>#E0AA90</code></td>
+<td><code>ShowTurnBanner(EnemyTurn)</code></td>
+</tr>
+<tr>
+<td>12</td>
+<td>回合</td>
+<td><code>TurnBannerText</code></td>
+<td>Outline</td>
+<td>OUTLINE_HP</td>
+<td><code>#382624</code> @55%</td>
+<td></td>
+</tr>
+<tr>
+<td><strong>主操作按鈕</strong></td>
+</tr>
+<tr>
+<td>13</td>
+<td>按鈕</td>
+<td><code>結束回合</code>（場景）</td>
+<td>Image 底</td>
+<td>BTN_PRIMARY</td>
+<td><code>#9A7A55</code></td>
+<td><code>BattleSimulation.unity</code> + <code>sceneEndTurnButton</code></td>
+</tr>
+<tr>
+<td>14</td>
+<td>按鈕</td>
+<td><code>結束回合</code></td>
+<td>Label TMP/Text</td>
+<td>BTN_PRIMARY_TEXT</td>
+<td><code>#FFF8E7</code></td>
+<td>子物件 Label</td>
+</tr>
+<tr>
+<td>15</td>
+<td>按鈕</td>
+<td><code>結束回合</code></td>
+<td>ColorBlock Normal</td>
+<td>BTN_PRIMARY</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>16</td>
+<td>按鈕</td>
+<td><code>結束回合</code></td>
+<td>Highlighted</td>
+<td>BTN_PRIMARY_H</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>17</td>
+<td>按鈕</td>
+<td><code>結束回合</code></td>
+<td>Pressed</td>
+<td>BTN_PRIMARY_P</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>18</td>
+<td>按鈕</td>
+<td><code>結束回合</code></td>
+<td>Disabled</td>
+<td>BTN_DISABLED_BG / TEXT</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>19</td>
+<td>按鈕</td>
+<td><code>QuickEndTurnButton</code>（fallback）</td>
+<td>同 #13–18</td>
+<td>同上</td>
+<td></td>
+<td><code>CreateButton</code> 若場景無按鈕</td>
+</tr>
+<tr>
+<td>20</td>
+<td>按鈕</td>
+<td><code>PauseToggleButton</code></td>
+<td>Image 底</td>
+<td>BTN_SECONDARY</td>
+<td><code>#5A7A8F</code></td>
+<td><code>CreatePauseUI</code></td>
+</tr>
+<tr>
+<td>21</td>
+<td>按鈕</td>
+<td><code>PauseToggleButton</code></td>
+<td>Label</td>
+<td>BTN_SECONDARY_TEXT</td>
+<td><code>#E8F2F6</code></td>
+<td>Legacy <code>Text</code></td>
+</tr>
+<tr>
+<td>22</td>
+<td>按鈕</td>
+<td><code>ActiveWeatherEffectButton</code></td>
+<td>同 #20–21</td>
+<td>BTN_SECONDARY</td>
+<td></td>
+<td>顯示時；TMP 標籤同色</td>
+</tr>
+<tr>
+<td>23</td>
+<td>按鈕</td>
+<td><code>CreateButton</code>（範圍內）</td>
+<td>依 name 分流</td>
+<td>主／次</td>
+<td></td>
+<td><code>EndTurn</code>／<code>結束</code>／<code>Resume</code>→Primary；Pause／場地效果→Secondary</td>
+</tr>
+<tr>
+<td><strong>暫停選單</strong></td>
+</tr>
+<tr>
+<td>24</td>
+<td>暫停</td>
+<td><code>PausePanel</code></td>
+<td>Image 遮罩</td>
+<td>DIM</td>
+<td><code>#0A0305</code> @50%</td>
+<td></td>
+</tr>
+<tr>
+<td>25</td>
+<td>暫停</td>
+<td><code>PauseCard</code></td>
+<td>Image 底</td>
+<td>PANEL_CREAM</td>
+<td><code>#F5E6C8</code> @96%</td>
+<td></td>
+</tr>
+<tr>
+<td>26</td>
+<td>暫停</td>
+<td><code>PauseTitle</code></td>
+<td>TMP</td>
+<td>INK</td>
+<td><code>#5C4033</code></td>
+<td></td>
+</tr>
+<tr>
+<td>27</td>
+<td>暫停</td>
+<td><code>ResumeButton</code></td>
+<td>Image</td>
+<td>BTN_PRIMARY</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>28</td>
+<td>暫停</td>
+<td><code>ResumeButton</code></td>
+<td>Label</td>
+<td>BTN_PRIMARY_TEXT</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>29</td>
+<td>暫停</td>
+<td><code>PauseRestartButton</code></td>
+<td>Image</td>
+<td>BTN_SECONDARY</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>30</td>
+<td>暫停</td>
+<td><code>PauseGiveUpButton</code></td>
+<td>Image</td>
+<td>BTN_SECONDARY</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>31</td>
+<td>暫停</td>
+<td>Restart / Give up</td>
+<td>Label</td>
+<td>BTN_SECONDARY_TEXT</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td><strong>牌庫視覺</strong></td>
+</tr>
+<tr>
+<td>32</td>
+<td>牌堆</td>
+<td><code>PlayerDeckPile</code> / <code>EnemyDeckPile</code> <code>PileLayer_2</code></td>
+<td>Image</td>
+<td>DECK_TOP</td>
+<td><code>#4A6B7C</code></td>
+<td>最上層</td>
+</tr>
+<tr>
+<td>33</td>
+<td>牌堆</td>
+<td><code>PileLayer_0/1</code></td>
+<td>Image</td>
+<td>DECK_SHADOW</td>
+<td><code>#2E3542</code> @92%</td>
+<td></td>
+</tr>
+<tr>
+<td><strong>開場骰子</strong></td>
+</tr>
+<tr>
+<td>34</td>
+<td>開場</td>
+<td><code>OpeningRollPanel</code></td>
+<td>Image 底</td>
+<td>PANEL_MILK</td>
+<td><code>#FFF8E7</code></td>
+<td>&#167;3.3</td>
+</tr>
+<tr>
+<td>35</td>
+<td>開場</td>
+<td><code>OpeningRollDiceText</code></td>
+<td>TMP</td>
+<td>INK</td>
+<td><code>#5C4033</code></td>
+<td></td>
+</tr>
+<tr>
+<td>36</td>
+<td>開場</td>
+<td><code>OpeningRollFirstText</code></td>
+<td>TMP</td>
+<td>BELL_GOLD</td>
+<td><code>#F8D878</code></td>
+<td>先手提示</td>
+</tr>
+<tr>
+<td><strong>天氣</strong></td>
+</tr>
+<tr>
+<td>37</td>
+<td>天氣</td>
+<td><code>WeatherForecastOverlay</code></td>
+<td>Image 遮罩</td>
+<td>DIM</td>
+<td><code>#0A0305</code> @50%</td>
+<td></td>
+</tr>
+<tr>
+<td>38</td>
+<td>天氣</td>
+<td><code>WeatherForecastCard</code></td>
+<td>Image 底</td>
+<td>PANEL_MILK</td>
+<td><code>#FFF8E7</code> @98.5%</td>
+<td></td>
+</tr>
+<tr>
+<td>39</td>
+<td>天氣</td>
+<td><code>WeatherForecastTitle</code></td>
+<td>TMP</td>
+<td>INK</td>
+<td><code>#5C4033</code></td>
+<td></td>
+</tr>
+<tr>
+<td>40</td>
+<td>天氣</td>
+<td><code>WeatherForecastBody</code></td>
+<td>TMP</td>
+<td>INK_SOFT</td>
+<td><code>#493F3B</code></td>
+<td></td>
+</tr>
+<tr>
+<td>41</td>
+<td>天氣</td>
+<td><code>ActiveWeatherEffectPanel</code></td>
+<td>Image 底</td>
+<td>PANEL_CREAM</td>
+<td><code>#F5E6C8</code> @96%</td>
+<td></td>
+</tr>
+<tr>
+<td>42</td>
+<td>天氣</td>
+<td><code>ActiveWeatherEffectPanel</code></td>
+<td>Outline</td>
+<td>PANEL_EDGE</td>
+<td><code>#8B7355</code> @35%</td>
+<td></td>
+</tr>
+<tr>
+<td>43</td>
+<td>天氣</td>
+<td><code>ActiveWeatherDivider</code></td>
+<td>Image</td>
+<td>PANEL_EDGE</td>
+<td><code>#8B7355</code> @35%</td>
+<td></td>
+</tr>
+<tr>
+<td>44</td>
+<td>天氣</td>
+<td><code>ActiveWeatherSummaryText</code></td>
+<td>TMP</td>
+<td>INK_SOFT</td>
+<td><code>#493F3B</code></td>
+<td></td>
+</tr>
+<tr>
+<td>45</td>
+<td>天氣</td>
+<td><code>ActiveWeatherEffectPanelText</code></td>
+<td>TMP</td>
+<td>INK_SOFT</td>
+<td><code>#493F3B</code></td>
+<td></td>
+</tr>
+<tr>
+<td><strong>棄牌流程 UI（非手牌本體）</strong></td>
+</tr>
+<tr>
+<td>46</td>
+<td>棄牌</td>
+<td><code>DiscardDropZone</code></td>
+<td>Image 底</td>
+<td>BTN_PRIMARY_P</td>
+<td><code>#6F5A3A</code> @90%</td>
+<td>左側棄牌區</td>
+</tr>
+<tr>
+<td>47</td>
+<td>棄牌</td>
+<td><code>DiscardDropZone</code> Label</td>
+<td>TMP</td>
+<td>BTN_PRIMARY_TEXT</td>
+<td><code>#FFF8E7</code></td>
+<td></td>
+</tr>
+<tr>
+<td>48</td>
+<td>棄牌</td>
+<td><code>DiscardPromptPanel</code></td>
+<td>Image</td>
+<td>PANEL_CREAM</td>
+<td><code>#F5E6C8</code> @96%</td>
+<td></td>
+</tr>
+<tr>
+<td>49</td>
+<td>棄牌</td>
+<td><code>DiscardPromptPanel</code> Text</td>
+<td>TMP</td>
+<td>INK</td>
+<td><code>#5C4033</code></td>
+<td></td>
+</tr>
+<tr>
+<td>50</td>
+<td>棄牌</td>
+<td><code>EnemyDiscardToast</code></td>
+<td>Image 底</td>
+<td>PANEL_CREAM</td>
+<td><code>#F5E6C8</code> @96%</td>
+<td>不含 mount 內卡牌</td>
+</tr>
+<tr>
+<td>51</td>
+<td>棄牌</td>
+<td><code>EnemyDiscardToast</code> Title</td>
+<td>TMP</td>
+<td>INK</td>
+<td><code>#5C4033</code></td>
+<td></td>
+</tr>
+<tr>
+<td>52</td>
+<td>棄牌</td>
+<td><code>EnemyDiscardToast</code> Meta / Skill</td>
+<td>TMP</td>
+<td>INK_SOFT</td>
+<td><code>#493F3B</code></td>
+<td></td>
+</tr>
+<tr>
+<td><strong>結算／戰報</strong></td>
+</tr>
+<tr>
+<td>53</td>
+<td>結算</td>
+<td><code>EndBattlePanel</code></td>
+<td>Image 底</td>
+<td>PANEL_CREAM</td>
+<td><code>#F5E6C8</code> @96%</td>
+<td></td>
+</tr>
+<tr>
+<td>54</td>
+<td>結算</td>
+<td><code>EndBattleTitleText</code></td>
+<td>Text</td>
+<td>INK</td>
+<td><code>#5C4033</code></td>
+<td>Victory／Defeat 等</td>
+</tr>
+<tr>
+<td>55</td>
+<td>結算</td>
+<td><code>BattleHistoryButton</code> 等三鈕</td>
+<td>Image</td>
+<td>HALL_WINE</td>
+<td><code>#714847</code> @96%</td>
+<td><code>CreateEndBattleButton</code></td>
+</tr>
+<tr>
+<td>56</td>
+<td>結算</td>
+<td>三鈕 Label</td>
+<td>Text</td>
+<td>BTN_PRIMARY_TEXT</td>
+<td><code>#FFF8E7</code></td>
+<td></td>
+</tr>
+<tr>
+<td>57</td>
+<td>結算</td>
+<td><code>SettlementFreeze</code> dim</td>
+<td>Image</td>
+<td>DIM_HEAVY</td>
+<td><code>#0A0305</code> @66%</td>
+<td></td>
+</tr>
+<tr>
+<td>58</td>
+<td>結算</td>
+<td>戰報 <code>rootDim</code></td>
+<td>Image</td>
+<td>DIM_HEAVY</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>59</td>
+<td>結算</td>
+<td>戰報 <code>dlgBg</code></td>
+<td>Image</td>
+<td>PANEL_MILK</td>
+<td><code>#FFF8E7</code></td>
+<td></td>
+</tr>
+<tr>
+<td>60</td>
+<td>結算</td>
+<td>戰報 <code>titleTmp</code></td>
+<td>TMP</td>
+<td>INK</td>
+<td><code>#5C4033</code></td>
+<td></td>
+</tr>
+<tr>
+<td>61</td>
+<td>結算</td>
+<td>戰報 <code>closeBtn</code></td>
+<td>Image</td>
+<td>HALL_WINE</td>
+<td><code>#714847</code> @96%</td>
+<td></td>
+</tr>
+<tr>
+<td>62</td>
+<td>結算</td>
+<td>戰報 <code>closeTxt</code></td>
+<td>TMP/Text</td>
+<td>BTN_PRIMARY_TEXT</td>
+<td><code>#FFF8E7</code></td>
+<td></td>
+</tr>
+<tr>
+<td>63</td>
+<td>結算</td>
+<td>戰報 scroll 底</td>
+<td>Image</td>
+<td><code>PANEL_SCROLL</code></td>
+<td><code>#E0D4C4</code></td>
+<td><code>PANEL_CREAM</code>&#215;0.92；建議實作時升格 Token</td>
+</tr>
+<tr>
+<td>64</td>
+<td>結算</td>
+<td>戰報歷史行 TMP</td>
+<td>TMP</td>
+<td>INK_SOFT</td>
+<td><code>#493F3B</code></td>
+<td>內文預設色</td>
+</tr>
+<tr>
+<td>65</td>
+<td>結算</td>
+<td>戰報天氣行底</td>
+<td>Image</td>
+<td>HALL_WINE</td>
+<td><code>#714847</code> @28%</td>
+<td></td>
+</tr>
+</tbody></table>
+
+
+
+<h2>5. 依腳本檔案之修改索引（僅 §1.3 範圍）</h2>
+
+<table class="md-table">
+<thead><tr>
+<th>檔案</th>
+<th>主要方法／區塊</th>
+<th>對應 &#167;4 列 #</th>
+<th>備註</th>
+</tr></thead><tbody>
+<tr>
+<td><code>BattleSimulationDebugUI.cs</code></td>
+<td><code>CreateHeroHpHud</code>, <code>RefreshHeroHpHud</code></td>
+<td>1–6</td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td><code>CreateBattleTurnBanner</code>, <code>ShowTurnBanner</code></td>
+<td>7–12</td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td><code>CreateButton</code>, <code>BindSceneEndTurnButton</code></td>
+<td>13–23</td>
+<td><strong>勿</strong>改 <code>CloseDebugPanelButton</code></td>
+</tr>
+<tr>
+<td></td>
+<td><code>CreatePauseUI</code></td>
+<td>24–31</td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td><code>CreateDeckPileVisual</code></td>
+<td>32–33</td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td><code>OpeningRollPanel</code> 區塊</td>
+<td>34–36</td>
+<td>骰子 <strong>點陣</strong> Image 屬 &#167;1.2-B，可不改</td>
+</tr>
+<tr>
+<td></td>
+<td><code>WeatherForecastOverlay</code>, <code>ActiveWeatherEffectPanel</code></td>
+<td>37–45</td>
+<td></td>
+</tr>
+<tr>
+<td><code>BattleSimulationDebugUI.Settlement.cs</code></td>
+<td><code>EnsureEndBattlePanel</code>, <code>CreateEndBattleButton</code></td>
+<td>53–56</td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td><code>EnsureBattleHistoryOverlay</code>, <code>BuildBattleHistoryRows</code></td>
+<td>57–65</td>
+<td>歷史 Rich 語意色另見 &#167;6 備註</td>
+</tr>
+<tr>
+<td><code>BattleSimulationDebugUI.Discard.cs</code></td>
+<td><code>EnsureDiscardSelectionUi</code></td>
+<td>46–49</td>
+<td></td>
+</tr>
+<tr>
+<td><code>BattleSimulationDebugUI.DiscardPopup.cs</code></td>
+<td><code>EnsureEnemyDiscardToastUi</code></td>
+<td>50–52</td>
+<td></td>
+</tr>
+<tr>
+<td><code>Assets/Scenes/BattleSimulation.unity</code></td>
+<td><code>結束回合</code> Button</td>
+<td>13–18</td>
+<td></td>
+</tr>
+<tr>
+<td><strong>不修改</strong></td>
+<td><code>CreateDebugPanel</code> 全區</td>
+<td>—</td>
+<td>&#167;1.2-C</td>
+</tr>
+<tr>
+<td><strong>不修改</strong></td>
+<td><code>BattleAutoSimPlugin</code></td>
+<td>—</td>
+<td>&#167;1.2-C</td>
+</tr>
+<tr>
+<td><strong>不修改</strong></td>
+<td><code>PlayerHand</code> / <code>FieldCards</code> / <code>BattleHandDiscardDrag</code></td>
+<td>—</td>
+<td>&#167;1.2-A</td>
+</tr>
+<tr>
+<td><strong>不修改</strong></td>
+<td><code>CreateWeatherScreenFx</code>、受傷 Vignette／Flash</td>
+<td>—</td>
+<td>&#167;1.2-B</td>
+</tr>
+</tbody></table>
+
+
+
+<h2>6. 實作備註（定案共識）</h2>
+
+<p>1. <strong>集中常數</strong>：<code>static class BattleUiColors</code>（或 partial）僅供 <strong>&#167;1.3</strong> 元件引用 &#167;3 代號。  </p>
+<p>2. <strong><code>CreateButton</code> 分流</strong>（範圍內）：<code>EndTurn</code>／<code>結束</code>／<code>Resume</code> → Primary；<code>Pause</code>／<code>場地效果</code> → Secondary；<strong>除錯 Close 鈕不在此列</strong>。  </p>
+<p>3. <strong>禁止使用</strong>（範圍內）：大面積純白按鈕、螢光紅 HP、高飽和成功綠回合字、DANGEROUS 血紅作主色。  </p>
+<p>4. <strong>質感（Phase 2）</strong>：圓角、<code>PANEL_EDGE</code> 描邊、按鈕陰影；Phase 1 只做顏色。  </p>
+<p>5. <strong>戰報 Rich 語意色</strong>：<code>FormatBattleHistoryRichText</code> 內怪物／法術／傷害／治療／勝敗五色<strong>尚未</strong>納入本規格 Token；實作 v1 可維持現行 hex，或另開 &#167;3.4 擴充。  </p>
+<p>6. <strong>驗收</strong>（關閉除錯面板下）：英雄 HP、回合橫幅、結束回合、Pause、牌堆、暫停、天氣 UI、棄牌提示、結算／戰報；確認<strong>手牌／場牌／FX 顏色與改版前相同</strong>。  </p>
+
+
+<h2>7. 版本紀錄</h2>
+
+<table class="md-table">
+<thead><tr>
+<th>日期</th>
+<th>版本</th>
+<th>說明</th>
+</tr></thead><tbody>
+<tr>
+<td>2026-05-16</td>
+<td>1.0</td>
+<td>初版：融合書稿 + 森友會 A 克制；&#167;4 總表 79 列</td>
+</tr>
+<tr>
+<td>2026-05-16</td>
+<td>1.1</td>
+<td>新增 &#167;2：三本書／動森對照表、38 Token 加權量化、圓餅圖／長條圖</td>
+</tr>
+<tr>
+<td>2026-05-16</td>
+<td>1.2</td>
+<td>&#167;1 重訂：明確排除卡牌區、特效、除錯／批次模擬；&#167;4 縮為 65 列實作範圍</td>
+</tr>
+<tr>
+<td>2026-05-16</td>
+<td>1.2.1</td>
+<td>新增 &#167;8 列印說明；<code>tools/Export-BattleUiColorSpecPrint.ps1</code> → <code>Docs/BATTLE_UI_COLOR_SPEC.print.html</code></td>
+</tr>
+</tbody></table>
+
+
+
+<h2>8. 列印本規格書</h2>
+
+<h3>方式 A：瀏覽器列印（建議，含完整表格）</h3>
+
+<p>1. 在專案根目錄以 PowerShell 執行：</p>
+<p>   ```powershell</p>
+<p>   .\tools\Export-BattleUiColorSpecPrint.ps1</p>
+<p>   ```</p>
+<p>2. 開啟產生的 <code>Docs\BATTLE_UI_COLOR_SPEC.print.html</code>（雙擊或用 Chrome / Edge）。</p>
+<p>3. <code>Ctrl+P</code> → 目的地選印表機或 <strong>另存為 PDF</strong>。</p>
+<p>4. 建議：<strong>A4</strong>、直向、邊界預設；勾選 <strong>背景圖形</strong>（表格底色較完整）。</p>
+<p>5. &#167;2 的 Mermaid 圖在列印版會改為<strong>數字表格</strong>（內容同 &#167;2.5）。</p>
+
+<h3>方式 B：Cursor / VS Code 預覽</h3>
+
+<p>1. 開啟 <code>BATTLE_UI_COLOR_SPEC.md</code> → <code>Ctrl+Shift+V</code> 預覽。</p>
+<p>2. <code>Ctrl+P</code> 列印。  </p>
+<p>   <strong>注意</strong>：Mermaid 圖表可能無法顯示；&#167;4 大表可能換頁較難讀 → 優先用法 A。</p>
+
+<h3>方式 C：另存 PDF 後列印</h3>
+
+<p>用法 A 步驟 3 選「Microsoft Print to PDF」或「另存 PDF」，再將 PDF 送去列印或裝訂。</p>
+
+
+<p>*確認本文件後，下一階段依 &#167;5 索引進行程式與 <code>BattleSimulation.unity</code> 實作（<strong>不含</strong> &#167;1.2）。*</p>
+
+
+</body>
+</html>

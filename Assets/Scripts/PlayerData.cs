@@ -140,7 +140,7 @@ public class PlayerData : MonoBehaviour
 
         string path = GetPlayerDataPath();
 
-        if (!File.Exists(path))
+        if (!PlayerPersistSafeIO.ExistsAnyWithBackups(path))
         {
             playerCoins = 100;
             totalCoins = playerCoins;
@@ -148,42 +148,81 @@ public class PlayerData : MonoBehaviour
             return;
         }
 
-        string[] dataRow = File.ReadAllLines(path);
-        Debug.Log("Load from persistent: " + path);
-        activePlayerSlot = Mathf.Clamp(ReadActiveSlotFromRows(dataRow), 1, MaxPlayerSlots);
-        cachedOtherSlotRows.Clear();
-        bool hasDeckSlotData = false;
-        bool hasSlotRows = false;
-
-        foreach (var row in dataRow)
+        foreach (string candidatePath in PlayerPersistSafeIO.EnumerateLoadCandidates(path))
         {
-            string[] rowArray = row.Split(',');
-            if (rowArray == null || rowArray.Length == 0) continue;
-            if (rowArray[0] == "#") continue;
-
-            if (rowArray[0] == "slot")
+            if (!File.Exists(candidatePath)) continue;
+            string[] dataRow;
+            try
             {
-                hasSlotRows = true;
-                if (rowArray.Length < 4) continue;
-                if (!int.TryParse(rowArray[1].Trim(), out int slotIndex)) continue;
-                if (slotIndex != activePlayerSlot)
-                {
-                    cachedOtherSlotRows.Add(row);
-                    continue;
-                }
-                string[] scoped = new string[rowArray.Length - 2];
-                Array.Copy(rowArray, 2, scoped, 0, scoped.Length);
-                ParsePlayerRow(scoped, ref hasDeckSlotData);
+                dataRow = File.ReadAllLines(candidatePath);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning("PlayerData: could not read " + candidatePath + " -> " + ex.Message);
                 continue;
             }
 
-            if (!hasSlotRows)
-            {
-                ParsePlayerRow(rowArray, ref hasDeckSlotData);
-            }
+            if (!PlayerPersistSafeIO.LooksLikePlayerDataCsv(dataRow)) continue;
+
+            playerCollection.Clear();
+            for (int s = 0; s < deckSlotMaps.Length; s++)
+                deckSlotMaps[s].Clear();
+
+            if (!TryApplyLoadedPlayerDataRows(dataRow)) continue;
+
+            Debug.Log("Load from persistent: " + candidatePath);
+            Debug.Log("Loaded coins=" + playerCoins);
+            return;
         }
 
-        Debug.Log("Loaded coins=" + playerCoins);
+        Debug.LogError("PlayerData: all save candidates failed to load; recreating defaults.");
+        playerCoins = 100;
+        totalCoins = playerCoins;
+        SavePlayerData();
+    }
+
+    private bool TryApplyLoadedPlayerDataRows(string[] dataRow)
+    {
+        try
+        {
+            activePlayerSlot = Mathf.Clamp(ReadActiveSlotFromRows(dataRow), 1, MaxPlayerSlots);
+            cachedOtherSlotRows.Clear();
+            bool hasDeckSlotData = false;
+            bool hasSlotRows = false;
+
+            foreach (var row in dataRow)
+            {
+                string[] rowArray = row.Split(',');
+                if (rowArray == null || rowArray.Length == 0) continue;
+                if (rowArray[0] == "#") continue;
+
+                if (rowArray[0] == "slot")
+                {
+                    hasSlotRows = true;
+                    if (rowArray.Length < 4) continue;
+                    if (!int.TryParse(rowArray[1].Trim(), out int slotIndex)) continue;
+                    if (slotIndex != activePlayerSlot)
+                    {
+                        cachedOtherSlotRows.Add(row);
+                        continue;
+                    }
+                    string[] scoped = new string[rowArray.Length - 2];
+                    Array.Copy(rowArray, 2, scoped, 0, scoped.Length);
+                    ParsePlayerRow(scoped, ref hasDeckSlotData);
+                    continue;
+                }
+
+                if (!hasSlotRows)
+                    ParsePlayerRow(rowArray, ref hasDeckSlotData);
+            }
+
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Debug.LogWarning("PlayerData: parse failed for candidate save -> " + ex.Message);
+            return false;
+        }
     }
 
     private void ParsePlayerRow(string[] rowArray, ref bool hasDeckSlotData)
@@ -343,6 +382,25 @@ public class PlayerData : MonoBehaviour
         string path = GetPlayerDataPath();
         Directory.CreateDirectory(dir);
 
+        // PlayerProfileCsvService syncs W/L/D/Q into playerdata as slot,N,profile_* rows.
+        // Those rows are not represented in Player fields; without preserving them here,
+        // the next save would strip battle stats (and RefreshProfileFromRuntime could reset profile files).
+        var preservedActiveProfileRows = new List<string>(14);
+        if (PlayerPersistSafeIO.TryReadPlayerDataLines(path, out string[] existingLines, out _))
+        {
+            for (int li = 0; li < existingLines.Length; li++)
+            {
+                string line = existingLines[li];
+                if (string.IsNullOrWhiteSpace(line) || line.StartsWith("#", StringComparison.Ordinal)) continue;
+                string[] cols = line.Split(',');
+                if (cols.Length < 4) continue;
+                if (!string.Equals(cols[0].Trim(), "slot", StringComparison.OrdinalIgnoreCase)) continue;
+                if (!int.TryParse(cols[1].Trim(), out int slotNum) || slotNum != activePlayerSlot) continue;
+                if (cols[2].Trim().StartsWith("profile_", StringComparison.OrdinalIgnoreCase))
+                    preservedActiveProfileRows.Add(line);
+            }
+        }
+
         var datas = new List<string>();
         datas.Add($"active_slot,{activePlayerSlot}");
 
@@ -396,8 +454,10 @@ public class PlayerData : MonoBehaviour
 
         for (int i = 0; i < current.Count; i++) datas.Add(current[i]);
         EnsureAllSlotContainers(datas);
+        for (int pi = 0; pi < preservedActiveProfileRows.Count; pi++)
+            datas.Add(preservedActiveProfileRows[pi]);
 
-        File.WriteAllLines(path, datas);
+        PlayerPersistSafeIO.WriteAllLinesWithAtomicRotateBackups(path, datas);
         Debug.Log("Save path: " + path);
     }
 
@@ -448,9 +508,8 @@ public class PlayerData : MonoBehaviour
     {
         coins = 0;
         string path = GetPlayerDataPath();
-        if (!File.Exists(path)) return false;
-
-        string[] rows = File.ReadAllLines(path);
+        if (!PlayerPersistSafeIO.TryReadPlayerDataLines(path, out string[] rows, out _))
+            return false;
         int activeSlot = Mathf.Clamp(ReadActiveSlotFromRows(rows), 1, MaxPlayerSlots);
 
         // Preferred format: slot,<active_slot>,coins,<value>
@@ -488,7 +547,9 @@ public class PlayerData : MonoBehaviour
         string path = GetPlayerDataPath();
         string dir = Application.persistentDataPath;
         Directory.CreateDirectory(dir);
-        string[] existing = File.Exists(path) ? File.ReadAllLines(path) : Array.Empty<string>();
+        string[] existing = PlayerPersistSafeIO.TryReadPlayerDataLines(path, out string[] read, out _)
+            ? read
+            : Array.Empty<string>();
         var rows = new List<string>(existing.Length + 2);
         bool activeWritten = false;
         for (int i = 0; i < existing.Length; i++)
@@ -509,14 +570,14 @@ public class PlayerData : MonoBehaviour
         }
         if (!activeWritten) rows.Insert(0, $"active_slot,{slot}");
         EnsureAllSlotContainers(rows);
-        File.WriteAllLines(path, rows);
+        PlayerPersistSafeIO.WriteAllLinesWithAtomicRotateBackups(path, rows);
     }
 
     public static int FindFirstEmptySlot()
     {
         string path = GetPlayerDataPath();
-        if (!File.Exists(path)) return 1;
-        string[] rows = File.ReadAllLines(path);
+        if (!PlayerPersistSafeIO.TryReadPlayerDataLines(path, out string[] rows, out _))
+            return 1;
         bool[] nonDefault = new bool[MaxPlayerSlots + 1];
         for (int i = 0; i < rows.Length; i++)
         {
@@ -538,7 +599,9 @@ public class PlayerData : MonoBehaviour
         string path = GetPlayerDataPath();
         string dir = Application.persistentDataPath;
         Directory.CreateDirectory(dir);
-        string[] existing = File.Exists(path) ? File.ReadAllLines(path) : Array.Empty<string>();
+        string[] existing = PlayerPersistSafeIO.TryReadPlayerDataLines(path, out string[] read, out _)
+            ? read
+            : Array.Empty<string>();
         int active = Mathf.Clamp(ReadActiveSlotFromRows(existing), 1, MaxPlayerSlots);
         if (active == slot)
         {
@@ -592,7 +655,7 @@ public class PlayerData : MonoBehaviour
         rows.Add($"slot,{slot},selected_deck_slot,0");
         rows.Add($"slot,{slot},slot_name,玩家{slot}");
         EnsureAllSlotContainers(rows);
-        File.WriteAllLines(path, rows);
+        PlayerPersistSafeIO.WriteAllLinesWithAtomicRotateBackups(path, rows);
     }
 
     private static int FindFirstNonDeletedSlot(string[] rows, int deletedSlot)
@@ -653,12 +716,10 @@ public class PlayerData : MonoBehaviour
         }
 
         string path = GetPlayerDataPath();
-        if (!File.Exists(path))
+        if (!PlayerPersistSafeIO.TryReadPlayerDataLines(path, out string[] rows, out _))
         {
             return BuildSnapshots(hasData, coins, names);
         }
-
-        string[] rows = File.ReadAllLines(path);
         for (int i = 0; i < rows.Length; i++)
         {
             string row = rows[i];
@@ -700,8 +761,8 @@ public class PlayerData : MonoBehaviour
         };
 
         string path = GetPlayerDataPath();
-        if (!File.Exists(path)) return summary;
-        string[] rows = File.ReadAllLines(path);
+        if (!PlayerPersistSafeIO.TryReadPlayerDataLines(path, out string[] rows, out _))
+            return summary;
         int deckRowCount = 0;
         for (int i = 0; i < rows.Length; i++)
         {
@@ -753,10 +814,9 @@ public class PlayerData : MonoBehaviour
     public static string GetActivePlayerSlotName()
     {
         string path = GetPlayerDataPath();
-        if (!File.Exists(path)) return "玩家1";
-        int active = 1;
-        string[] rows = File.ReadAllLines(path);
-        active = Mathf.Clamp(ReadActiveSlotFromRows(rows), 1, MaxPlayerSlots);
+        if (!PlayerPersistSafeIO.TryReadPlayerDataLines(path, out string[] rows, out _))
+            return "玩家1";
+        int active = Mathf.Clamp(ReadActiveSlotFromRows(rows), 1, MaxPlayerSlots);
         for (int i = 0; i < rows.Length; i++)
         {
             string[] c = rows[i].Split(',');
@@ -773,7 +833,9 @@ public class PlayerData : MonoBehaviour
         string path = GetPlayerDataPath();
         string dir = Application.persistentDataPath;
         Directory.CreateDirectory(dir);
-        string[] existing = File.Exists(path) ? File.ReadAllLines(path) : Array.Empty<string>();
+        string[] existing = PlayerPersistSafeIO.TryReadPlayerDataLines(path, out string[] read, out _)
+            ? read
+            : Array.Empty<string>();
         int active = Mathf.Clamp(ReadActiveSlotFromRows(existing), 1, MaxPlayerSlots);
         string safeName = SanitizeSlotName(name, active);
 
@@ -797,7 +859,7 @@ public class PlayerData : MonoBehaviour
         }
         if (!wrote) rows.Add($"slot,{active},slot_name,{safeName}");
         EnsureAllSlotContainers(rows);
-        File.WriteAllLines(path, rows);
+        PlayerPersistSafeIO.WriteAllLinesWithAtomicRotateBackups(path, rows);
     }
 
     private static string SanitizeSlotName(string name, int slot)

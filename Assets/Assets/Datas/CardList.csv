@@ -1,28 +1,28 @@
-﻿#,編號,卡名,英文名,攻擊力,生命值
-monster,0,赤紅惡龍,Crimson Dragon,80,100
-monster,1,光明騎士,Radiant Knight,30,40
-monster,2,護林鹿,Forest Stag,20,80
-monster,3,遠古雷鳥,Ancient Thunderbird,70,30
-monster,4,民兵,Militia,20,20
-monster,5,長弓兵,Longbowman,30,10
-monster,6,王國騎兵,Royal Cavalry,30,30
-monster,7,城堡,Castle,0,90
-monster,8,死,Death,40,40
-monster,9,戰爭,War,40,40
-monster,10,瘟疫,Plague,40,40
-monster,11,飢荒,Famine,40,40
-monster,12,王后,Queen,20,40
-monster,13,國王,King,80,80
-monster,14,主教,Bishop,0,30
-monster,15,聖女,Holy Maiden,70,70
-monster,16,宗教審判官,Inquisitor,20,50
-monster,17,修女,Nun,0,60
-monster,18,聖院騎士,Sanctum Knight,50,50
-monster,19,聖盾軍,Sacred Shield Corps,40,50
-monster,20,聖盾,Sacred Shield,0,100
-monster,21,傳教士,Missionary,0,0
-monster,22,教徒,Acolyte,0,10
-#,編號,卡名,英文名,效果,
-spell,000,火球術,Fireball,對敵方場上卡牌20傷害(不溢出) 無場上卡則傷害英雄,
-spell,001,初級治療,Lesser Heal,手牌點擊：我方場上怪獸+40HP可溢出 場上已有怪時僅此法術可從手牌打出,
-spell,002,林可的凝視,Lin's Gaze,僅我方場上無怪獸時可發動 置場：3回合每回合全體-5HP 敵方無法攻擊,
+﻿#,類型,編號,卡名,英文名,稀有度(N/R/SR/SSR/UR),攻擊力,生命值
+monster,0,赤紅惡龍,Crimson Dragon,SSR,80,100
+monster,1,光明騎士,Radiant Knight,SR,30,40
+monster,2,護林鹿,Forest Stag,R,20,80
+monster,3,遠古雷鳥,Ancient Thunderbird,SR,70,30
+monster,4,民兵,Militia,N,20,20
+monster,5,長弓兵,Longbowman,N,30,10
+monster,6,王國騎兵,Royal Cavalry,R,30,30
+monster,7,城堡,Castle,R,0,90
+monster,8,死,Death,SSR,40,40
+monster,9,戰爭,War,SSR,40,40
+monster,10,瘟疫,Plague,SSR,40,40
+monster,11,飢荒,Famine,SSR,40,40
+monster,12,王后,Queen,SR,20,40
+monster,13,國王,King,UR,80,80
+monster,14,主教,Bishop,R,0,30
+monster,15,聖女,Holy Maiden,SR,70,70
+monster,16,宗教審判官,Inquisitor,R,20,50
+monster,17,修女,Nun,N,0,60
+monster,18,聖院騎士,Sanctum Knight,SR,50,50
+monster,19,聖盾軍,Sacred Shield Corps,R,40,50
+monster,20,聖盾,Sacred Shield,R,0,100
+monster,21,傳教士,Missionary,N,0,0
+monster,22,教徒,Acolyte,N,0,10
+#,編號,卡名,英文名,稀有度,效果,
+spell,000,火球術,Fireball,R,對敵方場上卡牌20傷害(不溢出) 無場上卡則傷害英雄,
+spell,001,初級治療,Lesser Heal,N,手牌點擊：我方場上怪獸+40HP可溢出 場上已有怪時僅此法術可從手牌打出,
+spell,002,林可的凝視,Lin's Gaze,UR,僅我方場上無怪獸時可發動 置場：3回合每回合全體-5HP 敵方無法攻擊,

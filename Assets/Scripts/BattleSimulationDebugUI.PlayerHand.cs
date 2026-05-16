@@ -236,6 +236,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
                 display.effectText.gameObject.SetActive(false);
             }
             ApplyPrefabVisualTuning(display);
+            display.RefreshCardArtRarityOverlayExternal();
         }
         else
         {

@@ -83,6 +83,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         CardDisplay display = holder.GetComponentInChildren<CardDisplay>();
         if (display == null) return;
         ApplyPrefabVisualTuning(display, true, isSpell);
+        display.RefreshCardArtRarityOverlayExternal();
         if (display.card != null) ApplyFieldDamageHealthColor(display, display.card);
     }
 
@@ -162,6 +163,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
                 display.effectText.gameObject.SetActive(false);
             }
             ApplyPrefabVisualTuning(display, true, isSpell);
+            display.RefreshCardArtRarityOverlayExternal();
             ApplyFieldDamageHealthColor(display, card);
         }
 

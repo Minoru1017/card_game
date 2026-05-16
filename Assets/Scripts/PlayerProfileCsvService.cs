@@ -158,7 +158,9 @@ public static class PlayerProfileCsvService
     {
         string dir = Application.persistentDataPath;
         Directory.CreateDirectory(dir);
-        string[] existing = File.Exists(PlayerDataPath) ? File.ReadAllLines(PlayerDataPath) : Array.Empty<string>();
+        string[] existing = PlayerPersistSafeIO.TryReadPlayerDataLines(PlayerDataPath, out string[] read, out _)
+            ? read
+            : Array.Empty<string>();
         int activeSlot = ReadActiveSlotFromRows(existing);
 
         var merged = new List<string>(Mathf.Max(8, existing.Length + 4));
@@ -216,7 +218,7 @@ public static class PlayerProfileCsvService
             merged.Add("slot," + activeSlot + ",slot_name,玩家" + activeSlot);
 
         EnsureAllSlotsMinimalRows(merged);
-        File.WriteAllLines(PlayerDataPath, merged);
+        PlayerPersistSafeIO.WriteAllLinesWithAtomicRotateBackups(PlayerDataPath, merged);
     }
 
     private static int ReadActiveSlotFromRows(string[] rows)
@@ -305,9 +307,16 @@ public static class PlayerProfileCsvService
 
     public static PlayerProfile LoadOrCreate()
     {
+        TryMigrateLegacyGlobalProfileIntoActiveSlotIfNeeded();
         PlayerProfile p;
         if (!TryLoadProfileFromActiveSlotRows(out p))
+        {
+            // Slot mirror may be missing if playerdata was saved by an older PlayerData path that
+            // dropped profile_* rows; fall back to standalone player_profile.csv before minting a new UUID.
             p = Load();
+            if (string.IsNullOrWhiteSpace(p.uuid))
+                p = new PlayerProfile();
+        }
         if (string.IsNullOrWhiteSpace(p.uuid))
         {
             p.schemaVersion = CurrentSchemaVersion;
@@ -326,9 +335,9 @@ public static class PlayerProfileCsvService
     private static bool TryLoadProfileFromActiveSlotRows(out PlayerProfile p)
     {
         p = new PlayerProfile();
-        if (!File.Exists(PlayerDataPath)) return false;
+        if (!PlayerPersistSafeIO.TryReadPlayerDataLines(PlayerDataPath, out string[] rows, out _))
+            return false;
 
-        string[] rows = File.ReadAllLines(PlayerDataPath);
         int activeSlot = ReadActiveSlotFromRows(rows);
         bool foundAny = false;
 
@@ -360,12 +369,68 @@ public static class PlayerProfileCsvService
         return foundAny;
     }
 
+    private static bool HasAnySlotProfileRows(string[] rows, int slot)
+    {
+        for (int i = 0; i < rows.Length; i++)
+        {
+            string row = rows[i];
+            if (string.IsNullOrWhiteSpace(row)) continue;
+            string[] cols = row.Split(',');
+            if (cols.Length < 4) continue;
+            if (!string.Equals(cols[0].Trim(), "slot", StringComparison.OrdinalIgnoreCase)) continue;
+            if (!int.TryParse(cols[1].Trim(), out int rowSlot) || rowSlot != slot) continue;
+            if (cols[2].Trim().StartsWith("profile_", StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+        return false;
+    }
+
+    private static bool HasAnySlotProfileRowsInAnySlot(string[] rows)
+    {
+        for (int i = 0; i < rows.Length; i++)
+        {
+            string row = rows[i];
+            if (string.IsNullOrWhiteSpace(row)) continue;
+            string[] cols = row.Split(',');
+            if (cols.Length < 4) continue;
+            if (!string.Equals(cols[0].Trim(), "slot", StringComparison.OrdinalIgnoreCase)) continue;
+            if (!int.TryParse(cols[1].Trim(), out int slot) || slot < 1 || slot > PlayerData.MaxPlayerSlots) continue;
+            if (cols[2].Trim().StartsWith("profile_", StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Older saves used a single player_profile.csv plus root-level profile_* rows in playerdata.csv.
+    /// Copy that into slot,N,profile_* once so switching slots does not show another slot's stats.
+    /// </summary>
+    private static void TryMigrateLegacyGlobalProfileIntoActiveSlotIfNeeded()
+    {
+        if (!PlayerPersistSafeIO.ExistsAnyWithBackups(PlayerDataPath) || !PlayerPersistSafeIO.ExistsAnyWithBackups(ProfilePath))
+            return;
+
+        if (!PlayerPersistSafeIO.TryReadPlayerDataLines(PlayerDataPath, out string[] rows, out _))
+            return;
+        int activeSlot = ReadActiveSlotFromRows(rows);
+        if (HasAnySlotProfileRows(rows, activeSlot))
+            return;
+        if (HasAnySlotProfileRowsInAnySlot(rows))
+            return;
+
+        PlayerProfile legacy = Load();
+        if (string.IsNullOrWhiteSpace(legacy.uuid))
+            return;
+
+        SyncProfileIntoActiveSlotRows(legacy);
+    }
+
     private static PlayerProfile Load()
     {
         PlayerProfile p = new PlayerProfile();
-        if (!File.Exists(ProfilePath)) return p;
+        if (!PlayerPersistSafeIO.TryReadProfileLines(ProfilePath, out string[] rows, out _))
+            return p;
 
-        string[] rows = File.ReadAllLines(ProfilePath);
         for (int i = 0; i < rows.Length; i++)
         {
             string row = rows[i];
@@ -407,53 +472,16 @@ public static class PlayerProfileCsvService
             "quits," + p.quits,
             "last_result," + SafeCsv(p.lastResult)
         };
-        File.WriteAllLines(ProfilePath, rows);
+        PlayerPersistSafeIO.WriteAllLinesWithAtomicRotateBackups(ProfilePath, rows);
         SaveProjectSnapshot(FileName, rows);
-        SyncProfileIntoPlayerDataCsv(p);
         SyncProfileIntoActiveSlotRows(p);
-    }
-
-    private static void SyncProfileIntoPlayerDataCsv(PlayerProfile p)
-    {
-        string[] existing = File.Exists(PlayerDataPath) ? File.ReadAllLines(PlayerDataPath) : Array.Empty<string>();
-        var merged = new List<string>(existing.Length + 10);
-
-        for (int i = 0; i < existing.Length; i++)
-        {
-            string row = existing[i];
-            if (string.IsNullOrWhiteSpace(row))
-            {
-                merged.Add(row);
-                continue;
-            }
-            string[] cols = row.Split(',');
-            string key = cols.Length > 0 ? cols[0].Trim() : string.Empty;
-            if (key.StartsWith("profile_", StringComparison.OrdinalIgnoreCase))
-                continue; // replace old profile snapshot rows
-            merged.Add(row);
-        }
-
-        merged.Add("profile_uuid," + SafeCsv(p.uuid));
-        merged.Add("profile_schema_version," + SafeCsv(string.IsNullOrWhiteSpace(p.schemaVersion) ? CurrentSchemaVersion : p.schemaVersion));
-        merged.Add("profile_role," + SafeCsv(p.role));
-        merged.Add("profile_decks," + SafeCsv(p.decks));
-        merged.Add("profile_heroes," + SafeCsv(p.heroes));
-        merged.Add("profile_start_date," + SafeCsv(p.startDate));
-        merged.Add("profile_wins," + p.wins);
-        merged.Add("profile_losses," + p.losses);
-        merged.Add("profile_draws," + p.draws);
-        merged.Add("profile_quits," + p.quits);
-        merged.Add("profile_last_result," + SafeCsv(p.lastResult));
-
-        string dir = Application.persistentDataPath;
-        Directory.CreateDirectory(dir);
-        File.WriteAllLines(PlayerDataPath, merged);
-        SaveProjectSnapshot("playerdata.profile_mirror.csv", merged);
     }
 
     private static void SyncProfileIntoActiveSlotRows(PlayerProfile p)
     {
-        string[] existing = File.Exists(PlayerDataPath) ? File.ReadAllLines(PlayerDataPath) : Array.Empty<string>();
+        string[] existing = PlayerPersistSafeIO.TryReadPlayerDataLines(PlayerDataPath, out string[] read, out _)
+            ? read
+            : Array.Empty<string>();
         int activeSlot = ReadActiveSlotFromRows(existing);
         var merged = new List<string>(existing.Length + 10);
 
@@ -466,6 +494,10 @@ public static class PlayerProfileCsvService
                 continue;
             }
             string[] cols = row.Split(',');
+            string key0 = cols.Length > 0 ? cols[0].Trim() : string.Empty;
+            // Legacy: root-level profile_* rows were shared across all slots — remove them.
+            if (key0.StartsWith("profile_", StringComparison.OrdinalIgnoreCase))
+                continue;
             if (cols.Length >= 3 &&
                 string.Equals(cols[0].Trim(), "slot", StringComparison.OrdinalIgnoreCase) &&
                 int.TryParse(cols[1].Trim(), out int slot) &&
@@ -487,14 +519,17 @@ public static class PlayerProfileCsvService
         merged.Add($"slot,{activeSlot},profile_quits,{p.quits}");
         merged.Add($"slot,{activeSlot},profile_last_result,{SafeCsv(p.lastResult)}");
 
-        File.WriteAllLines(PlayerDataPath, merged);
+        string dir = Application.persistentDataPath;
+        Directory.CreateDirectory(dir);
+        PlayerPersistSafeIO.WriteAllLinesWithAtomicRotateBackups(PlayerDataPath, merged);
+        SaveProjectSnapshot("playerdata.profile_mirror.csv", merged);
     }
 
     private static bool TryReadActiveSlotProfile(out PlayerProfile p)
     {
         p = new PlayerProfile();
-        if (!File.Exists(PlayerDataPath)) return false;
-        string[] rows = File.ReadAllLines(PlayerDataPath);
+        if (!PlayerPersistSafeIO.TryReadPlayerDataLines(PlayerDataPath, out string[] rows, out _))
+            return false;
         int activeSlot = ReadActiveSlotFromRows(rows);
         bool hasAny = false;
         for (int i = 0; i < rows.Length; i++)
