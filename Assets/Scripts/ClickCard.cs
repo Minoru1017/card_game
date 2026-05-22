@@ -55,7 +55,7 @@ public class ClickCard : MonoBehaviour, IPointerClickHandler
         {
             if (!deckManager.showDeck)
             {
-                deckManager.ShowBackpackCardInspect(display.card);
+                deckManager.ShowBackpackCardInspect(display.card, display);
                 return;
             }
 

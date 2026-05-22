@@ -8,6 +8,15 @@ public enum CardRarity
     UR = 4
 }
 
+/// <summary>稀有度排序與 AI 加權（數值越大越優先保留／打出）。</summary>
+public static class CardRarityUtility
+{
+    public static int GetRank(CardRarity rarity) => (int)rarity;
+
+    /// <summary>出牌／留牌加權：UR 明顯高於低稀有同名級卡。</summary>
+    public static int GetPlayAndKeepBonus(CardRarity rarity) => GetRank(rarity) * 25;
+}
+
 public class Card
 {
     public int id;

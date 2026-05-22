@@ -38,9 +38,44 @@ public class GlobalNavRuntime : MonoBehaviour
     private TextMeshProUGUI playerInfoCoinsText;
     private TextMeshProUGUI playerInfoDeckSummaryText;
     private TextMeshProUGUI playerInfoHeroSummaryText;
-    private TextMeshProUGUI playerInfoWldText;
     private TextMeshProUGUI playerInfoLastResultText;
-    private TextMeshProUGUI playerInfoTotalMatchesText;
+    private TextMeshProUGUI playerInfoRecordTotalText;
+    private int playerInfoActiveRecordFilter = 1;
+    private readonly Button[] playerInfoRecordFilterButtons = new Button[4];
+    private readonly Image[] playerInfoRecordFilterButtonBgs = new Image[4];
+    private readonly TextMeshProUGUI[] playerInfoRecordFilterLabels = new TextMeshProUGUI[4];
+    private PlayerInfoRecordColumnUi[] playerInfoRecordColumns;
+    private static readonly int[] PlayerInfoRecordFilterCodes = { 1, -1, 2, 3 };
+    private static readonly string[] PlayerInfoRecordFilterLabels = { "W", "L", "D", "Q" };
+    private static readonly Color[] PlayerInfoDifficultyBadgeColors =
+    {
+        new Color(0.36f, 0.78f, 0.44f, 1f),
+        new Color(0.45f, 0.72f, 0.95f, 1f),
+        new Color(0.95f, 0.78f, 0.28f, 1f),
+        new Color(0.95f, 0.42f, 0.50f, 1f),
+        new Color(0.62f, 0.38f, 0.88f, 1f)
+    };
+
+    private sealed class PlayerInfoRecordColumnUi
+    {
+        public Image badgeImage;
+        public TextMeshProUGUI badgeText;
+        public TextMeshProUGUI countText;
+    }
+
+    private const float PlayerInfoPadH = 28f;
+    private const float PlayerInfoSectionGap = 18f;
+    private const float PlayerInfoLineGap = 10f;
+    private const float PlayerInfoHeaderHeight = 76f;
+    private const float PlayerInfoFooterHeight = 60f;
+    private static readonly Color PlayerInfoTextPrimary = new Color(0.2f, 0.16f, 0.12f, 1f);
+    private static readonly Color PlayerInfoTextMuted = new Color(0.48f, 0.42f, 0.36f, 1f);
+    private static readonly Color PlayerInfoSectionBg = new Color(0.98f, 0.96f, 0.92f, 0.98f);
+    private static readonly Color PlayerInfoSectionTitle = new Color(0.32f, 0.27f, 0.22f, 1f);
+
+    private RectTransform playerInfoScrollContentRt;
+    private float playerInfoLayoutY;
+    private float playerInfoContentWidth;
     private TMP_InputField playerSlotNameInput;
     private Button backpackButton;
     private Button settingsButton;
@@ -599,7 +634,11 @@ public class GlobalNavRuntime : MonoBehaviour
     {
         EnsurePlayerInfoOverlay();
         if (playerInfoOverlayRoot == null) return;
-        if (playerInfoOverlayRoot.activeSelf) playerInfoOverlayRoot.SetActive(false);
+        if (playerInfoOverlayRoot.activeSelf)
+        {
+            playerInfoOverlayRoot.SetActive(false);
+            RefreshBuildbeckDeckNameLabelsAfterPlayerInfo();
+        }
         else OpenPlayerInfoOverlay();
     }
 
@@ -614,11 +653,22 @@ public class GlobalNavRuntime : MonoBehaviour
         return true;
     }
 
+    private static void RefreshBuildbeckDeckNameLabelsAfterPlayerInfo()
+    {
+        Scene s = SceneManager.GetActiveScene();
+        if (!s.IsValid() || !s.name.Equals("Buildbeck", System.StringComparison.OrdinalIgnoreCase))
+            return;
+        GameObject dm = GameObject.Find("DataManager");
+        if (dm == null) return;
+        DeckManager deck = dm.GetComponent<DeckManager>();
+        if (deck != null)
+            deck.RefreshBuildbeckDeckNameLabelsIfActive();
+    }
+
     private void RefreshPlayerInfoOverlayContent()
     {
         PlayerProfileCsvService.PlayerProfile p = PlayerProfileCsvService.RefreshProfileFromRuntime();
-        PlayerData pd = UnityEngine.Object.FindFirstObjectByType<PlayerData>();
-        if (pd != null) pd.LoadPlayerData();
+        PlayerData pd = PlayerData.ResolveCanonical();
         int coins = pd != null ? pd.playerCoins : (PlayerData.TryGetActiveSlotCoinsFromSave(out int coinsFromSave) ? coinsFromSave : 0);
         string slotName = PlayerData.GetActivePlayerSlotName();
         int slot = pd != null ? Mathf.Clamp(pd.activePlayerSlot, 1, PlayerData.MaxPlayerSlots) : 1;
@@ -628,18 +678,25 @@ public class GlobalNavRuntime : MonoBehaviour
         string uuidShort = string.IsNullOrWhiteSpace(p.uuid)
             ? "-"
             : (p.uuid.Length > 12 ? p.uuid.Substring(0, 8) + "..." : p.uuid);
-        if (playerInfoUuidText != null) playerInfoUuidText.text = "UUID: " + uuidShort;
-        if (playerInfoRoleText != null) playerInfoRoleText.text = "玩家身份: " + (string.IsNullOrWhiteSpace(p.role) ? "-" : p.role);
-        if (playerInfoStartDateText != null) playerInfoStartDateText.text = "開始遊玩日期: " + (string.IsNullOrWhiteSpace(p.startDate) ? "-" : p.startDate);
-        if (playerInfoCoinsText != null) playerInfoCoinsText.text = "金幣: " + coins;
-        if (playerInfoDeckSummaryText != null) playerInfoDeckSummaryText.text = "持有的牌組: " + (string.IsNullOrWhiteSpace(p.decks) ? "-" : p.decks);
-        if (playerInfoHeroSummaryText != null) playerInfoHeroSummaryText.text = "持有的英雄: " + (string.IsNullOrWhiteSpace(p.heroes) ? "-" : p.heroes);
-        if (playerInfoWldText != null) playerInfoWldText.text = "W/L/D/Q: " + p.wins + " / " + p.losses + " / " + p.draws + " / " + p.quits;
-        if (playerInfoLastResultText != null) playerInfoLastResultText.text = "最近結果: " + (string.IsNullOrWhiteSpace(p.lastResult) ? "-" : p.lastResult);
-        if (playerInfoTotalMatchesText != null) playerInfoTotalMatchesText.text = "總場次: " + Mathf.Max(0, p.wins + p.losses + p.draws + p.quits);
-
+        if (playerInfoUuidText != null)
+            playerInfoUuidText.text = uuidShort;
         if (playerInfoRoleText != null)
-            playerInfoRoleText.text = "玩家身份: " + (string.IsNullOrWhiteSpace(p.role) ? "-" : p.role) + "  (槽位 " + slot + ")";
+            playerInfoRoleText.text = (string.IsNullOrWhiteSpace(p.role) ? "-" : p.role) + "（槽位 " + slot + "）";
+        if (playerInfoStartDateText != null)
+            playerInfoStartDateText.text = string.IsNullOrWhiteSpace(p.startDate) ? "-" : p.startDate;
+        if (playerInfoCoinsText != null)
+            playerInfoCoinsText.text = coins.ToString("N0");
+        if (playerInfoDeckSummaryText != null)
+        {
+            playerInfoDeckSummaryText.text = FormatDeckSummaryForDisplay(p.decks);
+            FitProfileValueTextHeight(playerInfoDeckSummaryText, 26f, 30f);
+        }
+        if (playerInfoHeroSummaryText != null)
+            playerInfoHeroSummaryText.text = "無";
+        if (playerInfoLastResultText != null)
+            playerInfoLastResultText.text = string.IsNullOrWhiteSpace(p.lastResult) ? "-" : p.lastResult;
+        RefreshPlayerInfoRecordPanel(p);
+        RefreshBuildbeckDeckNameLabelsAfterPlayerInfo();
     }
 
     private void EnsurePlayerInfoOverlay()
@@ -677,7 +734,7 @@ public class GlobalNavRuntime : MonoBehaviour
         headerRt.anchorMin = new Vector2(0f, 1f);
         headerRt.anchorMax = new Vector2(1f, 1f);
         headerRt.pivot = new Vector2(0.5f, 1f);
-        headerRt.offsetMin = new Vector2(0f, -84f);
+        headerRt.offsetMin = new Vector2(0f, -PlayerInfoHeaderHeight);
         headerRt.offsetMax = new Vector2(0f, 0f);
         Image headerBg = header.GetComponent<Image>();
         headerBg.color = new Color(0.85f, 0.79f, 0.68f, 0.9f);
@@ -715,17 +772,27 @@ public class GlobalNavRuntime : MonoBehaviour
             if (playerInfoOverlayRoot != null) playerInfoOverlayRoot.SetActive(false);
         });
 
+        GameObject footer = new GameObject("FooterBar", typeof(RectTransform), typeof(Image));
+        footer.transform.SetParent(panel.transform, false);
+        RectTransform footerRt = footer.GetComponent<RectTransform>();
+        footerRt.anchorMin = Vector2.zero;
+        footerRt.anchorMax = new Vector2(1f, 0f);
+        footerRt.pivot = new Vector2(0.5f, 0f);
+        footerRt.offsetMin = Vector2.zero;
+        footerRt.offsetMax = new Vector2(0f, PlayerInfoFooterHeight);
+        footer.GetComponent<Image>().color = new Color(0.88f, 0.82f, 0.74f, 0.92f);
+
         GameObject resetBtnObj = CreateButton(
-            panel.transform,
+            footer.transform,
             "ResetButton",
             "重置資料",
-            new Vector2(1f, 1f),
-            new Vector2(1f, 1f),
-            new Vector2(1f, 1f),
-            new Vector2(-160f, -18f),
-            new Vector2(150f, 54f),
+            new Vector2(1f, 0.5f),
+            new Vector2(1f, 0.5f),
+            new Vector2(1f, 0.5f),
+            new Vector2(-PlayerInfoPadH, 0f),
+            new Vector2(148f, 44f),
             new Color(0.6f, 0.24f, 0.22f, 0.96f),
-            28f);
+            22f);
         Button resetBtn = resetBtnObj.GetComponent<Button>();
         resetBtn.onClick.RemoveAllListeners();
         resetBtn.onClick.AddListener(() =>
@@ -735,42 +802,254 @@ public class GlobalNavRuntime : MonoBehaviour
             RefreshPlayerInfoOverlayContent();
         });
 
-        GameObject slotSection = new GameObject("SlotSection", typeof(RectTransform), typeof(Image));
-        slotSection.transform.SetParent(panel.transform, false);
-        RectTransform slotRt = slotSection.GetComponent<RectTransform>();
-        slotRt.anchorMin = new Vector2(0f, 1f);
-        slotRt.anchorMax = new Vector2(1f, 1f);
-        slotRt.pivot = new Vector2(0.5f, 1f);
-        slotRt.offsetMin = new Vector2(24f, -258f);
-        slotRt.offsetMax = new Vector2(-24f, -98f);
-        Image slotBg = slotSection.GetComponent<Image>();
-        slotBg.color = new Color(0.97f, 0.95f, 0.9f, 0.95f);
+        Transform scrollContent = CreatePlayerInfoScrollArea(panel.transform, panelWidth, PlayerInfoHeaderHeight, PlayerInfoFooterHeight);
+        playerInfoContentWidth = panelWidth - PlayerInfoPadH * 2f;
+        playerInfoLayoutY = -8f;
+
+        const float profileTwoLineRowH = 58f;
+
+        Transform basicBody = CreatePlayerInfoSection(scrollContent, "基本資料", 328f);
+        float rowY = -14f;
+        CreatePlayerInfoSlotNameRow(basicBody, ref rowY);
+        playerInfoUuidText = PlaceProfileField(basicBody, "UUID", "UuidText", ref rowY, profileTwoLineRowH, 19f);
+        playerInfoRoleText = PlaceProfileField(basicBody, "玩家身份", "RoleText", ref rowY, profileTwoLineRowH, 19f);
+        playerInfoStartDateText = PlaceProfileField(basicBody, "開始遊玩", "StartDateText", ref rowY, profileTwoLineRowH, 19f);
+
+        int deckLineCount = 5;
+        PlayerData layoutPlayerData = UnityEngine.Object.FindFirstObjectByType<PlayerData>();
+        if (layoutPlayerData != null && layoutPlayerData.deckSlotCount > 0)
+            deckLineCount = layoutPlayerData.deckSlotCount;
+        const float profileDeckLineHeight = 30f;
+        float profileDeckBlockRowH = 22f + 4f + deckLineCount * profileDeckLineHeight;
+        float profileAssetSectionH = 52f + profileTwoLineRowH + PlayerInfoLineGap + profileDeckBlockRowH +
+                                     PlayerInfoLineGap + profileTwoLineRowH + 24f;
+
+        Transform assetBody = CreatePlayerInfoSection(scrollContent, "資產與收藏", profileAssetSectionH);
+        rowY = -14f;
+        playerInfoCoinsText = PlaceProfileField(assetBody, "金幣", "CoinsText", ref rowY, profileTwoLineRowH, 21f);
+        playerInfoDeckSummaryText = PlaceProfileField(assetBody, "牌組", "DeckSummaryText", ref rowY, profileDeckBlockRowH, 19f, wrapValue: true, valueLineSpacing: 6f);
+        playerInfoHeroSummaryText = PlaceProfileField(assetBody, "英雄", "HeroSummaryText", ref rowY, profileTwoLineRowH, 19f);
+
+        Transform recordBody = CreatePlayerInfoSection(scrollContent, "對戰紀錄", 300f);
+        rowY = -12f;
+        playerInfoLastResultText = PlaceProfileField(recordBody, "最近結果", "LastResultText", ref rowY, profileTwoLineRowH, 19f);
+        BuildPlayerInfoRecordPanel(recordBody, ref rowY);
+
+        FinalizePlayerInfoScrollContent();
+
+        playerInfoOverlayRoot = root;
+        playerInfoOverlayRoot.SetActive(false);
+    }
+
+    private static string FormatDeckSummaryForDisplay(string decks)
+    {
+        if (string.IsNullOrWhiteSpace(decks)) return "-";
+        string[] parts = decks.Split(new[] { " | " }, StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length <= 1) return decks.Trim();
+        for (int i = 0; i < parts.Length; i++)
+            parts[i] = parts[i].Trim();
+        return string.Join("\n", parts);
+    }
+
+    private static void FitProfileValueTextHeight(TextMeshProUGUI valueField, float minHeight, float perLineHeight)
+    {
+        if (valueField == null) return;
+        valueField.ForceMeshUpdate();
+        int lineCount = valueField.textInfo != null ? Mathf.Max(1, valueField.textInfo.lineCount) : 1;
+        float height = Mathf.Max(minHeight, lineCount * perLineHeight);
+        RectTransform rt = valueField.rectTransform;
+        rt.sizeDelta = new Vector2(rt.sizeDelta.x, height);
+    }
+
+    private Transform CreatePlayerInfoScrollArea(Transform panel, float panelWidth, float headerHeight, float footerHeight)
+    {
+        GameObject scrollRoot = new GameObject("ProfileScroll", typeof(RectTransform), typeof(Image), typeof(ScrollRect));
+        scrollRoot.transform.SetParent(panel, false);
+        RectTransform scrollRt = scrollRoot.GetComponent<RectTransform>();
+        scrollRt.anchorMin = Vector2.zero;
+        scrollRt.anchorMax = Vector2.one;
+        scrollRt.offsetMin = new Vector2(PlayerInfoPadH, footerHeight + 8f);
+        scrollRt.offsetMax = new Vector2(-PlayerInfoPadH, -headerHeight - 4f);
+        scrollRoot.GetComponent<Image>().color = new Color(1f, 1f, 1f, 0.04f);
+
+        GameObject viewport = new GameObject("Viewport", typeof(RectTransform), typeof(RectMask2D));
+        viewport.transform.SetParent(scrollRoot.transform, false);
+        RectTransform viewportRt = viewport.GetComponent<RectTransform>();
+        viewportRt.anchorMin = Vector2.zero;
+        viewportRt.anchorMax = Vector2.one;
+        viewportRt.offsetMin = Vector2.zero;
+        viewportRt.offsetMax = Vector2.zero;
+
+        GameObject content = new GameObject("Content", typeof(RectTransform));
+        content.transform.SetParent(viewport.transform, false);
+        playerInfoScrollContentRt = content.GetComponent<RectTransform>();
+        playerInfoScrollContentRt.anchorMin = new Vector2(0f, 1f);
+        playerInfoScrollContentRt.anchorMax = new Vector2(1f, 1f);
+        playerInfoScrollContentRt.pivot = new Vector2(0.5f, 1f);
+        playerInfoScrollContentRt.anchoredPosition = Vector2.zero;
+        playerInfoScrollContentRt.sizeDelta = new Vector2(0f, 900f);
+
+        ScrollRect scroll = scrollRoot.GetComponent<ScrollRect>();
+        scroll.viewport = viewportRt;
+        scroll.content = playerInfoScrollContentRt;
+        scroll.horizontal = false;
+        scroll.vertical = true;
+        scroll.movementType = ScrollRect.MovementType.Clamped;
+        scroll.scrollSensitivity = 28f;
+
+        return content.transform;
+    }
+
+    private void FinalizePlayerInfoScrollContent()
+    {
+        if (playerInfoScrollContentRt == null) return;
+        float totalHeight = Mathf.Max(480f, -playerInfoLayoutY + 40f);
+        playerInfoScrollContentRt.sizeDelta = new Vector2(0f, totalHeight);
+    }
+
+    private Transform CreatePlayerInfoSection(Transform contentRoot, string title, float sectionHeight)
+    {
+        float sectionWidth = playerInfoContentWidth;
+        GameObject section = new GameObject(title + "Section", typeof(RectTransform), typeof(Image));
+        section.transform.SetParent(contentRoot, false);
+        RectTransform sectionRt = section.GetComponent<RectTransform>();
+        sectionRt.anchorMin = new Vector2(0f, 1f);
+        sectionRt.anchorMax = new Vector2(1f, 1f);
+        sectionRt.pivot = new Vector2(0.5f, 1f);
+        sectionRt.anchoredPosition = new Vector2(0f, playerInfoLayoutY);
+        sectionRt.sizeDelta = new Vector2(0f, sectionHeight);
+        section.GetComponent<Image>().color = PlayerInfoSectionBg;
+
+        GameObject titleObj = new GameObject("SectionTitle", typeof(RectTransform), typeof(TextMeshProUGUI));
+        titleObj.transform.SetParent(section.transform, false);
+        RectTransform titleRt = titleObj.GetComponent<RectTransform>();
+        titleRt.anchorMin = new Vector2(0f, 1f);
+        titleRt.anchorMax = new Vector2(1f, 1f);
+        titleRt.pivot = new Vector2(0f, 1f);
+        titleRt.anchoredPosition = new Vector2(16f, -10f);
+        titleRt.sizeDelta = new Vector2(sectionWidth - 32f, 30f);
+        TextMeshProUGUI titleTmp = titleObj.GetComponent<TextMeshProUGUI>();
+        if (navLabelFont != null) titleTmp.font = navLabelFont;
+        titleTmp.text = title;
+        titleTmp.fontSize = 22f;
+        titleTmp.fontStyle = FontStyles.Bold;
+        titleTmp.color = PlayerInfoSectionTitle;
+        titleTmp.alignment = TextAlignmentOptions.Left;
+
+        GameObject body = new GameObject("Body", typeof(RectTransform), typeof(RectMask2D));
+        body.transform.SetParent(section.transform, false);
+        RectTransform bodyRt = body.GetComponent<RectTransform>();
+        bodyRt.anchorMin = Vector2.zero;
+        bodyRt.anchorMax = Vector2.one;
+        bodyRt.offsetMin = new Vector2(16f, 12f);
+        bodyRt.offsetMax = new Vector2(-16f, -40f);
+
+        playerInfoLayoutY -= sectionHeight + PlayerInfoSectionGap;
+        return body.transform;
+    }
+
+    private TextMeshProUGUI PlaceProfileField(
+        Transform parent,
+        string label,
+        string valueObjectName,
+        ref float rowY,
+        float rowHeight,
+        float valueFontSize,
+        bool wrapValue = false,
+        float valueLineSpacing = 2f)
+    {
+        const float labelHeight = 22f;
+        float valueHeight = Mathf.Max(26f, rowHeight - labelHeight - 4f);
+
+        CreateProfileTextLine(parent, valueObjectName + "_Label", ref rowY, labelHeight, 17f, PlayerInfoTextMuted, label, false, false, 0f);
+        TextMeshProUGUI valueTmp = CreateProfileTextLine(
+            parent,
+            valueObjectName,
+            ref rowY,
+            valueHeight,
+            valueFontSize,
+            PlayerInfoTextPrimary,
+            string.Empty,
+            wrapValue,
+            false,
+            valueLineSpacing);
+        rowY -= PlayerInfoLineGap;
+        return valueTmp;
+    }
+
+    private TextMeshProUGUI CreateProfileTextLine(
+        Transform parent,
+        string name,
+        ref float rowY,
+        float lineHeight,
+        float fontSize,
+        Color color,
+        string text,
+        bool wrap,
+        bool richText,
+        float lineSpacing)
+    {
+        GameObject go = new GameObject(name, typeof(RectTransform), typeof(TextMeshProUGUI));
+        go.transform.SetParent(parent, false);
+        RectTransform rt = go.GetComponent<RectTransform>();
+        rt.anchorMin = new Vector2(0f, 1f);
+        rt.anchorMax = new Vector2(1f, 1f);
+        rt.pivot = new Vector2(0f, 1f);
+        rt.anchoredPosition = new Vector2(0f, rowY);
+        rt.sizeDelta = new Vector2(0f, lineHeight);
+
+        TextMeshProUGUI tmp = go.GetComponent<TextMeshProUGUI>();
+        if (navLabelFont != null) tmp.font = navLabelFont;
+        tmp.fontSize = fontSize;
+        tmp.color = color;
+        tmp.alignment = TextAlignmentOptions.TopLeft;
+        tmp.richText = richText;
+        tmp.enableWordWrapping = wrap;
+        tmp.overflowMode = TextOverflowModes.Overflow;
+        tmp.lineSpacing = lineSpacing;
+        tmp.paragraphSpacing = wrap ? 4f : 0f;
+        tmp.text = text;
+        rowY -= lineHeight;
+        return tmp;
+    }
+
+    private void CreatePlayerInfoSlotNameRow(Transform parent, ref float rowY)
+    {
+        float rowHeight = 48f;
+        GameObject row = new GameObject("SlotNameRow", typeof(RectTransform));
+        row.transform.SetParent(parent, false);
+        RectTransform rowRt = row.GetComponent<RectTransform>();
+        rowRt.anchorMin = new Vector2(0f, 1f);
+        rowRt.anchorMax = new Vector2(1f, 1f);
+        rowRt.pivot = new Vector2(0f, 1f);
+        rowRt.anchoredPosition = new Vector2(0f, rowY);
+        rowRt.sizeDelta = new Vector2(0f, rowHeight);
 
         GameObject slotNameLabel = new GameObject("SlotNameLabel", typeof(RectTransform), typeof(TextMeshProUGUI));
-        slotNameLabel.transform.SetParent(slotSection.transform, false);
+        slotNameLabel.transform.SetParent(row.transform, false);
         RectTransform slotNameLabelRt = slotNameLabel.GetComponent<RectTransform>();
         slotNameLabelRt.anchorMin = new Vector2(0f, 1f);
         slotNameLabelRt.anchorMax = new Vector2(0f, 1f);
         slotNameLabelRt.pivot = new Vector2(0f, 1f);
-        slotNameLabelRt.anchoredPosition = new Vector2(20f, -18f);
-        slotNameLabelRt.sizeDelta = new Vector2(130f, 34f);
+        slotNameLabelRt.anchoredPosition = Vector2.zero;
+        slotNameLabelRt.sizeDelta = new Vector2(88f, rowHeight);
         TextMeshProUGUI slotNameLabelTmp = slotNameLabel.GetComponent<TextMeshProUGUI>();
         if (navLabelFont != null) slotNameLabelTmp.font = navLabelFont;
-        slotNameLabelTmp.fontSize = 24f;
+        slotNameLabelTmp.fontSize = 17f;
         slotNameLabelTmp.alignment = TextAlignmentOptions.Left;
-        slotNameLabelTmp.color = new Color(0.2f, 0.16f, 0.12f, 1f);
-        slotNameLabelTmp.text = "槽位名稱:";
+        slotNameLabelTmp.color = PlayerInfoTextMuted;
+        slotNameLabelTmp.text = "槽位名稱";
 
         GameObject inputBgObj = new GameObject("SlotNameInputBg", typeof(RectTransform), typeof(Image));
-        inputBgObj.transform.SetParent(slotSection.transform, false);
+        inputBgObj.transform.SetParent(row.transform, false);
         RectTransform inputBgRt = inputBgObj.GetComponent<RectTransform>();
         inputBgRt.anchorMin = new Vector2(0f, 1f);
-        inputBgRt.anchorMax = new Vector2(0f, 1f);
+        inputBgRt.anchorMax = new Vector2(1f, 1f);
         inputBgRt.pivot = new Vector2(0f, 1f);
-        inputBgRt.anchoredPosition = new Vector2(156f, -14f);
-        inputBgRt.sizeDelta = new Vector2(320f, 42f);
+        inputBgRt.anchoredPosition = new Vector2(96f, 0f);
+        inputBgRt.sizeDelta = new Vector2(-280f, rowHeight);
         Image inputBg = inputBgObj.GetComponent<Image>();
-        inputBg.color = new Color(1f, 1f, 1f, 0.92f);
+        inputBg.color = Color.white;
 
         GameObject viewportObj = new GameObject("Viewport", typeof(RectTransform), typeof(RectMask2D));
         viewportObj.transform.SetParent(inputBgObj.transform, false);
@@ -789,11 +1068,11 @@ public class GlobalNavRuntime : MonoBehaviour
         phRt.offsetMax = Vector2.zero;
         TextMeshProUGUI placeholder = placeholderObj.GetComponent<TextMeshProUGUI>();
         if (navLabelFont != null) placeholder.font = navLabelFont;
-        placeholder.fontSize = 22f;
-        placeholder.color = new Color(0.45f, 0.4f, 0.35f, 0.75f);
+        placeholder.fontSize = 20f;
+        placeholder.color = new Color(0.55f, 0.5f, 0.45f, 0.8f);
         placeholder.alignment = TextAlignmentOptions.Left;
         placeholder.richText = false;
-        placeholder.text = "玩家槽位名稱";
+        placeholder.text = "輸入名稱";
 
         GameObject inputTextObj = new GameObject("Text", typeof(RectTransform), typeof(TextMeshProUGUI));
         inputTextObj.transform.SetParent(viewportObj.transform, false);
@@ -804,8 +1083,8 @@ public class GlobalNavRuntime : MonoBehaviour
         inputTextRt.offsetMax = Vector2.zero;
         TextMeshProUGUI inputText = inputTextObj.GetComponent<TextMeshProUGUI>();
         if (navLabelFont != null) inputText.font = navLabelFont;
-        inputText.fontSize = 22f;
-        inputText.color = new Color(0.2f, 0.16f, 0.12f, 1f);
+        inputText.fontSize = 20f;
+        inputText.color = PlayerInfoTextPrimary;
         inputText.alignment = TextAlignmentOptions.Left;
         inputText.richText = false;
         inputText.overflowMode = TextOverflowModes.Overflow;
@@ -820,14 +1099,14 @@ public class GlobalNavRuntime : MonoBehaviour
         playerSlotNameInput.richText = false;
 
         GameObject saveNameBtnObj = CreateButton(
-            slotSection.transform,
+            row.transform,
             "SaveSlotNameButton",
-            "儲存名稱",
-            new Vector2(0f, 1f),
-            new Vector2(0f, 1f),
-            new Vector2(0f, 1f),
-            new Vector2(490f, -14f),
-            new Vector2(140f, 42f),
+            "儲存",
+            new Vector2(1f, 1f),
+            new Vector2(1f, 1f),
+            new Vector2(1f, 1f),
+            new Vector2(0f, 0f),
+            new Vector2(120f, rowHeight),
             new Color(0.24f, 0.47f, 0.32f, 0.96f),
             20f);
         Button saveNameBtn = saveNameBtnObj.GetComponent<Button>();
@@ -839,42 +1118,193 @@ public class GlobalNavRuntime : MonoBehaviour
             RefreshPlayerInfoOverlayContent();
         });
 
-        playerInfoUuidText = CreateInfoText(slotSection.transform, "UuidText", new Vector2(20f, -66f), new Vector2(panelWidth - 88f, 32f), 20f);
-        playerInfoRoleText = CreateInfoText(slotSection.transform, "RoleText", new Vector2(20f, -100f), new Vector2(520f, 30f), 20f);
-        playerInfoStartDateText = CreateInfoText(slotSection.transform, "StartDateText", new Vector2(560f, -100f), new Vector2(480f, 30f), 20f);
+        rowY -= rowHeight + PlayerInfoLineGap;
+    }
 
-        GameObject assetSection = new GameObject("AssetSection", typeof(RectTransform), typeof(Image));
-        assetSection.transform.SetParent(panel.transform, false);
-        RectTransform assetRt = assetSection.GetComponent<RectTransform>();
-        assetRt.anchorMin = new Vector2(0f, 1f);
-        assetRt.anchorMax = new Vector2(1f, 1f);
-        assetRt.pivot = new Vector2(0.5f, 1f);
-        assetRt.offsetMin = new Vector2(24f, -460f);
-        assetRt.offsetMax = new Vector2(-24f, -270f);
-        Image assetBg = assetSection.GetComponent<Image>();
-        assetBg.color = new Color(0.97f, 0.95f, 0.9f, 0.95f);
+    private void BuildPlayerInfoRecordPanel(Transform recordBody, ref float rowY)
+    {
+        const float barHeight = 44f;
+        const float columnAreaHeight = 118f;
+        const float summaryHeight = 36f;
+        float filterTop = rowY;
 
-        playerInfoCoinsText = CreateInfoText(assetSection.transform, "CoinsText", new Vector2(20f, -18f), new Vector2(240f, 34f), 24f);
-        playerInfoDeckSummaryText = CreateInfoText(assetSection.transform, "DeckSummaryText", new Vector2(20f, -58f), new Vector2(panelWidth - 88f, 56f), 20f);
-        playerInfoHeroSummaryText = CreateInfoText(assetSection.transform, "HeroSummaryText", new Vector2(20f, -122f), new Vector2(panelWidth - 88f, 56f), 20f);
+        GameObject filterBar = new GameObject("RecordFilterBar", typeof(RectTransform), typeof(Image));
+        filterBar.transform.SetParent(recordBody, false);
+        RectTransform filterBarRt = filterBar.GetComponent<RectTransform>();
+        filterBarRt.anchorMin = new Vector2(0f, 1f);
+        filterBarRt.anchorMax = new Vector2(1f, 1f);
+        filterBarRt.pivot = new Vector2(0.5f, 1f);
+        filterBarRt.anchoredPosition = new Vector2(0f, filterTop);
+        filterBarRt.sizeDelta = new Vector2(0f, barHeight);
+        filterBar.GetComponent<Image>().color = new Color(0.72f, 0.80f, 0.86f, 0.55f);
 
-        GameObject recordSection = new GameObject("RecordSection", typeof(RectTransform), typeof(Image));
-        recordSection.transform.SetParent(panel.transform, false);
-        RectTransform recordRt = recordSection.GetComponent<RectTransform>();
-        recordRt.anchorMin = new Vector2(0f, 1f);
-        recordRt.anchorMax = new Vector2(1f, 1f);
-        recordRt.pivot = new Vector2(0.5f, 1f);
-        recordRt.offsetMin = new Vector2(24f, -614f);
-        recordRt.offsetMax = new Vector2(-24f, -472f);
-        Image recordBg = recordSection.GetComponent<Image>();
-        recordBg.color = new Color(0.97f, 0.95f, 0.9f, 0.95f);
+        int filterCount = PlayerInfoRecordFilterLabels.Length;
+        for (int i = 0; i < filterCount; i++)
+        {
+            int filterCode = PlayerInfoRecordFilterCodes[i];
+            string tabLabel = PlayerInfoRecordFilterLabels[i];
+            float minX = (float)i / filterCount;
+            float maxX = (float)(i + 1) / filterCount;
 
-        playerInfoWldText = CreateInfoText(recordSection.transform, "WldText", new Vector2(20f, -24f), new Vector2(360f, 40f), 30f);
-        playerInfoLastResultText = CreateInfoText(recordSection.transform, "LastResultText", new Vector2(400f, -28f), new Vector2(300f, 34f), 24f);
-        playerInfoTotalMatchesText = CreateInfoText(recordSection.transform, "TotalMatchesText", new Vector2(20f, -78f), new Vector2(280f, 30f), 20f);
+            GameObject tabObj = new GameObject("Filter_" + tabLabel, typeof(RectTransform), typeof(Image), typeof(Button));
+            tabObj.transform.SetParent(filterBar.transform, false);
+            RectTransform tabRt = tabObj.GetComponent<RectTransform>();
+            tabRt.anchorMin = new Vector2(minX, 0f);
+            tabRt.anchorMax = new Vector2(maxX, 1f);
+            tabRt.offsetMin = new Vector2(5f, 5f);
+            tabRt.offsetMax = new Vector2(-5f, -5f);
 
-        playerInfoOverlayRoot = root;
-        playerInfoOverlayRoot.SetActive(false);
+            Image tabBg = tabObj.GetComponent<Image>();
+            tabBg.color = new Color(1f, 1f, 1f, 0f);
+            Button tabBtn = tabObj.GetComponent<Button>();
+            tabBtn.onClick.AddListener(() =>
+            {
+                playerInfoActiveRecordFilter = filterCode;
+                RefreshPlayerInfoOverlayContent();
+            });
+
+            GameObject tabLabelObj = new GameObject("Label", typeof(RectTransform), typeof(TextMeshProUGUI));
+            tabLabelObj.transform.SetParent(tabObj.transform, false);
+            RectTransform tabLabelRt = tabLabelObj.GetComponent<RectTransform>();
+            tabLabelRt.anchorMin = Vector2.zero;
+            tabLabelRt.anchorMax = Vector2.one;
+            tabLabelRt.offsetMin = Vector2.zero;
+            tabLabelRt.offsetMax = Vector2.zero;
+            TextMeshProUGUI tabTmp = tabLabelObj.GetComponent<TextMeshProUGUI>();
+            if (navLabelFont != null) tabTmp.font = navLabelFont;
+            tabTmp.text = tabLabel;
+            tabTmp.fontSize = 24f;
+            tabTmp.fontStyle = FontStyles.Bold;
+            tabTmp.alignment = TextAlignmentOptions.Center;
+            tabTmp.color = new Color(0.92f, 0.95f, 0.98f, 1f);
+            tabTmp.raycastTarget = false;
+
+            playerInfoRecordFilterButtons[i] = tabBtn;
+            playerInfoRecordFilterButtonBgs[i] = tabBg;
+            playerInfoRecordFilterLabels[i] = tabTmp;
+        }
+
+        rowY -= barHeight + 14f;
+        float columnTop = rowY;
+
+        GameObject columnsRoot = new GameObject("DifficultyColumns", typeof(RectTransform));
+        columnsRoot.transform.SetParent(recordBody, false);
+        RectTransform columnsRt = columnsRoot.GetComponent<RectTransform>();
+        columnsRt.anchorMin = new Vector2(0f, 1f);
+        columnsRt.anchorMax = new Vector2(1f, 1f);
+        columnsRt.pivot = new Vector2(0.5f, 1f);
+        columnsRt.anchoredPosition = new Vector2(0f, columnTop);
+        columnsRt.sizeDelta = new Vector2(0f, columnAreaHeight);
+
+        int columnCount = PlayerProfileCsvService.StandardDifficultyLabelsZh.Length;
+        playerInfoRecordColumns = new PlayerInfoRecordColumnUi[columnCount];
+
+        for (int i = 0; i < columnCount; i++)
+        {
+            string diffLabel = PlayerProfileCsvService.StandardDifficultyLabelsZh[i];
+            float minX = (float)i / columnCount;
+            float maxX = (float)(i + 1) / columnCount;
+
+            GameObject colObj = new GameObject("Col_" + diffLabel, typeof(RectTransform));
+            colObj.transform.SetParent(columnsRoot.transform, false);
+            RectTransform colRt = colObj.GetComponent<RectTransform>();
+            colRt.anchorMin = new Vector2(minX, 0f);
+            colRt.anchorMax = new Vector2(maxX, 1f);
+            colRt.offsetMin = new Vector2(3f, 0f);
+            colRt.offsetMax = new Vector2(-3f, 0f);
+
+            GameObject badgeObj = new GameObject("Badge", typeof(RectTransform), typeof(Image));
+            badgeObj.transform.SetParent(colObj.transform, false);
+            RectTransform badgeRt = badgeObj.GetComponent<RectTransform>();
+            badgeRt.anchorMin = new Vector2(0.06f, 1f);
+            badgeRt.anchorMax = new Vector2(0.94f, 1f);
+            badgeRt.pivot = new Vector2(0.5f, 1f);
+            badgeRt.anchoredPosition = new Vector2(0f, -4f);
+            badgeRt.sizeDelta = new Vector2(0f, 36f);
+            Image badgeImg = badgeObj.GetComponent<Image>();
+            badgeImg.color = PlayerInfoDifficultyBadgeColors[i];
+
+            GameObject badgeTextObj = new GameObject("BadgeText", typeof(RectTransform), typeof(TextMeshProUGUI));
+            badgeTextObj.transform.SetParent(badgeObj.transform, false);
+            RectTransform badgeTextRt = badgeTextObj.GetComponent<RectTransform>();
+            badgeTextRt.anchorMin = Vector2.zero;
+            badgeTextRt.anchorMax = Vector2.one;
+            badgeTextRt.offsetMin = Vector2.zero;
+            badgeTextRt.offsetMax = Vector2.zero;
+            TextMeshProUGUI badgeTmp = badgeTextObj.GetComponent<TextMeshProUGUI>();
+            if (navLabelFont != null) badgeTmp.font = navLabelFont;
+            badgeTmp.text = diffLabel;
+            badgeTmp.fontSize = 18f;
+            badgeTmp.fontStyle = FontStyles.Bold;
+            badgeTmp.alignment = TextAlignmentOptions.Center;
+            badgeTmp.color = Color.white;
+            badgeTmp.raycastTarget = false;
+
+            GameObject countObj = new GameObject("Count", typeof(RectTransform), typeof(TextMeshProUGUI));
+            countObj.transform.SetParent(colObj.transform, false);
+            RectTransform countRt = countObj.GetComponent<RectTransform>();
+            countRt.anchorMin = new Vector2(0f, 1f);
+            countRt.anchorMax = new Vector2(1f, 1f);
+            countRt.pivot = new Vector2(0.5f, 1f);
+            countRt.anchoredPosition = new Vector2(0f, -50f);
+            countRt.sizeDelta = new Vector2(0f, 44f);
+            TextMeshProUGUI countTmp = countObj.GetComponent<TextMeshProUGUI>();
+            if (navLabelFont != null) countTmp.font = navLabelFont;
+            countTmp.text = "0";
+            countTmp.fontSize = 26f;
+            countTmp.fontStyle = FontStyles.Bold;
+            countTmp.alignment = TextAlignmentOptions.Center;
+            countTmp.color = new Color(0.35f, 0.38f, 0.42f, 1f);
+            countTmp.raycastTarget = false;
+
+            playerInfoRecordColumns[i] = new PlayerInfoRecordColumnUi
+            {
+                badgeImage = badgeImg,
+                badgeText = badgeTmp,
+                countText = countTmp
+            };
+        }
+
+        rowY -= columnAreaHeight + 12f;
+        playerInfoRecordTotalText = CreateProfileTextLine(
+            recordBody,
+            "RecordFilterTotal",
+            ref rowY,
+            summaryHeight,
+            17f,
+            PlayerInfoTextMuted,
+            string.Empty,
+            true,
+            false,
+            2f);
+        rowY -= PlayerInfoLineGap;
+    }
+
+    private void RefreshPlayerInfoRecordPanel(PlayerProfileCsvService.PlayerProfile p)
+    {
+        if (playerInfoRecordColumns == null || playerInfoRecordColumns.Length == 0) return;
+
+        int[] counts = PlayerProfileCsvService.GetDifficultyCountsForResult(p, playerInfoActiveRecordFilter);
+        int total = PlayerProfileCsvService.SumCounts(counts);
+        for (int i = 0; i < playerInfoRecordColumns.Length && i < counts.Length; i++)
+        {
+            if (playerInfoRecordColumns[i]?.countText != null)
+                playerInfoRecordColumns[i].countText.text = Mathf.Max(0, counts[i]).ToString();
+        }
+
+        for (int i = 0; i < PlayerInfoRecordFilterCodes.Length; i++)
+        {
+            bool active = PlayerInfoRecordFilterCodes[i] == playerInfoActiveRecordFilter;
+            if (playerInfoRecordFilterButtonBgs[i] != null)
+                playerInfoRecordFilterButtonBgs[i].color = active ? Color.white : new Color(1f, 1f, 1f, 0f);
+            if (playerInfoRecordFilterLabels[i] != null)
+                playerInfoRecordFilterLabels[i].color = active
+                    ? new Color(0.22f, 0.26f, 0.30f, 1f)
+                    : new Color(0.92f, 0.95f, 0.98f, 1f);
+        }
+
+        if (playerInfoRecordTotalText != null)
+            playerInfoRecordTotalText.text = PlayerProfileCsvService.BuildBattleRecordPanelSummary(p, playerInfoActiveRecordFilter);
     }
 
     private TextMeshProUGUI CreateInfoText(Transform parent, string name, Vector2 anchoredPos, Vector2 size, float fontSize)

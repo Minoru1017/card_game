@@ -9,7 +9,7 @@ using UnityEngine.UI;
 using UnityEngine.EventSystems;
 using UnityEngine.SceneManagement;
 
-public partial class DeckManager : MonoBehaviour
+public partial class DeckManager : MonoBehaviour, ICardInspectPanelHost
 {
     public int maxDeckCards = 30;
     public TextMeshProUGUI deckHintText;
@@ -479,9 +479,27 @@ public partial class DeckManager : MonoBehaviour
         return _cachedHintCanvas;
     }
 
+    /// <summary>DataManager 上的唯一 DeckManager；場景內重複實例銷毀時不得解除全域場景訂閱。</summary>
+    private bool IsCanonicalDeckManagerInstance()
+    {
+        if (DataManager == null)
+        {
+            PlayerData pd = PlayerData.ResolveCanonical();
+            if (pd != null) DataManager = pd.gameObject;
+        }
+        if (DataManager == null) return true;
+        DeckManager primary = DataManager.GetComponent<DeckManager>();
+        return primary == null || primary == this;
+    }
+
     private void OnDestroy()
     {
-        SceneManager.sceneLoaded -= OnSceneLoadedEnsureBuildbeckDeckUi;
+        if (IsCanonicalDeckManagerInstance())
+        {
+            SceneManager.sceneLoaded -= OnSceneLoadedEnsureBuildbeckDeckUi;
+            SceneManager.sceneUnloaded -= OnSceneUnloadedFlushBuildbeckSave;
+        }
+
         UnwireDeckScrollEdgeFeel(_libraryPanelScrollRect, OnLibraryPanelScrollFeel);
         UnwireDeckScrollEdgeFeel(_deckPanelScrollRect, OnDeckPanelScrollFeel);
         if (_libraryScrollEdgePulseCo != null) StopCoroutine(_libraryScrollEdgePulseCo);
@@ -492,13 +510,36 @@ public partial class DeckManager : MonoBehaviour
 
     private void OnEnable()
     {
+        if (!IsCanonicalDeckManagerInstance()) return;
         SceneManager.sceneLoaded -= OnSceneLoadedEnsureBuildbeckDeckUi;
         SceneManager.sceneLoaded += OnSceneLoadedEnsureBuildbeckDeckUi;
+        SceneManager.sceneUnloaded -= OnSceneUnloadedFlushBuildbeckSave;
+        SceneManager.sceneUnloaded += OnSceneUnloadedFlushBuildbeckSave;
     }
 
     private void OnDisable()
     {
+        if (!IsCanonicalDeckManagerInstance()) return;
         SceneManager.sceneLoaded -= OnSceneLoadedEnsureBuildbeckDeckUi;
+        SceneManager.sceneUnloaded -= OnSceneUnloadedFlushBuildbeckSave;
+    }
+
+    /// <summary>玩家資訊等流程更新存檔後，若仍在 Buildbeck 則刷新牌組分頁／名稱顯示。</summary>
+    public void RefreshBuildbeckDeckNameLabelsIfActive()
+    {
+        if (!IsBuildbeckSceneActive()) return;
+        EnsureCoreRefs();
+        BuildbeckLayoutAutoBinder.InvalidateAndRewire(this);
+        BindExternalSlotButtonsIfNeeded();
+        RefreshDeckSlotTabVisual();
+    }
+
+    private static void OnSceneUnloadedFlushBuildbeckSave(Scene scene)
+    {
+        if (!scene.IsValid() || !scene.name.Equals("Buildbeck", System.StringComparison.OrdinalIgnoreCase))
+            return;
+        PlayerData pd = PlayerData.ResolveCanonical();
+        if (pd != null) pd.SavePlayerData();
     }
 
     private void OnSceneLoadedEnsureBuildbeckDeckUi(Scene scene, LoadSceneMode mode)
@@ -509,6 +550,12 @@ public partial class DeckManager : MonoBehaviour
     public void TriggerBuildbeckUiReload()
     {
         RequestBuildbeckUiReload();
+    }
+
+    /// <summary>Buildbeck UI 重新綁定前呼叫，確保牌組分頁會重新掛上場景按鈕。</summary>
+    public void NotifyBuildbeckUiRewireStarting()
+    {
+        externalSlotButtonsBound = false;
     }
 
     private void RequestBuildbeckUiReload()
@@ -544,7 +591,16 @@ public partial class DeckManager : MonoBehaviour
                 BuildbeckSceneAutoScaffold.EnsureScaffoldNow();
 
             EnsureCoreRefs();
-            if (PlayerData != null) PlayerData.LoadPlayerData();
+            ResetBuildbeckSceneUiWiring();
+            NotifyBuildbeckUiRewireStarting();
+            BuildbeckLayoutAutoBinder.InvalidateAndRewire(this);
+
+            PlayerData pd = PlayerData.ResolveCanonical();
+            if (pd != null)
+            {
+                pd.EnsureMinimumDeckSlotCount();
+                pd.LoadPlayerData();
+            }
 
             EnsureDeckUIRefs();
             BindExternalSlotButtonsIfNeeded();
@@ -555,6 +611,7 @@ public partial class DeckManager : MonoBehaviour
             ClearPanels();
             UpdateLibrary();
             if (showDeck) UpdateDeck();
+            DestroyBackpackProficiencyHelpFloatingButton();
             RefreshScrollablePanels();
             ForcePanelsScrollToTop();
             ForceRebuildPanelsLayout();
@@ -564,9 +621,11 @@ public partial class DeckManager : MonoBehaviour
             {
                 BuildbeckLayoutAutoBinder.TryWireReadyBattleButton();
                 SceneLoader loader = GetCachedSceneLoader();
-                if (loader != null) loader.RefreshEnterBattleState();
+                if (loader != null) loader.RefreshEnterBattleState(false);
                 BuildbeckLayoutAutoBinder.BringBuildbeckReturnButtonToFront();
             }
+
+            DestroyBackpackProficiencyHelpFloatingButton();
         }
         finally
         {
@@ -745,9 +804,9 @@ public partial class DeckManager : MonoBehaviour
         ClearPanels();
         UpdateLibrary();
         if (showDeck) UpdateDeck();
+        DestroyBackpackProficiencyHelpFloatingButton();
         RefreshScrollablePanels();
         ForcePanelsScrollToTop();
-        
     }
 
     private void AutoSelectFirstNonEmptyDeckSlotIfNeeded()
@@ -783,8 +842,8 @@ public partial class DeckManager : MonoBehaviour
     {
         EnsureCoreRefs();
         if (PlayerData == null) return;
-        if (PlayerData.deckSlotCount >= 5) return;
-        PlayerData.deckSlotCount = 5;
+        if (PlayerData.deckSlotCount >= PlayerData.MinDeckSlotCount) return;
+        PlayerData.EnsureMinimumDeckSlotCount();
         PlayerData.SavePlayerData();
     }
 
@@ -794,9 +853,11 @@ public partial class DeckManager : MonoBehaviour
     {
         TickDeckScrollUserSessionEnd();
         SlotNavigator.UpdateFrame();
-        if (backpackInspectRoot != null && backpackInspectRoot.activeSelf && Input.GetKeyDown(KeyCode.Escape))
+        if (GetBackpackProficiencyHelpDialog().IsOpen && Input.GetKeyDown(KeyCode.Escape))
+            HideBackpackProficiencyHelp();
+        else if (backpackInspectPanel != null && backpackInspectPanel.IsOpen && Input.GetKeyDown(KeyCode.Escape))
             HideBackpackCardInspect();
-        TickBackpackInspectSwipeInput();
+        backpackInspectPanel?.TickSwipeInput();
         if (deckNameEditPanel != null && deckNameEditPanel.activeSelf)
             RefreshDeckNameEditCharCounter();
     }
@@ -958,7 +1019,7 @@ public partial class DeckManager : MonoBehaviour
         RefreshDeckSlotTabVisual();
 
         SceneLoader loader = GetCachedSceneLoader();
-        if (loader != null) loader.RefreshEnterBattleState();
+        if (loader != null) loader.RefreshEnterBattleState(false);
     }
 
     public void SelectDeckSlot0() { SelectDeckSlot(0); }
@@ -985,7 +1046,7 @@ public partial class DeckManager : MonoBehaviour
         PlayerData.SavePlayerData();
         ShowDeckHint("牌組已保存");
         SceneLoader loader = GetCachedSceneLoader();
-        if (loader != null) loader.RefreshEnterBattleState();
+        if (loader != null) loader.RefreshEnterBattleState(false);
     }
 
     public void ClearPanels()
@@ -1907,15 +1968,17 @@ public partial class DeckManager : MonoBehaviour
             if (dm != null) DataManager = dm;
         }
 
-        if (PlayerData == null && DataManager != null)
-            PlayerData = DataManager.GetComponent<PlayerData>();
         if (CardStore == null && DataManager != null)
             CardStore = DataManager.GetComponent<CardStore>();
 
-        if (PlayerData == null)
-            PlayerData = Object.FindFirstObjectByType<PlayerData>();
+        PlayerData canonical = PlayerData.ResolveCanonical();
+        if (canonical != null)
+            PlayerData = canonical;
+        else if (PlayerData == null && DataManager != null)
+            PlayerData = DataManager.GetComponent<PlayerData>();
+
         if (CardStore == null)
-            CardStore = Object.FindFirstObjectByType<CardStore>();
+            CardStore = UnityEngine.Object.FindFirstObjectByType<CardStore>();
 
         if (DataManager == null && PlayerData != null)
             DataManager = PlayerData.gameObject;
@@ -2354,9 +2417,29 @@ public partial class DeckManager : MonoBehaviour
         return BuildbeckUiHierarchyBuilder.CreateDeckSlotGuideNavButton(parent, objectName, symbol, hintTMPFont);
     }
 
+    private void ResetBuildbeckSceneUiWiring()
+    {
+        externalSlotButtonsBound = false;
+        deckSlotButtons.Clear();
+        deckSlotButton1 = null;
+        deckSlotButton2 = null;
+        deckSlotButton3 = null;
+        deckSlotButton4 = null;
+        deckSlotButton5 = null;
+        currentDeckDisplayNameText = null;
+        currentDeckDisplayNameLegacyText = null;
+        libraryPanel = null;
+        deckPanel = null;
+    }
+
     private void BindExternalSlotButtonsIfNeeded()
     {
-        if (externalSlotButtonsBound) return;
+        if (externalSlotButtonsBound)
+        {
+            RefreshDeckSlotTabVisual();
+            RefreshCurrentDeckDisplayName();
+            return;
+        }
 
         bool hasAny = deckSlotButton1 != null || deckSlotButton2 != null || deckSlotButton3 != null ||
                       deckSlotButton4 != null || deckSlotButton5 != null;
@@ -3534,8 +3617,9 @@ public partial class DeckManager : MonoBehaviour
     {
         Debug.Log("DeckManager: ResetDeckForRebuild clicked.");
         EnsureDeckUIRefs();
-        if (PlayerData == null && DataManager != null) PlayerData = DataManager.GetComponent<PlayerData>();
-        if (PlayerData == null) PlayerData = Object.FindFirstObjectByType<PlayerData>();
+        PlayerData canonical = PlayerData.ResolveCanonical();
+        if (canonical != null) PlayerData = canonical;
+        else if (PlayerData == null && DataManager != null) PlayerData = DataManager.GetComponent<PlayerData>();
         if (PlayerData != null && GetDeckTotalCount() <= 0)
         {
             ShowDeckHint("\u76EE\u524D\u724C\u7D44\u6C92\u6709\u5361\u724C");
@@ -3575,7 +3659,7 @@ public partial class DeckManager : MonoBehaviour
         StartCoroutine(RebuildPanelsAfterReset());
 
         SceneLoader loader = GetCachedSceneLoader();
-        if (loader != null) loader.RefreshEnterBattleState();
+        if (loader != null) loader.RefreshEnterBattleState(false);
     }
 
     private IEnumerator RebuildPanelsAfterReset()
@@ -3789,20 +3873,24 @@ public partial class DeckManager : MonoBehaviour
     public void ConfirmDeckNameEdit()
     {
         EnsureCoreRefs();
-        if (PlayerData == null)
+        PlayerData pd = PlayerData.ResolveCanonical();
+        if (pd == null)
         {
             HideDeckNameEditPanel();
             return;
         }
 
+        PlayerData = pd;
+        pd.EnsureMinimumDeckSlotCount();
+        int nameSlot = Mathf.Clamp(pd.selectedDeckSlot, 0, pd.deckSlotCount - 1);
         string text = deckNameEditInput != null ? deckNameEditInput.text : string.Empty;
-        PlayerData.SetDeckSlotDisplayName(PlayerData.selectedDeckSlot, text);
-        PlayerData.SavePlayerData();
+        pd.SetDeckSlotDisplayName(nameSlot, text);
+        pd.SavePlayerData();
         HideDeckNameEditPanel();
         RefreshDeckSlotTabVisual();
         ShowDeckHint("牌組名稱已更新");
         SceneLoader loader = GetCachedSceneLoader();
-        if (loader != null) loader.RefreshEnterBattleState();
+        if (loader != null) loader.RefreshEnterBattleState(false);
     }
 
     private void EnsureDeckNameEditPanel()
@@ -4155,781 +4243,145 @@ public partial class DeckManager : MonoBehaviour
     }
 
     // --- 背包場景（showDeck == false）：點卡開浮動檢視，不加入牌組 ---
-    // 浮動視窗：左側完整卡圖、右側結構化資訊（標題/副標/小標/內文）。
 
-    private GameObject backpackInspectRoot;
-    private RectTransform backpackInspectPanelRt;
-    private RectTransform backpackInspectPrefabMount;
-    private Image backpackInspectArtImage;
-    private TextMeshProUGUI backpackInspectTitleTmp;
-    private TextMeshProUGUI backpackInspectRarityTmp;
-    private TextMeshProUGUI backpackInspectSubtitleTmp;
-    private TextMeshProUGUI backpackInspectMetaTmp;
-    private TextMeshProUGUI backpackInspectSwipeHintTmp;
-    private TextMeshProUGUI backpackInspectPageTmp;
-    private TextMeshProUGUI backpackInspectLeftArrowTmp;
-    private TextMeshProUGUI backpackInspectRightArrowTmp;
-    private GameObject backpackInspectCardInstance;
-    private RectTransform backpackInspectImageRegionRt;
-    private RectTransform backpackInspectInfoRegionRt;
-    private CanvasGroup backpackInspectImageCg;
-    private CanvasGroup backpackInspectInfoCg;
-    private readonly List<int> backpackInspectCardIds = new List<int>();
-    private int backpackInspectIndex = -1;
-    private bool backpackInspectSwipeTrackingMouse;
-    private Vector2 backpackInspectSwipeMouseStart;
-    private int backpackInspectSwipeTouchId = -1;
-    private Vector2 backpackInspectSwipeTouchStart;
-    private Coroutine backpackInspectTransitionCo;
-    private float backpackInspectIgnoreSwipeUntilUnscaled;
+    private BackpackCardInspectPanel backpackInspectPanel;
+    private BackpackProficiencyHelpDialog backpackProficiencyHelpDialog;
 
-    public void ShowBackpackCardInspect(Card card)
+    private BackpackCardInspectPanel InspectPanel
     {
-        if (card == null) return;
-        EnsureCoreRefs();
-        if (showDeck) return;
-
-        EnsureBackpackInspectUi();
-        if (backpackInspectRoot == null) return;
-
-        RebuildBackpackInspectCardList();
-        backpackInspectIndex = backpackInspectCardIds.IndexOf(card.id);
-        if (backpackInspectIndex < 0)
+        get
         {
-            backpackInspectCardIds.Add(card.id);
-            backpackInspectIndex = backpackInspectCardIds.Count - 1;
+            if (backpackInspectPanel == null)
+            {
+                backpackInspectPanel = GetComponent<BackpackCardInspectPanel>();
+                if (backpackInspectPanel == null)
+                    backpackInspectPanel = gameObject.AddComponent<BackpackCardInspectPanel>();
+                backpackInspectPanel.BindHost(this);
+            }
+            return backpackInspectPanel;
         }
-
-        backpackInspectRoot.SetActive(true);
-        backpackInspectRoot.transform.SetAsLastSibling();
-        if (backpackInspectPanelRt != null)
-            backpackInspectPanelRt.transform.SetAsLastSibling();
-        backpackInspectSwipeTrackingMouse = false;
-        backpackInspectSwipeTouchId = -1;
-        backpackInspectIgnoreSwipeUntilUnscaled = Time.unscaledTime + 0.2f;
-        RefreshBackpackInspectByIndex(0);
     }
 
-    public void HideBackpackCardInspect()
+    public Canvas BackpackInspectResolveCanvas()
     {
-        if (backpackInspectRoot != null)
-            backpackInspectRoot.SetActive(false);
-        if (backpackInspectTransitionCo != null)
+        if (libraryPanel != null)
         {
-            StopCoroutine(backpackInspectTransitionCo);
-            backpackInspectTransitionCo = null;
+            Canvas libCanvas = libraryPanel.GetComponentInParent<Canvas>(true);
+            if (libCanvas != null) return libCanvas;
         }
-        if (backpackInspectCardInstance != null)
-        {
-            Destroy(backpackInspectCardInstance);
-            backpackInspectCardInstance = null;
-        }
-        backpackInspectCardIds.Clear();
-        backpackInspectIndex = -1;
+        return ResolvePrimaryUiCanvas();
     }
 
-    private void RebuildBackpackInspectCardList()
+    public TMP_FontAsset BackpackInspectResolveFont()
     {
-        backpackInspectCardIds.Clear();
-        if (PlayerData == null) return;
+        EnsureTMPHintReady();
+        if (hintTMPFont != null && BuildbeckUiFonts.FontSupportsText(hintTMPFont, "戰技"))
+            return hintTMPFont;
+        TMP_FontAsset fromPrefabs = ResolveHintTMPFont();
+        if (fromPrefabs != null && BuildbeckUiFonts.FontSupportsText(fromPrefabs, "戰技"))
+            return fromPrefabs;
+        TMP_FontAsset buildbeck = BuildbeckUiFonts.ResolveBuildbeckButtonFont();
+        if (buildbeck != null) return buildbeck;
+        return TMP_Settings.defaultFontAsset;
+    }
 
+    internal GameObject BackpackInspectLibraryPrefab => librarycardPrefab;
+    internal GameObject BackpackInspectDeckPrefab => deckCardPrefab;
+
+    public Card BackpackInspectGetCard(int cardId) =>
+        CardStore != null ? CardStore.GetCardById(cardId) : null;
+
+    public void BackpackInspectFillCollectionIds(List<int> ids)
+    {
+        if (ids == null || PlayerData == null) return;
         foreach (var kv in PlayerData.playerCollection)
         {
             if (kv.Value <= 0) continue;
             if (CardStore != null && CardStore.GetCardById(kv.Key) == null) continue;
-            backpackInspectCardIds.Add(kv.Key);
+            ids.Add(kv.Key);
         }
-        backpackInspectCardIds.Sort();
     }
 
-    private void RefreshBackpackInspectByIndex(int swipeDirection)
+    public int BackpackInspectCollectionCount(int cardId) =>
+        PlayerData != null ? PlayerData.GetCollectionCount(cardId) : 0;
+
+    internal int BackpackInspectDeckCount(int cardId) =>
+        PlayerData != null ? PlayerData.GetSelectedDeckCount(cardId) : 0;
+
+    public string BackpackInspectDeckInclusionText(int cardId)
     {
-        if (backpackInspectCardIds.Count == 0 || backpackInspectIndex < 0 || backpackInspectIndex >= backpackInspectCardIds.Count)
-            return;
-        Card card = CardStore != null ? CardStore.GetCardById(backpackInspectCardIds[backpackInspectIndex]) : null;
+        if (PlayerData == null) return "尚未加入牌組";
+        if (PlayerData.GetSelectedDeckCount(cardId) <= 0) return "尚未加入目前牌組";
+        string deckName = PlayerData.GetDeckSlotDisplayName(PlayerData.selectedDeckSlot);
+        if (string.IsNullOrWhiteSpace(deckName)) deckName = "牌組";
+        return $"已含在牌組 {deckName.Trim()}";
+    }
+
+    public void EnsureCoreRefsForInspect() => EnsureCoreRefs();
+
+    public void ShowBackpackCardInspect(Card card, CardDisplay sourceDisplay = null)
+    {
         if (card == null) return;
-        RenderBackpackInspectCard(card);
-        RefreshBackpackSwipeGuides();
-        PlayBackpackInspectTransition(swipeDirection);
+        EnsureCoreRefs();
+        if (showDeck) return;
+        ShowCardInspect(card, sourceDisplay);
     }
 
-    private void RenderBackpackInspectCard(Card card)
+    /// <summary>開啟卡牌詳情（不受 showDeck 限制；商店開包長按等）。</summary>
+    public void ShowCardInspect(Card card, CardDisplay sourceDisplay = null)
     {
-        if (backpackInspectCardInstance != null)
-        {
-            Destroy(backpackInspectCardInstance);
-            backpackInspectCardInstance = null;
-        }
-
-        Sprite portrait = card.ResolveCardArtSprite();
-        if (portrait == null) portrait = TryLoadInspectPortraitSprite(card.id);
-        if (portrait != null && backpackInspectArtImage != null)
-        {
-            backpackInspectArtImage.sprite = portrait;
-            backpackInspectArtImage.gameObject.SetActive(true);
-            CardDisplay.SyncCardArtRarityOverlay(backpackInspectArtImage, card);
-            if (backpackInspectPrefabMount != null)
-                backpackInspectPrefabMount.gameObject.SetActive(false);
-        }
-        else
-        {
-            if (backpackInspectArtImage != null)
-            {
-                backpackInspectArtImage.sprite = null;
-                backpackInspectArtImage.gameObject.SetActive(false);
-                CardDisplay.SyncCardArtRarityOverlay(backpackInspectArtImage, null);
-            }
-
-            GameObject prefab = librarycardPrefab != null ? librarycardPrefab : deckCardPrefab;
-            if (prefab != null && backpackInspectPrefabMount != null)
-            {
-                backpackInspectPrefabMount.gameObject.SetActive(true);
-                backpackInspectCardInstance = Instantiate(prefab, backpackInspectPrefabMount);
-                backpackInspectCardInstance.name = "BackpackInspectCard";
-                RectTransform crt = backpackInspectCardInstance.GetComponent<RectTransform>();
-                if (crt != null)
-                {
-                    crt.anchorMin = Vector2.zero;
-                    crt.anchorMax = Vector2.one;
-                    crt.pivot = new Vector2(0.5f, 0.5f);
-                    crt.offsetMin = crt.offsetMax = Vector2.zero;
-                    crt.localRotation = Quaternion.identity;
-                    crt.localScale = Vector3.one;
-                }
-
-                foreach (ClickCard cc in backpackInspectCardInstance.GetComponentsInChildren<ClickCard>(true))
-                    cc.enabled = false;
-                foreach (ZoomUI zu in backpackInspectCardInstance.GetComponentsInChildren<ZoomUI>(true))
-                    zu.enabled = false;
-                foreach (Button b in backpackInspectCardInstance.GetComponentsInChildren<Button>(true))
-                    b.interactable = false;
-                foreach (TextMeshProUGUI tmp in backpackInspectCardInstance.GetComponentsInChildren<TextMeshProUGUI>(true))
-                    tmp.enabled = false;
-                foreach (Text leg in backpackInspectCardInstance.GetComponentsInChildren<Text>(true))
-                    leg.enabled = false;
-
-                CardDisplay cd = backpackInspectCardInstance.GetComponentInChildren<CardDisplay>(true);
-                if (cd != null)
-                {
-                    cd.SetCard(card);
-                    ConfigureInspectCardImageOnly(cd);
-                }
-            }
-        }
-
-        if (backpackInspectTitleTmp != null)
-            backpackInspectTitleTmp.text = BuildBackpackInspectTitle(card);
-        if (backpackInspectRarityTmp != null)
-            backpackInspectRarityTmp.text = BuildBackpackInspectRarityLine(card);
-        if (backpackInspectSubtitleTmp != null)
-            backpackInspectSubtitleTmp.text = BuildBackpackInspectSubtitle(card);
-        if (backpackInspectMetaTmp != null)
-            backpackInspectMetaTmp.text = BuildBackpackInspectMetaText(card);
+        if (card == null) return;
+        EnsureCoreRefs();
+        InspectPanel.Show(card, sourceDisplay);
     }
 
-    private void OnBackpackInspectSwipe(float dragDeltaX)
+    public void HideBackpackCardInspect() => HideCardInspect();
+
+    public void HideCardInspect()
     {
-        if (backpackInspectRoot == null || !backpackInspectRoot.activeSelf) return;
-        if (backpackInspectCardIds.Count <= 1) return;
-
-        const float swipeThreshold = 50f;
-        if (Mathf.Abs(dragDeltaX) < swipeThreshold) return;
-
-        int swipeDirection;
-        if (dragDeltaX < 0f)
-        {
-            backpackInspectIndex++;
-            swipeDirection = 1;
-        }
-        else
-        {
-            backpackInspectIndex--;
-            swipeDirection = -1;
-        }
-
-        if (backpackInspectIndex < 0) backpackInspectIndex = backpackInspectCardIds.Count - 1;
-        else if (backpackInspectIndex >= backpackInspectCardIds.Count) backpackInspectIndex = 0;
-
-        RefreshBackpackInspectByIndex(swipeDirection);
+        if (backpackInspectPanel != null)
+            backpackInspectPanel.Hide();
     }
 
-    private void RefreshBackpackSwipeGuides()
+    private BackpackProficiencyHelpDialog GetBackpackProficiencyHelpDialog()
     {
-        bool canSwipe = backpackInspectCardIds.Count > 1;
-        if (backpackInspectLeftArrowTmp != null)
-            backpackInspectLeftArrowTmp.text = canSwipe ? "<" : string.Empty;
-        if (backpackInspectRightArrowTmp != null)
-            backpackInspectRightArrowTmp.text = canSwipe ? ">" : string.Empty;
-        if (backpackInspectSwipeHintTmp != null)
-            backpackInspectSwipeHintTmp.text = canSwipe ? "左右滑動切換卡牌" : "僅此一張卡牌";
-        if (backpackInspectPageTmp != null)
+        if (backpackProficiencyHelpDialog == null)
         {
-            if (backpackInspectCardIds.Count <= 0 || backpackInspectIndex < 0)
-                backpackInspectPageTmp.text = string.Empty;
-            else
-                backpackInspectPageTmp.text = $"第 {backpackInspectIndex + 1} / {backpackInspectCardIds.Count} 張";
+            backpackProficiencyHelpDialog = GetComponent<BackpackProficiencyHelpDialog>();
+            if (backpackProficiencyHelpDialog == null)
+                backpackProficiencyHelpDialog = gameObject.AddComponent<BackpackProficiencyHelpDialog>();
         }
+        return backpackProficiencyHelpDialog;
     }
 
-    private void PlayBackpackInspectTransition(int swipeDirection)
+    public void ShowBackpackProficiencyHelp()
     {
-        if (backpackInspectImageRegionRt == null || backpackInspectInfoRegionRt == null) return;
-        if (backpackInspectTransitionCo != null) StopCoroutine(backpackInspectTransitionCo);
-        backpackInspectTransitionCo = StartCoroutine(CoBackpackInspectTransition(swipeDirection));
-    }
-
-    private IEnumerator CoBackpackInspectTransition(int swipeDirection)
-    {
-        Vector2 imageBase = new Vector2(6f, 0f);
-        Vector2 infoBase = new Vector2(0f, 0f);
-        float direction = swipeDirection == 0 ? 0f : (swipeDirection > 0 ? 1f : -1f);
-        float startOffset = 26f * direction;
-
-        if (backpackInspectImageCg != null) backpackInspectImageCg.alpha = 0f;
-        if (backpackInspectInfoCg != null) backpackInspectInfoCg.alpha = 0f;
-        backpackInspectImageRegionRt.anchoredPosition = imageBase + new Vector2(startOffset, 0f);
-        backpackInspectInfoRegionRt.anchoredPosition = infoBase + new Vector2(startOffset, 0f);
-
-        const float duration = 0.18f;
-        float t = 0f;
-        while (t < duration)
-        {
-            t += Time.unscaledDeltaTime;
-            float p = Mathf.Clamp01(t / duration);
-            float eased = 1f - Mathf.Pow(1f - p, 3f);
-            float x = Mathf.Lerp(startOffset, 0f, eased);
-
-            backpackInspectImageRegionRt.anchoredPosition = imageBase + new Vector2(x, 0f);
-            backpackInspectInfoRegionRt.anchoredPosition = infoBase + new Vector2(x, 0f);
-            if (backpackInspectImageCg != null) backpackInspectImageCg.alpha = eased;
-            if (backpackInspectInfoCg != null) backpackInspectInfoCg.alpha = eased;
-
-            yield return null;
-        }
-
-        backpackInspectImageRegionRt.anchoredPosition = imageBase;
-        backpackInspectInfoRegionRt.anchoredPosition = infoBase;
-        if (backpackInspectImageCg != null) backpackInspectImageCg.alpha = 1f;
-        if (backpackInspectInfoCg != null) backpackInspectInfoCg.alpha = 1f;
-        backpackInspectTransitionCo = null;
-    }
-
-    private void TickBackpackInspectSwipeInput()
-    {
-        if (backpackInspectRoot == null || !backpackInspectRoot.activeSelf) return;
-        if (backpackInspectCardIds.Count <= 1) return;
-        if (Time.unscaledTime < backpackInspectIgnoreSwipeUntilUnscaled) return;
-
-        if (Input.GetMouseButtonDown(0))
-        {
-            Vector2 downPos = Input.mousePosition;
-            backpackInspectSwipeTrackingMouse = IsScreenPointInsideInspectPanel(downPos);
-            backpackInspectSwipeMouseStart = downPos;
-        }
-        if (backpackInspectSwipeTrackingMouse && Input.GetMouseButtonUp(0))
-        {
-            Vector2 delta = (Vector2)Input.mousePosition - backpackInspectSwipeMouseStart;
-            backpackInspectSwipeTrackingMouse = false;
-            if (Mathf.Abs(delta.x) > Mathf.Abs(delta.y))
-                OnBackpackInspectSwipe(delta.x);
-        }
-
-        if (Input.touchCount <= 0)
-        {
-            backpackInspectSwipeTouchId = -1;
-            return;
-        }
-        for (int i = 0; i < Input.touchCount; i++)
-        {
-            Touch t = Input.GetTouch(i);
-            if (t.phase == TouchPhase.Began && backpackInspectSwipeTouchId < 0)
-            {
-                if (IsScreenPointInsideInspectPanel(t.position))
-                {
-                    backpackInspectSwipeTouchId = t.fingerId;
-                    backpackInspectSwipeTouchStart = t.position;
-                }
-            }
-            else if (t.fingerId == backpackInspectSwipeTouchId &&
-                     (t.phase == TouchPhase.Ended || t.phase == TouchPhase.Canceled))
-            {
-                Vector2 delta = t.position - backpackInspectSwipeTouchStart;
-                backpackInspectSwipeTouchId = -1;
-                if (Mathf.Abs(delta.x) > Mathf.Abs(delta.y))
-                    OnBackpackInspectSwipe(delta.x);
-            }
-        }
-    }
-
-    private bool IsScreenPointInsideInspectPanel(Vector2 screenPoint)
-    {
-        if (backpackInspectPanelRt == null || !backpackInspectPanelRt.gameObject.activeInHierarchy) return false;
-        Canvas canvas = backpackInspectPanelRt.GetComponentInParent<Canvas>();
-        Camera cam = null;
-        if (canvas != null && canvas.renderMode != RenderMode.ScreenSpaceOverlay)
-            cam = canvas.worldCamera;
-        return RectTransformUtility.RectangleContainsScreenPoint(backpackInspectPanelRt, screenPoint, cam);
-    }
-
-    private static Sprite TryLoadInspectPortraitSprite(int cardId)
-    {
-        string[] paths =
-        {
-            $"CardArt/{cardId}",
-            $"Cards/{cardId}",
-            $"UI/CardFaces/{cardId}",
-            $"CardImages/{cardId}",
-        };
-        foreach (string p in paths)
-        {
-            Sprite s = Resources.Load<Sprite>(p);
-            if (s != null) return s;
-        }
-
-        return null;
-    }
-
-    private string BuildBackpackInspectTitle(Card card)
-    {
-        if (card == null) return string.Empty;
-        return string.IsNullOrWhiteSpace(card.cardName) ? "未命名卡牌" : card.cardName.Trim();
-    }
-
-    private static string BuildBackpackInspectRarityLine(Card card)
-    {
-        if (card == null) return string.Empty;
-        string tier = card.rarity.ToString();
-        string hex = card.rarity switch
-        {
-            CardRarity.N => "#B8C4CC",
-            CardRarity.R => "#81C784",
-            CardRarity.SR => "#64B5F6",
-            CardRarity.SSR => "#BA68C8",
-            CardRarity.UR => "#FFB74D",
-            _ => "#ECEFF1"
-        };
-        return $"<color={hex}>稀有度：{tier}</color>";
-    }
-
-    private string BuildBackpackInspectSubtitle(Card card)
-    {
-        if (card == null) return string.Empty;
-        string en = card.cardNameEnglish != null ? card.cardNameEnglish.Trim() : string.Empty;
-        if (string.IsNullOrEmpty(en)) en = "No English Name";
-        string cardType = card is SpellCard ? "法術牌" : (card is MonsterCard ? "怪物牌" : "未分類");
-        return $"Subtitle: {cardType} / {en}";
-    }
-
-    private string BuildBackpackInspectMetaText(Card card)
-    {
-        if (card == null) return string.Empty;
-
-        int owned = PlayerData != null ? PlayerData.GetCollectionCount(card.id) : 0;
-        int inDeck = PlayerData != null ? PlayerData.GetSelectedDeckCount(card.id) : 0;
-
-        var sb = new StringBuilder(320);
-        sb.AppendLine("<size=26><b>收藏資訊</b></size>");
-        sb.AppendLine($"<size=23>已持有: <mark=#274E79CC>{owned}</mark>  目前牌組: <mark=#445B2FCC>{inDeck}</mark></size>");
-        sb.AppendLine();
-
-        sb.AppendLine("<size=26><b>戰鬥數值</b></size>");
-        if (card is MonsterCard m)
-        {
-            sb.AppendLine($"<size=23>攻擊力: {m.attack}</size>");
-            sb.AppendLine($"<size=23>生命值: {m.healthPointMax}</size>");
-        }
-        else if (card is SpellCard sp)
-        {
-            sb.AppendLine("<size=23>攻擊力: -</size>");
-            sb.AppendLine("<size=23>生命值: -</size>");
-            sb.AppendLine();
-            sb.AppendLine("<size=26><b>效果說明</b></size>");
-            sb.AppendLine("<size=23>" + (string.IsNullOrWhiteSpace(sp.effect) ? "此法術暫無效果描述。" : sp.effect.Trim()) + "</size>");
-        }
-        else
-        {
-            sb.AppendLine("<size=23>攻擊力: -</size>");
-            sb.AppendLine("<size=23>生命值: -</size>");
-            sb.AppendLine();
-            sb.AppendLine("<size=26><b>說明</b></size>");
-            sb.AppendLine("<size=23>此卡牌資料格式不完整。</size>");
-        }
-
-        return sb.ToString();
-    }
-
-    private TextMeshProUGUI CreateBackpackInspectBodyScroll(
-        Transform parent,
-        string name,
-        Vector2 anchorMin,
-        Vector2 anchorMax,
-        Vector2 offsetMin,
-        Vector2 offsetMax)
-    {
-        GameObject col = new GameObject(name, typeof(RectTransform));
-        col.transform.SetParent(parent, false);
-        RectTransform colRt = col.GetComponent<RectTransform>();
-        colRt.anchorMin = anchorMin;
-        colRt.anchorMax = anchorMax;
-        colRt.offsetMin = offsetMin;
-        colRt.offsetMax = offsetMax;
-
-        GameObject scrollObj = new GameObject("Scroll", typeof(RectTransform), typeof(ScrollRect));
-        scrollObj.transform.SetParent(col.transform, false);
-        RectTransform scrollRt = scrollObj.GetComponent<RectTransform>();
-        scrollRt.anchorMin = Vector2.zero;
-        scrollRt.anchorMax = Vector2.one;
-        scrollRt.offsetMin = new Vector2(2f, 2f);
-        scrollRt.offsetMax = new Vector2(-2f, -2f);
-        ScrollRect sr = scrollObj.GetComponent<ScrollRect>();
-        sr.horizontal = false;
-        sr.vertical = true;
-        sr.movementType = ScrollRect.MovementType.Clamped;
-        sr.scrollSensitivity = 28f;
-
-        GameObject viewportObj = new GameObject("Viewport", typeof(RectTransform), typeof(Image), typeof(Mask));
-        viewportObj.transform.SetParent(scrollObj.transform, false);
-        RectTransform vpRt = viewportObj.GetComponent<RectTransform>();
-        vpRt.anchorMin = Vector2.zero;
-        vpRt.anchorMax = Vector2.one;
-        vpRt.offsetMin = vpRt.offsetMax = Vector2.zero;
-        Image vpImg = viewportObj.GetComponent<Image>();
-        vpImg.color = new Color(1f, 1f, 1f, 0.004f);
-        vpImg.raycastTarget = true;
-        Mask mask = viewportObj.GetComponent<Mask>();
-        mask.showMaskGraphic = false;
-        sr.viewport = vpRt;
-
-        GameObject contentObj = new GameObject("Content", typeof(RectTransform), typeof(ContentSizeFitter));
-        contentObj.transform.SetParent(viewportObj.transform, false);
-        RectTransform contentRt = contentObj.GetComponent<RectTransform>();
-        contentRt.anchorMin = new Vector2(0f, 1f);
-        contentRt.anchorMax = new Vector2(1f, 1f);
-        contentRt.pivot = new Vector2(0.5f, 1f);
-        contentRt.anchoredPosition = Vector2.zero;
-        contentRt.sizeDelta = new Vector2(0f, 0f);
-        ContentSizeFitter fitter = contentObj.GetComponent<ContentSizeFitter>();
-        fitter.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
-        fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
-        sr.content = contentRt;
-
-        GameObject metaObj = new GameObject("MetaText", typeof(RectTransform), typeof(TextMeshProUGUI));
-        metaObj.transform.SetParent(contentObj.transform, false);
-        RectTransform metaRt = metaObj.GetComponent<RectTransform>();
-        metaRt.anchorMin = new Vector2(0f, 1f);
-        metaRt.anchorMax = new Vector2(1f, 1f);
-        metaRt.pivot = new Vector2(0.5f, 1f);
-        metaRt.anchoredPosition = Vector2.zero;
-        metaRt.sizeDelta = new Vector2(0f, 0f);
-        metaRt.offsetMin = new Vector2(6f, 0f);
-        metaRt.offsetMax = new Vector2(-6f, 0f);
-        TextMeshProUGUI metaTmp = metaObj.GetComponent<TextMeshProUGUI>();
-        if (hintTMPFont != null) metaTmp.font = hintTMPFont;
-        metaTmp.richText = true;
-        metaTmp.fontStyle = FontStyles.Normal;
-        metaTmp.fontSize = 24f;
-        metaTmp.lineSpacing = 10f;
-        metaTmp.paragraphSpacing = 6f;
-        metaTmp.alignment = TextAlignmentOptions.TopLeft;
-        metaTmp.color = new Color(0.9f, 0.93f, 0.98f, 1f);
-        metaTmp.enableWordWrapping = true;
-        metaTmp.overflowMode = TextOverflowModes.Overflow;
-
-        return metaTmp;
-    }
-
-    private static void ConfigureInspectCardImageOnly(CardDisplay display)
-    {
-        if (display == null) return;
-        if (display.nameText != null) display.nameText.gameObject.SetActive(false);
-        if (display.attackText != null) display.attackText.gameObject.SetActive(false);
-        if (display.healthText != null) display.healthText.gameObject.SetActive(false);
-        if (display.effectText != null) display.effectText.gameObject.SetActive(false);
-
-        // Keep only the main art image; hide frame/mask/dots and other decorative layers.
-        Image keepImage = display.backgroundImage;
-        Image[] images = display.GetComponentsInChildren<Image>(true);
-        for (int i = 0; i < images.Length; i++)
-        {
-            Image img = images[i];
-            if (img == null) continue;
-            if (keepImage != null && ReferenceEquals(img, keepImage))
-            {
-                img.gameObject.SetActive(true);
-                continue;
-            }
-            if (string.Equals(img.gameObject.name, "CardArtRarityOverlay", System.StringComparison.Ordinal))
-            {
-                img.gameObject.SetActive(true);
-                continue;
-            }
-            img.gameObject.SetActive(false);
-        }
-
-        RawImage[] rawImages = display.GetComponentsInChildren<RawImage>(true);
-        for (int i = 0; i < rawImages.Length; i++)
-        {
-            RawImage raw = rawImages[i];
-            if (raw == null) continue;
-            raw.gameObject.SetActive(false);
-        }
-    }
-
-    private void EnsureBackpackInspectUi()
-    {
-        if (backpackInspectRoot != null) return;
-
-        Canvas canvas = ResolvePrimaryUiCanvas();
+        Canvas canvas = BackpackInspectResolveCanvas();
         if (canvas == null) return;
+        GetBackpackProficiencyHelpDialog().Show(canvas, BackpackInspectResolveFont());
+    }
 
-        EnsureTMPHintReady();
+    public void HideBackpackProficiencyHelp() => GetBackpackProficiencyHelpDialog().Hide();
 
-        backpackInspectRoot = new GameObject("BackpackCardInspectRoot", typeof(RectTransform), typeof(CanvasGroup));
-        backpackInspectRoot.transform.SetParent(canvas.transform, false);
-        RectTransform rootRt = backpackInspectRoot.GetComponent<RectTransform>();
-        rootRt.anchorMin = Vector2.zero;
-        rootRt.anchorMax = Vector2.one;
-        rootRt.offsetMin = rootRt.offsetMax = Vector2.zero;
+    /// <summary>移除舊版掛在圖書館角落的全域「?」按鈕（說明僅在卡牌詳情內開啟）。</summary>
+    private void DestroyBackpackProficiencyHelpFloatingButton()
+    {
+        if (libraryPanel != null)
+        {
+            Transform libParent = libraryPanel.parent;
+            if (libParent != null)
+            {
+                Transform legacy = libParent.Find("BackpackProficiencyHelpButton");
+                if (legacy != null)
+                    Destroy(legacy.gameObject);
+            }
+        }
 
-        CanvasGroup rootCg = backpackInspectRoot.GetComponent<CanvasGroup>();
-        rootCg.blocksRaycasts = true;
-        rootCg.interactable = true;
-
-        GameObject dimObj = new GameObject("InspectDim", typeof(RectTransform), typeof(Image), typeof(Button));
-        dimObj.transform.SetParent(backpackInspectRoot.transform, false);
-        RectTransform dimRt = dimObj.GetComponent<RectTransform>();
-        dimRt.anchorMin = Vector2.zero;
-        dimRt.anchorMax = Vector2.one;
-        dimRt.offsetMin = dimRt.offsetMax = Vector2.zero;
-        Image dimImg = dimObj.GetComponent<Image>();
-        dimImg.color = new Color(0f, 0f, 0f, 0.6f);
-        dimImg.raycastTarget = true;
-        Button dimBtn = dimObj.GetComponent<Button>();
-        dimBtn.targetGraphic = dimImg;
-        dimBtn.onClick.AddListener(HideBackpackCardInspect);
-
-        GameObject panel = new GameObject("BackpackInspectFloatingPanel", typeof(RectTransform), typeof(Image));
-        panel.transform.SetParent(backpackInspectRoot.transform, false);
-        backpackInspectPanelRt = panel.GetComponent<RectTransform>();
-        backpackInspectPanelRt.anchorMin = new Vector2(0.1f, 0.1f);
-        backpackInspectPanelRt.anchorMax = new Vector2(0.9f, 0.9f);
-        backpackInspectPanelRt.pivot = new Vector2(0.5f, 0.5f);
-        backpackInspectPanelRt.offsetMin = Vector2.zero;
-        backpackInspectPanelRt.offsetMax = Vector2.zero;
-        backpackInspectPanelRt.anchoredPosition = Vector2.zero;
-        Image panelBg = panel.GetComponent<Image>();
-        panelBg.color = new Color(0.08f, 0.1f, 0.14f, 0.98f);
-        panelBg.raycastTarget = true;
-
-        GameObject imageRegionObj = new GameObject("InspectImageRegion", typeof(RectTransform), typeof(Image));
-        imageRegionObj.transform.SetParent(panel.transform, false);
-        RectTransform imageRegionRt = imageRegionObj.GetComponent<RectTransform>();
-        backpackInspectImageRegionRt = imageRegionRt;
-        imageRegionRt.anchorMin = new Vector2(0f, 0f);
-        imageRegionRt.anchorMax = new Vector2(0.44f, 1f);
-        imageRegionRt.offsetMin = new Vector2(22f, 22f);
-        imageRegionRt.offsetMax = new Vector2(-10f, -22f);
-        Image imageRegionBg = imageRegionObj.GetComponent<Image>();
-        imageRegionBg.color = new Color(0.12f, 0.14f, 0.19f, 0.9f);
-        backpackInspectImageCg = imageRegionObj.GetComponent<CanvasGroup>();
-        if (backpackInspectImageCg == null) backpackInspectImageCg = imageRegionObj.AddComponent<CanvasGroup>();
-        backpackInspectImageCg.alpha = 1f;
-
-        GameObject artObj = new GameObject("InspectPortraitImage", typeof(RectTransform), typeof(Image));
-        artObj.transform.SetParent(imageRegionRt, false);
-        RectTransform artRt = artObj.GetComponent<RectTransform>();
-        artRt.anchorMin = Vector2.zero;
-        artRt.anchorMax = Vector2.one;
-        artRt.offsetMin = artRt.offsetMax = Vector2.zero;
-        backpackInspectArtImage = artObj.GetComponent<Image>();
-        backpackInspectArtImage.preserveAspect = true;
-        backpackInspectArtImage.raycastTarget = false;
-        backpackInspectArtImage.color = Color.white;
-        backpackInspectArtImage.gameObject.SetActive(false);
-
-        GameObject mountObj = new GameObject("InspectPrefabMount", typeof(RectTransform));
-        mountObj.transform.SetParent(imageRegionRt, false);
-        backpackInspectPrefabMount = mountObj.GetComponent<RectTransform>();
-        backpackInspectPrefabMount.anchorMin = Vector2.zero;
-        backpackInspectPrefabMount.anchorMax = Vector2.one;
-        backpackInspectPrefabMount.offsetMin = backpackInspectPrefabMount.offsetMax = Vector2.zero;
-        backpackInspectPrefabMount.gameObject.SetActive(false);
-
-        GameObject rightRegionObj = new GameObject("InspectInfoRegion", typeof(RectTransform), typeof(Image));
-        rightRegionObj.transform.SetParent(panel.transform, false);
-        RectTransform rightRegionRt = rightRegionObj.GetComponent<RectTransform>();
-        backpackInspectInfoRegionRt = rightRegionRt;
-        rightRegionRt.anchorMin = new Vector2(0.44f, 0f);
-        rightRegionRt.anchorMax = new Vector2(1f, 1f);
-        rightRegionRt.offsetMin = new Vector2(12f, 22f);
-        rightRegionRt.offsetMax = new Vector2(-22f, -22f);
-        Image rightRegionBg = rightRegionObj.GetComponent<Image>();
-        rightRegionBg.color = new Color(0.1f, 0.12f, 0.18f, 0.86f);
-        rightRegionBg.raycastTarget = false;
-        backpackInspectInfoCg = rightRegionObj.GetComponent<CanvasGroup>();
-        if (backpackInspectInfoCg == null) backpackInspectInfoCg = rightRegionObj.AddComponent<CanvasGroup>();
-        backpackInspectInfoCg.alpha = 1f;
-
-        GameObject titleObj = new GameObject("InspectTitle", typeof(RectTransform), typeof(TextMeshProUGUI));
-        titleObj.transform.SetParent(rightRegionObj.transform, false);
-        RectTransform titleRt = titleObj.GetComponent<RectTransform>();
-        titleRt.anchorMin = new Vector2(0f, 1f);
-        titleRt.anchorMax = new Vector2(1f, 1f);
-        titleRt.pivot = new Vector2(0.5f, 1f);
-        titleRt.offsetMin = new Vector2(18f, -70f);
-        titleRt.offsetMax = new Vector2(-18f, -14f);
-        backpackInspectTitleTmp = titleObj.GetComponent<TextMeshProUGUI>();
-        if (hintTMPFont != null) backpackInspectTitleTmp.font = hintTMPFont;
-        backpackInspectTitleTmp.fontSize = 40f;
-        backpackInspectTitleTmp.fontStyle = FontStyles.Bold;
-        backpackInspectTitleTmp.alignment = TextAlignmentOptions.TopLeft;
-        backpackInspectTitleTmp.color = Color.white;
-        backpackInspectTitleTmp.enableWordWrapping = true;
-        backpackInspectTitleTmp.text = "卡牌名稱";
-
-        GameObject rarityObj = new GameObject("InspectRarity", typeof(RectTransform), typeof(TextMeshProUGUI));
-        rarityObj.transform.SetParent(rightRegionObj.transform, false);
-        RectTransform rarityRt = rarityObj.GetComponent<RectTransform>();
-        rarityRt.anchorMin = new Vector2(0f, 1f);
-        rarityRt.anchorMax = new Vector2(1f, 1f);
-        rarityRt.pivot = new Vector2(0.5f, 1f);
-        rarityRt.offsetMin = new Vector2(18f, -106f);
-        rarityRt.offsetMax = new Vector2(-18f, -74f);
-        backpackInspectRarityTmp = rarityObj.GetComponent<TextMeshProUGUI>();
-        if (hintTMPFont != null) backpackInspectRarityTmp.font = hintTMPFont;
-        backpackInspectRarityTmp.fontSize = 26f;
-        backpackInspectRarityTmp.fontStyle = FontStyles.Bold;
-        backpackInspectRarityTmp.alignment = TextAlignmentOptions.TopLeft;
-        backpackInspectRarityTmp.color = new Color(0.95f, 0.88f, 0.62f, 1f);
-        backpackInspectRarityTmp.enableWordWrapping = true;
-        backpackInspectRarityTmp.richText = true;
-        backpackInspectRarityTmp.text = "稀有度：";
-
-        GameObject subtitleObj = new GameObject("InspectSubtitle", typeof(RectTransform), typeof(TextMeshProUGUI));
-        subtitleObj.transform.SetParent(rightRegionObj.transform, false);
-        RectTransform subtitleRt = subtitleObj.GetComponent<RectTransform>();
-        subtitleRt.anchorMin = new Vector2(0f, 1f);
-        subtitleRt.anchorMax = new Vector2(1f, 1f);
-        subtitleRt.pivot = new Vector2(0.5f, 1f);
-        subtitleRt.offsetMin = new Vector2(18f, -162f);
-        subtitleRt.offsetMax = new Vector2(-18f, -112f);
-        backpackInspectSubtitleTmp = subtitleObj.GetComponent<TextMeshProUGUI>();
-        if (hintTMPFont != null) backpackInspectSubtitleTmp.font = hintTMPFont;
-        backpackInspectSubtitleTmp.fontSize = 24f;
-        backpackInspectSubtitleTmp.alignment = TextAlignmentOptions.TopLeft;
-        backpackInspectSubtitleTmp.color = new Color(0.69f, 0.81f, 1f, 1f);
-        backpackInspectSubtitleTmp.enableWordWrapping = true;
-        backpackInspectSubtitleTmp.text = "Subtitle";
-
-        backpackInspectMetaTmp = CreateBackpackInspectBodyScroll(
-            rightRegionObj.transform,
-            "InspectMetaBody",
-            new Vector2(0f, 0f),
-            new Vector2(1f, 1f),
-            new Vector2(14f, 14f),
-            new Vector2(-14f, -172f));
-
-        GameObject swipeHintObj = new GameObject("InspectSwipeHint", typeof(RectTransform), typeof(TextMeshProUGUI));
-        swipeHintObj.transform.SetParent(panel.transform, false);
-        RectTransform swipeHintRt = swipeHintObj.GetComponent<RectTransform>();
-        swipeHintRt.anchorMin = new Vector2(0.5f, 0f);
-        swipeHintRt.anchorMax = new Vector2(0.5f, 0f);
-        swipeHintRt.pivot = new Vector2(0.5f, 0f);
-        swipeHintRt.anchoredPosition = new Vector2(0f, 10f);
-        swipeHintRt.sizeDelta = new Vector2(360f, 36f);
-        backpackInspectSwipeHintTmp = swipeHintObj.GetComponent<TextMeshProUGUI>();
-        if (hintTMPFont != null) backpackInspectSwipeHintTmp.font = hintTMPFont;
-        backpackInspectSwipeHintTmp.fontSize = 22f;
-        backpackInspectSwipeHintTmp.alignment = TextAlignmentOptions.Center;
-        backpackInspectSwipeHintTmp.color = new Color(0.78f, 0.86f, 1f, 0.95f);
-        backpackInspectSwipeHintTmp.text = "左右滑動切換卡牌";
-
-        GameObject pageObj = new GameObject("InspectPageIndex", typeof(RectTransform), typeof(TextMeshProUGUI));
-        pageObj.transform.SetParent(panel.transform, false);
-        RectTransform pageRt = pageObj.GetComponent<RectTransform>();
-        pageRt.anchorMin = new Vector2(0.5f, 0f);
-        pageRt.anchorMax = new Vector2(0.5f, 0f);
-        pageRt.pivot = new Vector2(0.5f, 0f);
-        pageRt.anchoredPosition = new Vector2(0f, 42f);
-        pageRt.sizeDelta = new Vector2(240f, 32f);
-        backpackInspectPageTmp = pageObj.GetComponent<TextMeshProUGUI>();
-        if (hintTMPFont != null) backpackInspectPageTmp.font = hintTMPFont;
-        backpackInspectPageTmp.fontSize = 20f;
-        backpackInspectPageTmp.alignment = TextAlignmentOptions.Center;
-        backpackInspectPageTmp.color = new Color(0.92f, 0.96f, 1f, 0.9f);
-        backpackInspectPageTmp.text = string.Empty;
-
-        GameObject leftArrowObj = new GameObject("InspectLeftArrow", typeof(RectTransform), typeof(TextMeshProUGUI));
-        leftArrowObj.transform.SetParent(panel.transform, false);
-        RectTransform leftArrowRt = leftArrowObj.GetComponent<RectTransform>();
-        leftArrowRt.anchorMin = new Vector2(0f, 0.5f);
-        leftArrowRt.anchorMax = new Vector2(0f, 0.5f);
-        leftArrowRt.pivot = new Vector2(0f, 0.5f);
-        leftArrowRt.anchoredPosition = new Vector2(10f, 0f);
-        leftArrowRt.sizeDelta = new Vector2(50f, 90f);
-        backpackInspectLeftArrowTmp = leftArrowObj.GetComponent<TextMeshProUGUI>();
-        if (hintTMPFont != null) backpackInspectLeftArrowTmp.font = hintTMPFont;
-        backpackInspectLeftArrowTmp.fontSize = 56f;
-        backpackInspectLeftArrowTmp.alignment = TextAlignmentOptions.Center;
-        backpackInspectLeftArrowTmp.color = new Color(0.85f, 0.9f, 1f, 0.9f);
-        backpackInspectLeftArrowTmp.text = "<";
-
-        GameObject rightArrowObj = new GameObject("InspectRightArrow", typeof(RectTransform), typeof(TextMeshProUGUI));
-        rightArrowObj.transform.SetParent(panel.transform, false);
-        RectTransform rightArrowRt = rightArrowObj.GetComponent<RectTransform>();
-        rightArrowRt.anchorMin = new Vector2(1f, 0.5f);
-        rightArrowRt.anchorMax = new Vector2(1f, 0.5f);
-        rightArrowRt.pivot = new Vector2(1f, 0.5f);
-        rightArrowRt.anchoredPosition = new Vector2(-10f, 0f);
-        rightArrowRt.sizeDelta = new Vector2(50f, 90f);
-        backpackInspectRightArrowTmp = rightArrowObj.GetComponent<TextMeshProUGUI>();
-        if (hintTMPFont != null) backpackInspectRightArrowTmp.font = hintTMPFont;
-        backpackInspectRightArrowTmp.fontSize = 56f;
-        backpackInspectRightArrowTmp.alignment = TextAlignmentOptions.Center;
-        backpackInspectRightArrowTmp.color = new Color(0.85f, 0.9f, 1f, 0.9f);
-        backpackInspectRightArrowTmp.text = ">";
-
-        GameObject swipeCaptureObj = new GameObject("InspectSwipeCapture", typeof(RectTransform), typeof(Image), typeof(BackpackInspectSwipeCapture));
-        swipeCaptureObj.transform.SetParent(panel.transform, false);
-        RectTransform swipeCaptureRt = swipeCaptureObj.GetComponent<RectTransform>();
-        swipeCaptureRt.anchorMin = Vector2.zero;
-        swipeCaptureRt.anchorMax = Vector2.one;
-        swipeCaptureRt.offsetMin = swipeCaptureRt.offsetMax = Vector2.zero;
-        Image swipeCaptureImg = swipeCaptureObj.GetComponent<Image>();
-        swipeCaptureImg.color = new Color(1f, 1f, 1f, 0.001f);
-        swipeCaptureImg.raycastTarget = true;
-        BackpackInspectSwipeCapture swipeCapture = swipeCaptureObj.GetComponent<BackpackInspectSwipeCapture>();
-        swipeCapture.Bind(this);
-
-        GameObject closeBtnObj = new GameObject("InspectCloseButton", typeof(RectTransform), typeof(Image), typeof(Button));
-        closeBtnObj.transform.SetParent(panel.transform, false);
-        RectTransform closeRt = closeBtnObj.GetComponent<RectTransform>();
-        closeRt.anchorMin = closeRt.anchorMax = new Vector2(1f, 1f);
-        closeRt.pivot = new Vector2(1f, 1f);
-        closeRt.anchoredPosition = new Vector2(-18f, -18f);
-        closeRt.sizeDelta = new Vector2(48f, 48f);
-        Image closeImg = closeBtnObj.GetComponent<Image>();
-        closeImg.color = new Color(0.24f, 0.26f, 0.33f, 1f);
-        Button closeBtn = closeBtnObj.GetComponent<Button>();
-        closeBtn.targetGraphic = closeImg;
-        closeBtn.onClick.AddListener(HideBackpackCardInspect);
-
-        GameObject closeLabel = new GameObject("Label", typeof(RectTransform), typeof(TextMeshProUGUI));
-        closeLabel.transform.SetParent(closeBtnObj.transform, false);
-        RectTransform closeLabelRt = closeLabel.GetComponent<RectTransform>();
-        closeLabelRt.anchorMin = Vector2.zero;
-        closeLabelRt.anchorMax = Vector2.one;
-        closeLabelRt.offsetMin = closeLabelRt.offsetMax = Vector2.zero;
-        TextMeshProUGUI closeTmp = closeLabel.GetComponent<TextMeshProUGUI>();
-        if (hintTMPFont != null) closeTmp.font = hintTMPFont;
-        closeTmp.fontSize = 32f;
-        closeTmp.alignment = TextAlignmentOptions.Center;
-        closeTmp.color = Color.white;
-        closeTmp.text = "X";
-
-        closeBtnObj.transform.SetAsLastSibling();
-
-        backpackInspectRoot.SetActive(false);
+        Canvas canvas = BackpackInspectResolveCanvas();
+        if (canvas == null) return;
+        Transform onCanvas = canvas.transform.Find("BackpackProficiencyHelpButton");
+        if (onCanvas != null)
+            Destroy(onCanvas.gameObject);
     }
 
     private sealed class DeckScrollUserGestureRelay : MonoBehaviour, IBeginDragHandler, IEndDragHandler
@@ -4951,29 +4403,6 @@ public partial class DeckManager : MonoBehaviour
         {
             if (_host != null)
                 _host.NotifyDeckScrollPointerHeld(false);
-        }
-    }
-
-    private sealed class BackpackInspectSwipeCapture : MonoBehaviour, IBeginDragHandler, IEndDragHandler
-    {
-        private DeckManager host;
-        private Vector2 beginPos;
-
-        public void Bind(DeckManager owner)
-        {
-            host = owner;
-        }
-
-        public void OnBeginDrag(PointerEventData eventData)
-        {
-            beginPos = eventData != null ? eventData.position : Vector2.zero;
-        }
-
-        public void OnEndDrag(PointerEventData eventData)
-        {
-            if (host == null || eventData == null) return;
-            float dx = eventData.position.x - beginPos.x;
-            host.OnBackpackInspectSwipe(dx);
         }
     }
 

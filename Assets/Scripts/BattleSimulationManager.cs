@@ -154,6 +154,10 @@ public class BattleSimulationManager : MonoBehaviour
     public int enemyDeckSize = 20;
     public bool useFixedEnemyDeck = true;
     public int[] fixedEnemyDeckCardIds = new int[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 16, 18, 19, 22, -1, -2, -3 };
+    private static readonly int[] BossFixedEnemyDeckCardIds =
+    {
+        13, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 16, 18, 19, 22, -1, -2, -3
+    };
     public bool forceEnemyStartWithMonster = false;
 
     [Header("Enemy deck spell mix")]
@@ -179,6 +183,105 @@ public class BattleSimulationManager : MonoBehaviour
     private int[] runtimeFixedEnemyDeckCardIds;
     private int runtimeEnemyOverLimitAllowance;
     private int runtimeMinEnemySpellsInDeck;
+    private EnemyAiPlayStyle runtimeEnemyAiPlayStyle = EnemyAiPlayStyle.Greedy;
+    private string runtimeDifficultyLabelZh;
+    private bool runtimeDifficultyLabelExplicit;
+
+    public string CurrentBattleDifficultyLabelZh => GetBattleDifficultyLabelForRecord();
+
+    public string GetBattleDifficultyLabelForRecord()
+    {
+        string active = BattleLaunchContext.GetActiveBattleDifficultyLabelZh();
+        if (!string.IsNullOrWhiteSpace(active))
+            return active.Trim();
+        return ResolveDifficultyLabelForCapture();
+    }
+
+    public void CaptureBattleDifficultyForRecords()
+    {
+        ApplyLaunchContextDifficulty();
+        string label = ResolveDifficultyLabelForCapture();
+        runtimeDifficultyLabelZh = label;
+        runtimeDifficultyLabelExplicit = true;
+        BattleDifficultyRuntime.SetCurrentLabelZh(label);
+        BattleLaunchContext.ConfirmActiveBattleDifficulty(label);
+    }
+
+    private string ResolveDifficultyLabelForCapture()
+    {
+        if (runtimeDifficultyLabelExplicit && !string.IsNullOrWhiteSpace(runtimeDifficultyLabelZh))
+            return runtimeDifficultyLabelZh.Trim();
+        if (runtimeEnemyAiPlayStyle == EnemyAiPlayStyle.SchemingBoss)
+            return "魔王";
+        if (runtimeEnemyAiPlayStyle == EnemyAiPlayStyle.SchemingHard)
+            return "困難";
+        string pending = BattleLaunchContext.PeekDifficultyLabelZh();
+        if (!string.IsNullOrWhiteSpace(pending))
+            return pending.Trim();
+        return BattleDifficultyRuntime.CurrentLabelZh;
+    }
+
+    public void ApplyLaunchContextDifficulty()
+    {
+        if (runtimeDifficultyLabelExplicit)
+            return;
+
+        string pending = BattleLaunchContext.PeekDifficultyLabelZh();
+        if (string.IsNullOrWhiteSpace(pending))
+            return;
+        runtimeDifficultyLabelZh = pending.Trim();
+        runtimeDifficultyLabelExplicit = true;
+        BattleDifficultyRuntime.SetCurrentLabelZh(runtimeDifficultyLabelZh);
+    }
+
+    /// <summary>When battle scene loads without SceneLoader fixup, still apply boss/hard AI from launch context.</summary>
+    public void TryApplyLaunchDifficultyFromContext()
+    {
+        if (runtimeDifficultyConfigPending)
+            return;
+
+        string label = BattleLaunchContext.ResolveForBattleRecord();
+        if (string.IsNullOrWhiteSpace(label))
+            label = BattleDifficultyRuntime.CurrentLabelZh;
+        label = string.IsNullOrWhiteSpace(label) ? BattleDifficultyRuntime.DefaultLabelZh : label.Trim();
+
+        EnemyAiPlayStyle style = EnemyAiPlayStyle.Greedy;
+        if (label.StartsWith("魔王", System.StringComparison.Ordinal) ||
+            string.Equals(label, "Boss", System.StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(label, "BOSS", System.StringComparison.Ordinal))
+            style = EnemyAiPlayStyle.SchemingBoss;
+        else if (label.StartsWith("困難", System.StringComparison.Ordinal) ||
+                 string.Equals(label, "Hard", System.StringComparison.OrdinalIgnoreCase))
+            style = EnemyAiPlayStyle.SchemingHard;
+
+        if (style == EnemyAiPlayStyle.Greedy && runtimeEnemyAiPlayStyle != EnemyAiPlayStyle.Greedy)
+            return;
+
+        if (style == EnemyAiPlayStyle.SchemingBoss)
+        {
+            QueueRuntimeDifficultyConfig(
+                true,
+                BossFixedEnemyDeckCardIds,
+                enemyOverLimitAllowance > 0 ? enemyOverLimitAllowance : 12,
+                minEnemySpellsInDeck > 0 ? minEnemySpellsInDeck : 4,
+                EnemyAiPlayStyle.SchemingBoss,
+                "魔王");
+            return;
+        }
+
+        if (style == EnemyAiPlayStyle.SchemingHard)
+        {
+            QueueRuntimeDifficultyConfig(
+                useFixedEnemyDeck,
+                fixedEnemyDeckCardIds,
+                enemyOverLimitAllowance > 0 ? enemyOverLimitAllowance : 8,
+                minEnemySpellsInDeck > 0 ? minEnemySpellsInDeck : 3,
+                EnemyAiPlayStyle.SchemingHard,
+                "困難");
+        }
+    }
+
+    private int enemySchemingHoldStreak;
     private BattleWeatherType currentWeather = BattleWeatherType.None;
     private int weatherTurnSerial;
     private bool playerFirstSpellBoostAvailable;
@@ -188,13 +291,13 @@ public class BattleSimulationManager : MonoBehaviour
     [SerializeField] private int weatherActiveDurationRounds = 3;
     [SerializeField] private int weatherForecastCooldownRounds = 3;
     [Header("Weather First Trigger Override")]
-    [Tooltip("勾選後，第一輪天氣觸發將優先套用「緋焰時雨」。若同時勾選多個，依序取第一個：緋焰時雨 > 月華聖祈 > 蒼潮夜湧 > 朔風森詠。")]
+    [Tooltip("勾選後，第一輪天氣觸發將優先套用「爐心飛燼」。若同時勾選多個，依序取第一個：爐心飛燼 > 暖燈浮塵 > 訓練薄霧 > 穿堂微風。")]
     [SerializeField] private bool firstWeatherPreferFireRain;
-    [Tooltip("勾選後，第一輪天氣觸發將優先套用「月華聖祈」。")]
+    [Tooltip("勾選後，第一輪天氣觸發將優先套用「暖燈浮塵」。")]
     [SerializeField] private bool firstWeatherPreferHolyLight;
-    [Tooltip("勾選後，第一輪天氣觸發將優先套用「蒼潮夜湧」。")]
+    [Tooltip("勾選後，第一輪天氣觸發將優先套用「訓練薄霧」。")]
     [SerializeField] private bool firstWeatherPreferFog;
-    [Tooltip("勾選後，第一輪天氣觸發將優先套用「朔風森詠」。")]
+    [Tooltip("勾選後，第一輪天氣觸發將優先套用「穿堂微風」。")]
     [SerializeField] private bool firstWeatherPreferGale;
     private bool firstWeatherOverrideConsumed;
     private int weatherActiveRoundsRemaining;
@@ -300,10 +403,10 @@ public class BattleSimulationManager : MonoBehaviour
     {
         switch (wt)
         {
-            case BattleWeatherType.FireRain: return "緋焰時雨";
-            case BattleWeatherType.HolyLight: return "月華聖祈";
-            case BattleWeatherType.Fog: return "蒼潮夜湧";
-            case BattleWeatherType.Gale: return "朔風森詠";
+            case BattleWeatherType.FireRain: return BattleWeatherLabels.EmberHearth;
+            case BattleWeatherType.HolyLight: return BattleWeatherLabels.WarmLamplight;
+            case BattleWeatherType.Fog: return BattleWeatherLabels.TrainingMist;
+            case BattleWeatherType.Gale: return BattleWeatherLabels.HallDraft;
             default: return "無";
         }
     }
@@ -543,16 +646,16 @@ public class BattleSimulationManager : MonoBehaviour
         switch (currentWeather)
         {
             case BattleWeatherType.FireRain:
-                return "【天氣偽卡】緋焰時雨：回合結束時，場上怪獸 -5 HP";
+                return "【場地偽卡】" + BattleWeatherLabels.EmberHearth + "：回合結束時，場上怪獸 -5 HP";
             case BattleWeatherType.HolyLight:
-                return "【天氣偽卡】月華聖祈：本回合治療 +10";
+                return "【場地偽卡】" + BattleWeatherLabels.WarmLamplight + "：本回合治療 +10";
             case BattleWeatherType.Fog:
-                return "【天氣偽卡】蒼潮夜湧：本回合直擊英雄傷害 -50%";
+                return "【場地偽卡】" + BattleWeatherLabels.TrainingMist + "：本回合直擊英雄傷害 -50%";
             case BattleWeatherType.Gale:
                 bool hasBuff = forPlayerSide ? playerFirstSpellBoostAvailable : enemyFirstSpellBoostAvailable;
                 return hasBuff
-                    ? "【天氣偽卡】朔風森詠：本回合首張法術效果 +20%（未觸發）"
-                    : "【天氣偽卡】朔風森詠：本回合首張法術效果 +20%（已觸發）";
+                    ? "【場地偽卡】" + BattleWeatherLabels.HallDraft + "：本回合首張法術效果 +20%（未觸發）"
+                    : "【場地偽卡】" + BattleWeatherLabels.HallDraft + "：本回合首張法術效果 +20%（已觸發）";
             default:
                 return "【天氣偽卡】無";
         }
@@ -580,6 +683,85 @@ public class BattleSimulationManager : MonoBehaviour
         return Mathf.Max(0, Mathf.CeilToInt(directDamage * 0.5f));
     }
 
+    private void ResetMonsterSkillBattleState()
+    {
+        playerKingTrainingCharges = 3;
+        enemyKingTrainingCharges = 3;
+        playerQueenShelterUsed = false;
+        enemyQueenShelterUsed = false;
+        playerMilitiaFormationUsed = false;
+        enemyMilitiaFormationUsed = false;
+        playerKingWasOnFieldThisBattle = false;
+        enemyKingWasOnFieldThisBattle = false;
+    }
+
+    private void ApplySummonMonsterSkills(BattleMonster field, bool isPlayer)
+    {
+        NoteKingSummonedThisBattle(field, isPlayer);
+        if (field == null || field.id != MonsterSkillIds.Militia) return;
+        if (isPlayer)
+        {
+            if (playerMilitiaFormationUsed) return;
+            playerMilitiaFormationUsed = true;
+        }
+        else
+        {
+            if (enemyMilitiaFormationUsed) return;
+            enemyMilitiaFormationUsed = true;
+        }
+        field.attack += 5;
+        string side = isPlayer ? "我方" : "敵方";
+        LogBattleHistory(side + " 列陣：這次攻擊力多 5 點 本局僅1次");
+        ShowBattleToast(side + "民兵·列陣：攻擊力多 5 點", 2.2f);
+    }
+
+    private void NoteKingSummonedThisBattle(BattleMonster field, bool isPlayer)
+    {
+        if (field == null || field.id != MonsterSkillIds.King) return;
+        if (isPlayer) playerKingWasOnFieldThisBattle = true;
+        else enemyKingWasOnFieldThisBattle = true;
+    }
+
+    private int ModifyDamageToPlayerMonster(int rawDamage)
+    {
+        if (playerField == null || rawDamage <= 0) return rawDamage;
+        int dmg = rawDamage;
+        if (playerField.id == MonsterSkillIds.Queen)
+            dmg = MonsterSkillRegistry.ApplyQueenShelter(ref playerQueenShelterUsed, dmg, LogBattleHistory);
+        if (playerField.id == MonsterSkillIds.King)
+            dmg = MonsterSkillRegistry.ApplyTrainingCourtDecree(ref playerKingTrainingCharges, dmg, LogBattleHistory);
+        return dmg;
+    }
+
+    private int ModifyDamageToEnemyMonster(int rawDamage)
+    {
+        if (enemyField == null || rawDamage <= 0) return rawDamage;
+        int dmg = rawDamage;
+        if (enemyField.id == MonsterSkillIds.Queen)
+            dmg = MonsterSkillRegistry.ApplyQueenShelter(ref enemyQueenShelterUsed, dmg, LogBattleHistory);
+        if (enemyField.id == MonsterSkillIds.King)
+            dmg = MonsterSkillRegistry.ApplyTrainingCourtDecree(ref enemyKingTrainingCharges, dmg, LogBattleHistory);
+        return dmg;
+    }
+
+    private int ModifyDirectDamageToPlayerHero(int rawDamage)
+    {
+        int dmg = ApplyFogDirectDamageReductionIfNeeded(rawDamage);
+        if (playerKingWasOnFieldThisBattle && playerKingTrainingCharges > 0 &&
+            (playerField == null || playerField.id == MonsterSkillIds.King))
+            dmg = MonsterSkillRegistry.ApplyTrainingCourtDecree(ref playerKingTrainingCharges, dmg, LogBattleHistory);
+        return dmg;
+    }
+
+    private int ModifyDirectDamageToEnemyHero(int rawDamage)
+    {
+        int dmg = ApplyFogDirectDamageReductionIfNeeded(rawDamage);
+        if (enemyKingWasOnFieldThisBattle && enemyKingTrainingCharges > 0 &&
+            (enemyField == null || enemyField.id == MonsterSkillIds.King))
+            dmg = MonsterSkillRegistry.ApplyTrainingCourtDecree(ref enemyKingTrainingCharges, dmg, LogBattleHistory);
+        return dmg;
+    }
+
     private int ApplyHolyLightHealBonusIfNeeded(int baseHeal)
     {
         if (currentWeather != BattleWeatherType.HolyLight) return baseHeal;
@@ -596,20 +778,22 @@ public class BattleSimulationManager : MonoBehaviour
         if (playerField != null)
         {
             hitPlayerMonster = true;
-            playerField.currentHp -= dot;
+            int playerDot = ModifyDamageToPlayerMonster(dot);
+            playerField.currentHp -= playerDot;
             if (playerField.currentHp <= 0) playerField = null;
             any = true;
         }
         if (enemyField != null)
         {
             hitEnemyMonster = true;
-            enemyField.currentHp -= dot;
+            int enemyDot = ModifyDamageToEnemyMonster(dot);
+            enemyField.currentHp -= enemyDot;
             if (enemyField.currentHp <= 0) enemyField = null;
             any = true;
         }
         if (!any) return;
 
-        string txt = "緋焰時雨：回合結束，雙方場上怪獸各受 5 點傷害。";
+        string txt = BattleWeatherLabels.EmberHearth + "：回合結束，雙方場上怪獸各受 5 點傷害。";
         ShowBattleToast(txt, 2.4f);
         LogBattleHistory(txt);
         if (hitPlayerMonster && hitEnemyMonster)
@@ -783,6 +967,15 @@ public class BattleSimulationManager : MonoBehaviour
     private bool linGazeEnemyAttackNoticeSentThisEnemyTurn;
     private bool linGazePlayerAttackNoticeSentThisPlayerTurn;
 
+    private int playerKingTrainingCharges = 3;
+    private int enemyKingTrainingCharges = 3;
+    private bool playerQueenShelterUsed;
+    private bool enemyQueenShelterUsed;
+    private bool playerMilitiaFormationUsed;
+    private bool enemyMilitiaFormationUsed;
+    private bool playerKingWasOnFieldThisBattle;
+    private bool enemyKingWasOnFieldThisBattle;
+
     private string battleToastMessage = string.Empty;
     private float battleToastUntilUnscaled;
 
@@ -796,8 +989,14 @@ public class BattleSimulationManager : MonoBehaviour
         Debug.Log(message);
     }
 
+    void Awake()
+    {
+        ApplyLaunchContextDifficulty();
+    }
+
     void Start()
     {
+        ApplyLaunchContextDifficulty();
         EnsureSceneVisualsReady();
         EnsureBattleUIExists();
         ResolveRefs();
@@ -943,6 +1142,8 @@ public class BattleSimulationManager : MonoBehaviour
         NotifyTurnBanner(BattleTurnBannerKind.Hidden);
         ClearPlayerLinGaze();
         ClearEnemyLinGaze();
+        ResetMonsterSkillBattleState();
+        enemySchemingHoldStreak = 0;
         battleToastMessage = string.Empty;
         battleToastUntilUnscaled = 0f;
         openingRollMessage = string.Empty;
@@ -967,7 +1168,9 @@ public class BattleSimulationManager : MonoBehaviour
 
         BuildPlayerDeck();
         BattleVerbose("BattleSimulation: loaded player deck count = " + playerDeck.Count);
+        TryApplyLaunchDifficultyFromContext();
         BuildEnemyDeck();
+        CaptureBattleDifficultyForRecords();
         Shuffle(playerDeck);
         Shuffle(enemyDeck);
 
@@ -1058,6 +1261,7 @@ public class BattleSimulationManager : MonoBehaviour
         {
             playerHand.RemoveAt(handIndex);
             playerField = new BattleMonster(monster);
+            ApplySummonMonsterSkills(playerField, true);
             playerPlacedCardThisRound = true;
             playerPlayedHandCardThisTurn = true;
             BattleVerbose("Player summoned: " + playerField.cardName);
@@ -1156,16 +1360,16 @@ public class BattleSimulationManager : MonoBehaviour
         if (enemyField != null)
         {
             string defenderName = enemyField.cardName;
-            int attackerDamage = playerField.attack;
             string attackerName = playerField.cardName;
-            enemyField.currentHp -= playerField.attack;
+            int playerAtkDmg = ModifyDamageToEnemyMonster(playerField.attack);
+            enemyField.currentHp -= playerAtkDmg;
             if (enemyField.currentHp <= 0) enemyField = null;
-            LogBattleHistory("我方場地上 怪物牌 " + attackerName + " 對敵方造成" + attackerDamage + " 點傷害");
+            LogBattleHistory("我方場地上 怪物牌 " + attackerName + " 對敵方造成" + playerAtkDmg + " 點傷害");
             bool counterTriggered = false;
             int counterDamage = 0;
             if (enemyField != null && playerField != null && playerField.currentHp > 0 && !enemyCounterUsedThisRound)
             {
-                counterDamage = enemyField.attack;
+                counterDamage = ModifyDamageToPlayerMonster(enemyField.attack);
                 playerField.currentHp -= counterDamage;
                 enemyCounterUsedThisRound = true;
                 counterTriggered = true;
@@ -1175,7 +1379,7 @@ public class BattleSimulationManager : MonoBehaviour
             {
                 attackerIsPlayer = true,
                 hasMonsterTarget = true,
-                attackerDamage = attackerDamage,
+                attackerDamage = playerAtkDmg,
                 counterTriggered = counterTriggered,
                 counterDamage = counterDamage
             });
@@ -1188,7 +1392,7 @@ public class BattleSimulationManager : MonoBehaviour
                 BattleVerbose("Enemy field is empty: direct attack is allowed on your next player turn after you end this turn.");
                 return;
             }
-            int directDmg = ApplyFogDirectDamageReductionIfNeeded(playerField.attack);
+            int directDmg = ModifyDirectDamageToEnemyHero(playerField.attack);
             enemyHp -= directDmg;
             LogBattleHistory("我方場地上 怪物牌 " + playerField.cardName + " 對敵方英雄造成" + directDmg + " 點傷害");
             AttackPerformed?.Invoke(new AttackVisualData
@@ -1235,6 +1439,7 @@ public class BattleSimulationManager : MonoBehaviour
         if (!battleOver && !playerHasAttackedThisTurn)
         {
             PlayerAttack();
+            yield return WaitForBattleAttackFxIfAny();
         }
         if (!battleOver)
         {
@@ -1293,6 +1498,7 @@ public class BattleSimulationManager : MonoBehaviour
 
         if (enemyAI != null) enemyAI.ExecuteAttack(this);
         else EnemyAttackIfPossible();
+        yield return WaitForBattleAttackFxIfAny();
         BattleVerbose("Enemy turn: after attack");
         if (!BattleAutoSimPlugin.IsRunning)
             yield return new WaitForSeconds(0.2f);
@@ -1351,66 +1557,9 @@ public class BattleSimulationManager : MonoBehaviour
 
     private void EnemyPlayCardIfPossible()
     {
-        if (enemyHand.Count == 0) return;
-
-        int chosen = -1;
-
-        // Priority: if enemy field is empty, summon a monster first.
-        if (enemyField == null)
-        {
-            for (int i = 0; i < enemyHand.Count; i++)
-            {
-                if (enemyHand[i] is MonsterCard)
-                {
-                    chosen = i;
-                    break;
-                }
-            }
-        }
-
-        // Fallback: play first spell.
-        if (chosen < 0)
-        {
-            for (int i = 0; i < enemyHand.Count; i++)
-            {
-                if (enemyField != null && enemyHand[i] is SpellCard spWhenField && spWhenField.SpellOrdinal != 1)
-                    continue;
-                if (enemyHand[i] is SpellCard spFireballOpen && spFireballOpen.SpellOrdinal == 0 && IsOpeningRoundFireballBlocked())
-                    continue;
-                if (enemyHand[i] is SpellCard spTry && spTry.SpellOrdinal == 2 && !CanEnemyCastLinGazeNow())
-                    continue;
-                if (enemyHand[i] is SpellCard spHeal && spHeal.SpellOrdinal == 1 && enemyField == null)
-                    continue;
-                if (enemyHand[i] is SpellCard)
-                {
-                    chosen = i;
-                    break;
-                }
-            }
-        }
-
+        int chosen = ChooseEnemyHandCardToPlayIndex();
         if (chosen < 0) return;
-
-        Card selected = enemyHand[chosen];
-        enemyHand.RemoveAt(chosen);
-
-        if (selected is MonsterCard monster)
-        {
-            enemyField = new BattleMonster(monster);
-            enemyPlacedCardThisRound = true;
-            enemyPlayedHandCardThisTurn = true;
-            BattleVerbose("Enemy summoned: " + enemyField.cardName);
-        }
-        else if (selected is SpellCard spell)
-        {
-            if (!TryApplyEnemySpell(spell))
-            {
-                enemyHand.Insert(chosen, selected);
-                return;
-            }
-            enemyPlayedHandCardThisTurn = true;
-            BattleVerbose("Enemy cast spell: " + spell.cardName);
-        }
+        EnemyPlayCardFromHand(chosen);
     }
 
     private void EnemyAttackIfPossible()
@@ -1437,14 +1586,15 @@ public class BattleSimulationManager : MonoBehaviour
         {
             int attackerDamage = enemyField.attack;
             string attackerName = enemyField.cardName;
-            playerField.currentHp -= enemyField.attack;
+            int enemyAtkDmg = ModifyDamageToPlayerMonster(enemyField.attack);
+            playerField.currentHp -= enemyAtkDmg;
             if (playerField.currentHp <= 0) playerField = null;
-            LogBattleHistory("敵方場地上 怪物牌 " + attackerName + " 對我方造成" + attackerDamage + " 點傷害");
+            LogBattleHistory("敵方場地上 怪物牌 " + attackerName + " 對我方造成" + enemyAtkDmg + " 點傷害");
             bool counterTriggered = false;
             int counterDamage = 0;
             if (playerField != null && enemyField != null && enemyField.currentHp > 0 && !playerCounterUsedThisRound)
             {
-                counterDamage = playerField.attack;
+                counterDamage = ModifyDamageToEnemyMonster(playerField.attack);
                 enemyField.currentHp -= counterDamage;
                 playerCounterUsedThisRound = true;
                 counterTriggered = true;
@@ -1454,7 +1604,7 @@ public class BattleSimulationManager : MonoBehaviour
             {
                 attackerIsPlayer = false,
                 hasMonsterTarget = true,
-                attackerDamage = attackerDamage,
+                attackerDamage = enemyAtkDmg,
                 counterTriggered = counterTriggered,
                 counterDamage = counterDamage
             });
@@ -1467,7 +1617,7 @@ public class BattleSimulationManager : MonoBehaviour
                 BattleVerbose("Enemy direct attack blocked: can attack only on next enemy turn after seeing empty player field.");
                 return;
             }
-            int directDmg = ApplyFogDirectDamageReductionIfNeeded(enemyField.attack);
+            int directDmg = ModifyDirectDamageToPlayerHero(enemyField.attack);
             int hpBefore = playerHp;
             playerHp -= directDmg;
             LogBattleHistory("敵方場地上 怪物牌 " + enemyField.cardName + " 對我方英雄造成" + directDmg + " 點傷害");
@@ -1609,12 +1759,14 @@ public class BattleSimulationManager : MonoBehaviour
             RecordPlayerHeroHpLossHistory(playerHpBefore, playerHp, playerHeroDamage, "林可的凝視");
         if (playerField != null)
         {
-            playerField.currentHp -= amount;
+            int gazeDmgPlayer = ModifyDamageToPlayerMonster(amount);
+            playerField.currentHp -= gazeDmgPlayer;
             if (playerField.currentHp <= 0) playerField = null;
         }
         if (enemyField != null)
         {
-            enemyField.currentHp -= amount;
+            int gazeDmgEnemy = ModifyDamageToEnemyMonster(amount);
+            enemyField.currentHp -= gazeDmgEnemy;
             if (enemyField.currentHp <= 0) enemyField = null;
         }
     }
@@ -1671,14 +1823,16 @@ public class BattleSimulationManager : MonoBehaviour
         int deal;
         if (enemyField != null)
         {
-            deal = Mathf.Min(dmg, Mathf.Max(0, enemyField.currentHp));
+            int toMonster = ModifyDamageToEnemyMonster(dmg);
+            deal = Mathf.Min(toMonster, Mathf.Max(0, enemyField.currentHp));
             enemyField.currentHp -= deal;
             if (enemyField.currentHp <= 0) enemyField = null;
         }
         else
         {
+            int toHero = ModifyDirectDamageToEnemyHero(dmg);
             int before = enemyHp;
-            enemyHp = Mathf.Max(0, enemyHp - dmg);
+            enemyHp = Mathf.Max(0, enemyHp - toHero);
             deal = before - enemyHp;
         }
         LogBattleHistory("我方咒術區 法術牌 " + spell.cardName + " 對敵方造成" + deal + "點傷害");
@@ -1775,14 +1929,16 @@ public class BattleSimulationManager : MonoBehaviour
         int deal;
         if (playerField != null)
         {
-            deal = Mathf.Min(dmg, Mathf.Max(0, playerField.currentHp));
+            int toMonster = ModifyDamageToPlayerMonster(dmg);
+            deal = Mathf.Min(toMonster, Mathf.Max(0, playerField.currentHp));
             playerField.currentHp -= deal;
             if (playerField.currentHp <= 0) playerField = null;
         }
         else
         {
+            int toHero = ModifyDirectDamageToPlayerHero(dmg);
             int before = playerHp;
-            playerHp = Mathf.Max(0, playerHp - dmg);
+            playerHp = Mathf.Max(0, playerHp - toHero);
             deal = before - playerHp;
             if (deal > 0)
                 RecordPlayerHeroHpLossHistory(before, playerHp, deal, "敵方法術 " + spell.cardName);
@@ -1850,10 +2006,13 @@ public class BattleSimulationManager : MonoBehaviour
         GetPlayerSavedDeckMaxStats(out playerMaxAttack, out playerMaxHealth);
         if (useFixedEnemyDeck && fixedEnemyDeckCardIds != null && fixedEnemyDeckCardIds.Length > 0)
         {
+            int[] deckIdsForBuild = runtimeEnemyAiPlayStyle == EnemyAiPlayStyle.SchemingBoss
+                ? BossFixedEnemyDeckCardIds
+                : fixedEnemyDeckCardIds;
             List<Card> fixedPool = new List<Card>();
-            for (int i = 0; i < fixedEnemyDeckCardIds.Length; i++)
+            for (int i = 0; i < deckIdsForBuild.Length; i++)
             {
-                int id = fixedEnemyDeckCardIds[i];
+                int id = deckIdsForBuild[i];
                 Card fixedCard = cardStore.GetCardById(id);
                 if (fixedCard != null) fixedPool.Add(fixedCard);
             }
@@ -1924,13 +2083,33 @@ public class BattleSimulationManager : MonoBehaviour
         bool useFixed,
         int[] fixedDeckIds,
         int overLimitAllowance,
-        int minSpells)
+        int minSpells,
+        EnemyAiPlayStyle aiPlayStyle = EnemyAiPlayStyle.Greedy,
+        string difficultyLabelZh = null)
     {
         runtimeUseFixedEnemyDeck = useFixed;
         runtimeFixedEnemyDeckCardIds = fixedDeckIds != null ? (int[])fixedDeckIds.Clone() : null;
         runtimeEnemyOverLimitAllowance = overLimitAllowance;
         runtimeMinEnemySpellsInDeck = minSpells;
+        runtimeEnemyAiPlayStyle = aiPlayStyle;
+        runtimeDifficultyLabelZh = ResolveDifficultyLabelZh(difficultyLabelZh, aiPlayStyle);
+        runtimeDifficultyLabelExplicit = true;
+        BattleDifficultyRuntime.SetCurrentLabelZh(runtimeDifficultyLabelZh);
+        BattleLaunchContext.SetPendingDifficultyLabelZh(runtimeDifficultyLabelZh);
+        BattleLaunchContext.ConfirmActiveBattleDifficulty(runtimeDifficultyLabelZh);
         runtimeDifficultyConfigPending = true;
+    }
+
+    private static string ResolveDifficultyLabelZh(string difficultyLabelZh, EnemyAiPlayStyle aiPlayStyle)
+    {
+        if (!string.IsNullOrWhiteSpace(difficultyLabelZh))
+            return difficultyLabelZh.Trim();
+        switch (aiPlayStyle)
+        {
+            case EnemyAiPlayStyle.SchemingBoss: return "魔王";
+            case EnemyAiPlayStyle.SchemingHard: return "困難";
+            default: return BattleDifficultyRuntime.CurrentLabelZh;
+        }
     }
 
     /// <summary>
@@ -2131,6 +2310,14 @@ public class BattleSimulationManager : MonoBehaviour
         return Time.unscaledTime < enemyDiscardPopupLockUntilUnscaled;
     }
 
+    private IEnumerator WaitForBattleAttackFxIfAny()
+    {
+        if (BattleAutoSimPlugin.IsRunning) yield break;
+        BattleSimulationDebugUI ui = Object.FindFirstObjectByType<BattleSimulationDebugUI>();
+        if (ui == null) yield break;
+        yield return ui.WaitForAttackFxRoutine();
+    }
+
     private IEnumerator WaitForEnemyDiscardPopupLockRelease()
     {
         while (IsEnemyDiscardPopupLockActive())
@@ -2181,16 +2368,197 @@ public class BattleSimulationManager : MonoBehaviour
 
     private int EvaluateEnemyCardKeepValue(Card card)
     {
+        return EvaluateEnemyCardPlayPriority(card);
+    }
+
+    /// <summary>敵方本回合出牌優先度（含稀有度；數值愈高愈優先打出）。</summary>
+    private int EvaluateEnemyCardPlayPriority(Card card)
+    {
+        if (card == null) return int.MinValue;
+        int rarityBonus = GetEnemyPlayRarityBonus(card.rarity);
         if (card is MonsterCard m)
-            return m.attack * 2 + m.healthPointMax;
+            return m.attack * 2 + m.healthPointMax + rarityBonus;
         if (card is SpellCard sp)
         {
-            if (sp.SpellOrdinal == 1) return enemyField != null ? 90 : 8;
-            if (sp.SpellOrdinal == 0) return enemyField != null ? 55 : 75;
-            if (sp.SpellOrdinal == 2) return CanEnemyCastLinGazeNow() ? 62 : 10;
-            return 20;
+            int spellValue;
+            if (sp.SpellOrdinal == 1) spellValue = enemyField != null ? 90 : 8;
+            else if (sp.SpellOrdinal == 0) spellValue = enemyField != null ? 55 : 75;
+            else if (sp.SpellOrdinal == 2) spellValue = CanEnemyCastLinGazeNow() ? 62 : 10;
+            else spellValue = 20;
+            if (sp.SpellOrdinal == 0 && IsOpeningRoundFireballBlocked()) spellValue = int.MinValue / 4;
+            return spellValue + rarityBonus;
         }
-        return 0;
+        return rarityBonus;
+    }
+
+    private bool UsesSchemingEnemyAi => runtimeEnemyAiPlayStyle != EnemyAiPlayStyle.Greedy;
+
+    private int GetEnemyPlayRarityBonus(CardRarity rarity)
+    {
+        int bonus = CardRarityUtility.GetPlayAndKeepBonus(rarity);
+        if (runtimeEnemyAiPlayStyle == EnemyAiPlayStyle.SchemingBoss)
+            bonus = Mathf.RoundToInt(bonus * 1.35f);
+        return bonus;
+    }
+
+    private int GetSchemingMaxHoldStreak() =>
+        runtimeEnemyAiPlayStyle == EnemyAiPlayStyle.SchemingBoss ? 4 : 3;
+
+    private int GetSchemingMinRarityRank() =>
+        runtimeEnemyAiPlayStyle == EnemyAiPlayStyle.SchemingBoss
+            ? (int)CardRarity.R
+            : (int)CardRarity.SR;
+
+    private bool IsSchemingHighRarityCard(Card card) =>
+        card != null && CardRarityUtility.GetRank(card.rarity) >= GetSchemingMinRarityRank();
+
+    private bool ShouldDeferSchemingCard(Card card)
+    {
+        if (!UsesSchemingEnemyAi || !IsSchemingHighRarityCard(card)) return false;
+        if (enemySchemingHoldStreak >= GetSchemingMaxHoldStreak()) return false;
+        return !IsSchemingPremiumTimingReady(card);
+    }
+
+    private bool IsSchemingPremiumTimingReady(Card card)
+    {
+        if (card == null) return true;
+        bool strict = runtimeEnemyAiPlayStyle == EnemyAiPlayStyle.SchemingBoss;
+        if (card is MonsterCard) return IsSchemingMonsterSummonReady(strict);
+        if (card is SpellCard sp) return IsSchemingSpellReady(sp, strict);
+        return true;
+    }
+
+    private bool IsSchemingMonsterSummonReady(bool strict)
+    {
+        if (enemyField != null) return true;
+        MonsterCard playerMonster = GetPlayerFieldCard() as MonsterCard;
+        if (playerMonster != null) return true;
+
+        int hpGatePlayer = strict ? 58 : 65;
+        int hpGateEnemyLow = strict ? 42 : 35;
+        if (playerHp <= Mathf.CeilToInt(startHealth * hpGatePlayer / 100f)) return true;
+        if (enemyHp <= Mathf.CeilToInt(startHealth * hpGateEnemyLow / 100f)) return true;
+        if (enemyHand.Count >= 7) return true;
+
+        if (playerField == null && playerHp > Mathf.CeilToInt(startHealth * (strict ? 0.68f : 0.7f)) &&
+            enemyHp > Mathf.CeilToInt(startHealth * (strict ? 0.68f : 0.65f)))
+            return false;
+
+        return true;
+    }
+
+    private bool IsSchemingSpellReady(SpellCard sp, bool strict)
+    {
+        if (sp == null) return true;
+        switch (sp.SpellOrdinal)
+        {
+            case 0:
+                if (IsOpeningRoundFireballBlocked()) return false;
+                if (enemyField != null) return true;
+                if (playerField != null) return true;
+                if (playerHp <= Mathf.CeilToInt(startHealth * (strict ? 0.52f : 0.5f))) return true;
+                if (playerField == null && playerHp > Mathf.CeilToInt(startHealth * (strict ? 0.58f : 0.72f)))
+                    return false;
+                return true;
+            case 1:
+                if (enemyField == null) return false;
+                float hurtRatio = strict ? 0.82f : 0.78f;
+                return enemyField.currentHp < Mathf.CeilToInt(enemyField.maxHp * hurtRatio);
+            case 2:
+                if (!CanEnemyCastLinGazeNow()) return false;
+                if (playerHp <= Mathf.CeilToInt(startHealth * (strict ? 0.48f : 0.45f))) return true;
+                if (playerField == null && playerHp > Mathf.CeilToInt(startHealth * (strict ? 0.52f : 0.55f)))
+                    return false;
+                return true;
+            default:
+                return true;
+        }
+    }
+
+    private int PickBestEnemyHandIndex(System.Predicate<Card> includeCard)
+    {
+        int chosen = -1;
+        int bestPriority = int.MinValue;
+        for (int i = 0; i < enemyHand.Count; i++)
+        {
+            Card c = enemyHand[i];
+            if (IsEnemyCardUnplayableNow(c)) continue;
+            if (includeCard != null && !includeCard(c)) continue;
+            int priority = EvaluateEnemyCardPlayPriority(c);
+            if (priority > bestPriority)
+            {
+                bestPriority = priority;
+                chosen = i;
+            }
+        }
+        return chosen;
+    }
+
+    private int TryPickLethalMonsterIndex()
+    {
+        MonsterCard playerMonster = GetPlayerFieldCard() as MonsterCard;
+        if (enemyField != null || playerMonster == null) return -1;
+        int glassCannonHp = playerMonster.healthPoint;
+        if (playerMonster.attack <= glassCannonHp) return -1;
+
+        int lethalIndex = -1;
+        int bestRarityRank = -1;
+        int bestAttack = -1;
+        for (int i = 0; i < enemyHand.Count; i++)
+        {
+            if (!(enemyHand[i] is MonsterCard enemyMonster)) continue;
+            if (enemyMonster.attack < glassCannonHp) continue;
+            int rank = CardRarityUtility.GetRank(enemyMonster.rarity);
+            if (rank > bestRarityRank || (rank == bestRarityRank && enemyMonster.attack > bestAttack))
+            {
+                bestRarityRank = rank;
+                bestAttack = enemyMonster.attack;
+                lethalIndex = i;
+            }
+        }
+        return lethalIndex;
+    }
+
+    private void NoteEnemySchemingCardPlayed(Card played)
+    {
+        if (!UsesSchemingEnemyAi) return;
+        if (played != null && IsSchemingHighRarityCard(played))
+        {
+            enemySchemingHoldStreak = 0;
+            return;
+        }
+        for (int i = 0; i < enemyHand.Count; i++)
+        {
+            if (ShouldDeferSchemingCard(enemyHand[i]))
+            {
+                enemySchemingHoldStreak++;
+                return;
+            }
+        }
+        enemySchemingHoldStreak = 0;
+    }
+
+    /// <summary>敵方 AI：戰術斬殺 &gt;（困難／魔王）囤高稀有待機 &gt; 優先度出牌。</summary>
+    public int ChooseEnemyHandCardToPlayIndex()
+    {
+        if (enemyHand.Count == 0) return -1;
+
+        int lethal = TryPickLethalMonsterIndex();
+        if (lethal >= 0) return lethal;
+
+        System.Predicate<Card> notDeferred = c => !ShouldDeferSchemingCard(c);
+        System.Predicate<Card> isMonster = c => c is MonsterCard;
+
+        if (enemyField == null)
+        {
+            int monster = PickBestEnemyHandIndex(c => isMonster(c) && notDeferred(c));
+            if (monster < 0) monster = PickBestEnemyHandIndex(isMonster);
+            if (monster >= 0) return monster;
+        }
+
+        int chosen = PickBestEnemyHandIndex(notDeferred);
+        if (chosen < 0) chosen = PickBestEnemyHandIndex(null);
+        return chosen;
     }
 
     private bool IsPlayerCardUnplayableNow(Card card)
@@ -2336,7 +2704,8 @@ public class BattleSimulationManager : MonoBehaviour
             battleResult = 2;
             BattleVerbose("平手：雙方英雄 HP≥1，且皆無牌可打（手牌、牌庫與場上皆無可用牌）。");
             RecordBattleOutcomeHistory();
-            PlayerProfileCsvService.RecordBattleResult(battleResult);
+            RecordCardProficiencyAfterBattle(GetBattleDifficultyLabelForRecord());
+            PlayerProfileCsvService.RecordBattleResult(battleResult, GetBattleDifficultyLabelForRecord());
             NotifyTurnBanner(BattleTurnBannerKind.Hidden);
             return;
         }
@@ -2346,7 +2715,8 @@ public class BattleSimulationManager : MonoBehaviour
             battleResult = 2;
             BattleVerbose("平手：雙方英雄於同一次結算中生命皆≤0。");
             RecordBattleOutcomeHistory();
-            PlayerProfileCsvService.RecordBattleResult(battleResult);
+            RecordCardProficiencyAfterBattle(GetBattleDifficultyLabelForRecord());
+            PlayerProfileCsvService.RecordBattleResult(battleResult, GetBattleDifficultyLabelForRecord());
             NotifyTurnBanner(BattleTurnBannerKind.Hidden);
             return;
         }
@@ -2361,7 +2731,8 @@ public class BattleSimulationManager : MonoBehaviour
             battleResult = 2;
             BattleVerbose("平手：雙方皆符合戰敗條件（英雄 HP≤0 或手牌＋場上無牌）。");
             RecordBattleOutcomeHistory();
-            PlayerProfileCsvService.RecordBattleResult(battleResult);
+            RecordCardProficiencyAfterBattle(GetBattleDifficultyLabelForRecord());
+            PlayerProfileCsvService.RecordBattleResult(battleResult, GetBattleDifficultyLabelForRecord());
             NotifyTurnBanner(BattleTurnBannerKind.Hidden);
             return;
         }
@@ -2376,7 +2747,8 @@ public class BattleSimulationManager : MonoBehaviour
             }
             BattleVerbose("我方戰敗：英雄 HP≤0，或手牌與場上無牌。");
             RecordBattleOutcomeHistory();
-            PlayerProfileCsvService.RecordBattleResult(battleResult);
+            RecordCardProficiencyAfterBattle(GetBattleDifficultyLabelForRecord());
+            PlayerProfileCsvService.RecordBattleResult(battleResult, GetBattleDifficultyLabelForRecord());
             NotifyTurnBanner(BattleTurnBannerKind.Hidden);
             return;
         }
@@ -2386,9 +2758,19 @@ public class BattleSimulationManager : MonoBehaviour
             battleResult = 1;
             BattleVerbose("我方勝利：敵方符合戰敗條件（英雄 HP≤0 或手牌＋場上無牌）。");
             RecordBattleOutcomeHistory();
-            PlayerProfileCsvService.RecordBattleResult(battleResult);
+            string difficultyLabel = GetBattleDifficultyLabelForRecord();
+            RecordCardProficiencyAfterBattle(difficultyLabel);
+            PlayerProfileCsvService.RecordBattleResult(battleResult, difficultyLabel);
             NotifyTurnBanner(BattleTurnBannerKind.Hidden);
         }
+    }
+
+    private void RecordCardProficiencyAfterBattle(string difficultyLabelZh)
+    {
+        if (playerData == null) return;
+        IReadOnlyDictionary<int, int> deck = playerData.GetDeckMap(playerData.selectedDeckSlot);
+        CardSkillProficiencyService.RecordBattleOutcome(playerData, deck, battleResult, difficultyLabelZh);
+        playerData.SavePlayerData();
     }
 
     public void PrintBattleState()
@@ -2424,6 +2806,16 @@ public class BattleSimulationManager : MonoBehaviour
     public string GetCurrentWeatherLabelForUi()
     {
         return GetWeatherLabel(currentWeather);
+    }
+
+    public int GetCurrentWeatherKindForUi()
+    {
+        return (int)currentWeather;
+    }
+
+    public bool IsCurrentWeatherFxActive(int weatherKind)
+    {
+        return weatherRemainingRoundsForUi > 0 && (int)currentWeather == weatherKind;
     }
 
     public string GetCurrentWeatherEffectForUi()
@@ -2734,8 +3126,45 @@ public class BattleSimulationManager : MonoBehaviour
                     return spell.effect;
             }
         }
-        if (card is MonsterCard) return "No active skill description for this card.";
+        if (card is MonsterCard monster)
+        {
+            if (MonsterSkillRegistry.TryGetSkillLineB(monster.id, out string lineB))
+                return lineB;
+            return string.Empty;
+        }
         return "No skill description for this card.";
+    }
+
+    /// <summary>對戰手牌長按浮窗：完整戰技／效果說明（不含 B 階一行摘要）。</summary>
+    public string GetCardHandLongPressTooltipText(Card card)
+    {
+        return TryGetCardHandLongPressTooltipModel(card, out HandLongPressTooltipModel model)
+            ? model.heading + "\n" + model.subtitleRich + "\n" + model.bodyRich
+            : string.Empty;
+    }
+
+    public bool TryGetCardHandLongPressTooltipModel(Card card, out HandLongPressTooltipModel model)
+    {
+        model = default;
+        if (card == null) return false;
+        if (card is MonsterCard monster)
+            return MonsterSkillRegistry.TryGetBattleHandLongPressModel(monster.id, out model);
+        if (card is SpellCard spell)
+        {
+            string body = GetSpellEffectTextForPresentation(spell);
+            if (string.IsNullOrWhiteSpace(body))
+                body = GetCardSkillDescription(spell);
+            if (string.IsNullOrWhiteSpace(body)) return false;
+            string name = string.IsNullOrWhiteSpace(spell.cardName) ? "法術" : spell.cardName.Trim();
+            model = new HandLongPressTooltipModel
+            {
+                heading = "效果說明",
+                subtitleRich = MonsterSkillRegistry.FormatSkillNameRich(name),
+                bodyRich = body.Trim()
+            };
+            return true;
+        }
+        return false;
     }
 
     public Card GetPlayerFieldCard()
@@ -2775,6 +3204,93 @@ public class BattleSimulationManager : MonoBehaviour
                 fallback.SetDeckThumb(mm.deckThumbResourcePath, mm.deckThumbSprite);
         }
         return fallback;
+    }
+
+    /// <summary>場上怪獸卡中央狀態徽章（不可攻擊／不可反擊＋副標）。</summary>
+    public struct FieldMonsterStatusBadge
+    {
+        public bool HasValue;
+        public string Primary;
+        public string Secondary;
+
+        public static FieldMonsterStatusBadge None => default;
+    }
+
+    /// <summary>我方場上怪獸：敵方凝視／首回合／本回合已攻擊／本回合已反擊等。</summary>
+    public FieldMonsterStatusBadge GetPlayerFieldMonsterStatusBadge()
+    {
+        if (playerField == null) return FieldMonsterStatusBadge.None;
+        if (EnemyLinGazeActive())
+        {
+            return new FieldMonsterStatusBadge
+            {
+                HasValue = true,
+                Primary = FieldCardStatusIndex.BadgeCannotAttack,
+                Secondary = FieldCardStatusIndex.BadgeSecondaryRoundsRemaining(GetEnemyLinGazeRoundsRemaining())
+            };
+        }
+        if (IsOpeningRoundAttackBlocked())
+        {
+            return new FieldMonsterStatusBadge
+            {
+                HasValue = true,
+                Primary = FieldCardStatusIndex.BadgeCannotAttack,
+                Secondary = FieldCardStatusIndex.BadgeSecondaryOpeningRound
+            };
+        }
+        if (playerHasAttackedThisTurn && playerTurn)
+        {
+            return new FieldMonsterStatusBadge
+            {
+                HasValue = true,
+                Primary = FieldCardStatusIndex.BadgeCannotAttack,
+                Secondary = FieldCardStatusIndex.BadgeSecondaryThisTurn
+            };
+        }
+        if (playerCounterUsedThisRound)
+        {
+            return new FieldMonsterStatusBadge
+            {
+                HasValue = true,
+                Primary = FieldCardStatusIndex.BadgeCannotCounter,
+                Secondary = FieldCardStatusIndex.BadgeSecondaryThisTurn
+            };
+        }
+        return FieldMonsterStatusBadge.None;
+    }
+
+    /// <summary>敵方場上怪獸：我方凝視／首回合／本回合已反擊等。</summary>
+    public FieldMonsterStatusBadge GetEnemyFieldMonsterStatusBadge()
+    {
+        if (enemyField == null) return FieldMonsterStatusBadge.None;
+        if (PlayerLinGazeActive())
+        {
+            return new FieldMonsterStatusBadge
+            {
+                HasValue = true,
+                Primary = FieldCardStatusIndex.BadgeCannotAttack,
+                Secondary = FieldCardStatusIndex.BadgeSecondaryRoundsRemaining(GetPlayerLinGazeRoundsRemaining())
+            };
+        }
+        if (IsOpeningRoundAttackBlocked())
+        {
+            return new FieldMonsterStatusBadge
+            {
+                HasValue = true,
+                Primary = FieldCardStatusIndex.BadgeCannotAttack,
+                Secondary = FieldCardStatusIndex.BadgeSecondaryOpeningRound
+            };
+        }
+        if (enemyCounterUsedThisRound)
+        {
+            return new FieldMonsterStatusBadge
+            {
+                HasValue = true,
+                Primary = FieldCardStatusIndex.BadgeCannotCounter,
+                Secondary = FieldCardStatusIndex.BadgeSecondaryThisTurn
+            };
+        }
+        return FieldMonsterStatusBadge.None;
     }
 
     // -------- Enemy AI public hooks --------
@@ -2824,9 +3340,11 @@ public class BattleSimulationManager : MonoBehaviour
                 return;
             }
             enemyField = new BattleMonster(monster);
+            ApplySummonMonsterSkills(enemyField, false);
             enemyPlacedCardThisRound = true;
             enemyPlayedHandCardThisTurn = true;
             BattleVerbose("Enemy summoned: " + enemyField.cardName);
+            NoteEnemySchemingCardPlayed(selected);
             EnemyCardPlayed?.Invoke(selected);
         }
         else if (selected is SpellCard spell)
@@ -2858,6 +3376,7 @@ public class BattleSimulationManager : MonoBehaviour
                 enemyPlayedHandCardThisTurn = true;
                 if (spell.SpellOrdinal != 0 && spell.SpellOrdinal != 1)
                     BattleVerbose("Enemy cast spell: " + spell.cardName);
+                NoteEnemySchemingCardPlayed(eventCard);
                 EnemyCardPlayed?.Invoke(eventCard);
             }
             deferPlayerFieldUiClearAfterEnemyFireballKill =
@@ -2903,6 +3422,7 @@ public class BattleSimulationManager : MonoBehaviour
             if (enemyDeck[i] is MonsterCard deckMonster)
             {
                 enemyField = new BattleMonster(deckMonster);
+                ApplySummonMonsterSkills(enemyField, false);
                 enemyDeck.RemoveAt(i);
                 BattleVerbose("Enemy start summon (deck): " + enemyField.cardName);
                 return;

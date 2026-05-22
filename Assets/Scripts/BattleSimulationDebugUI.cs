@@ -137,9 +137,18 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
     private Text roundText;
     private RectTransform tooltipPanel;
     private Text tooltipText;
-    private const float HandTooltipBackgroundAlpha = 0.7f;
-    private const float HandTooltipPanelWidth = 640f;
-    private const float HandTooltipPanelHeight = 280f;
+    private TextMeshProUGUI handTooltipTitleTmp;
+    private TextMeshProUGUI handTooltipSubtitleTmp;
+    private TextMeshProUGUI handTooltipBodyTmp;
+    private const float HandTooltipBackgroundAlpha = 0.88f;
+    private const float HandTooltipPanelWidth = 780f;
+    private const float HandTooltipPanelHeight = 460f;
+    private const float HandTooltipAnchorYNormalized = 0.94f;
+    private const float HandTooltipOffsetX = 16f;
+    private const float HandTooltipOffsetY = 96f;
+    private const int HandTooltipTitleFontSize = 42;
+    private const int HandTooltipSubtitleFontSize = 34;
+    private const int HandTooltipBodyFontSize = 28;
     private const int HandTooltipFontSize = 34;
     private const float LinGazeEyeStrikeDuration = 1.18f;
     private RectTransform spellCastOverlayRoot;
@@ -154,8 +163,18 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
     private bool lockBattleResultAutoUpdate;
     private GameObject endBattlePanel;
     private Text endBattleTitleText;
+    private Text endBattleSubtitleText;
+    private Image endBattleHeaderStripImage;
+    private GameObject endBattleProficiencyUpdateBanner;
+    private GameObject endBattleFooterBar;
     private CanvasGroup endBattlePanelGroup;
     private bool endBattlePanelShown;
+    private GameObject endBattleProficiencySection;
+    private RectTransform endBattleProficiencyContentRt;
+    private ScrollRect endBattleProficiencyScroll;
+    private Coroutine endBattleProficiencyAnimRoutine;
+    private readonly List<SettlementProficiencyRowUi> endBattleProficiencyRows = new List<SettlementProficiencyRowUi>();
+    private int endBattlePanelLayoutBuilt;
     private GameObject battleHistoryOverlayRoot;
     private TextMeshProUGUI battleHistoryContentTmp;
     private ScrollRect battleHistoryScrollRect;
@@ -463,7 +482,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
     {
         if (weatherForecastTitleTmp == null)
             yield break;
-        string[] pool = new[] { "緋焰時雨", "月華聖祈", "蒼潮夜湧", "朔風森詠" };
+        string[] pool = BattleWeatherLabels.ForecastRollPool;
         int start = Random.Range(0, pool.Length);
         float elapsed = 0f;
         const float total = 0.92f;
@@ -550,10 +569,10 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
     private string BuildAllWeatherHudText(string activeWeatherLabel)
     {
         return
-            FormatWeatherLine("緋焰時雨", activeWeatherLabel == "緋焰時雨", "回合結束雙方場上怪獸各受 5 點傷害") + "\n\n" +
-            FormatWeatherLine("月華聖祈", activeWeatherLabel == "月華聖祈", "所有治療效果增加 10") + "\n\n" +
-            FormatWeatherLine("蒼潮夜湧", activeWeatherLabel == "蒼潮夜湧", "直接攻擊英雄傷害減少 50%") + "\n\n" +
-            FormatWeatherLine("朔風森詠", activeWeatherLabel == "朔風森詠", "雙方首張法術效果增加 20%");
+            FormatWeatherLine(BattleWeatherLabels.EmberHearth, activeWeatherLabel == BattleWeatherLabels.EmberHearth, "回合結束雙方場上怪獸各受 5 點傷害") + "\n\n" +
+            FormatWeatherLine(BattleWeatherLabels.WarmLamplight, activeWeatherLabel == BattleWeatherLabels.WarmLamplight, "所有治療效果增加 10") + "\n\n" +
+            FormatWeatherLine(BattleWeatherLabels.TrainingMist, activeWeatherLabel == BattleWeatherLabels.TrainingMist, "直接攻擊英雄傷害減少 50%") + "\n\n" +
+            FormatWeatherLine(BattleWeatherLabels.HallDraft, activeWeatherLabel == BattleWeatherLabels.HallDraft, "雙方首張法術效果增加 20%");
     }
 
     private static string FormatWeatherLine(string name, bool active, string effect)
@@ -567,12 +586,11 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
     {
         if (battleManager == null || weatherScreenFxRoot == null) return;
 
-        string weather = battleManager.GetCurrentWeatherLabelForUi();
         bool active = battleManager.GetCurrentWeatherRemainingRoundsForUi() > 0;
-        bool showFire = active && weather == "緋焰時雨";
-        bool showHoly = active && weather == "月華聖祈";
-        bool showFog = active && weather == "蒼潮夜湧";
-        bool showGale = active && weather == "朔風森詠";
+        bool showFire = active && battleManager.IsCurrentWeatherFxActive(BattleWeatherKind.FireRain);
+        bool showHoly = active && battleManager.IsCurrentWeatherFxActive(BattleWeatherKind.HolyLight);
+        bool showFog = active && battleManager.IsCurrentWeatherFxActive(BattleWeatherKind.Fog);
+        bool showGale = active && battleManager.IsCurrentWeatherFxActive(BattleWeatherKind.Gale);
 
         if (weatherFireRainFxRt != null) weatherFireRainFxRt.gameObject.SetActive(showFire);
         if (weatherHolyLightFxRt != null) weatherHolyLightFxRt.gameObject.SetActive(showHoly);
@@ -628,7 +646,10 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
                         ? weatherHolyLightDustBaseColors[i]
                         : dustImg.color;
                     float tintPulse = 0.5f + Mathf.Sin(Time.unscaledTime * 0.95f + phase) * 0.5f;
-                    Color shimmer = Color.Lerp(baseColor, new Color(0.95f, 0.96f, 1f, baseColor.a), 0.14f * tintPulse);
+                    Color shimmer = Color.Lerp(
+                        baseColor,
+                        BattleFxColors.WithAlpha(BattleFxColors.WeatherHolyDustGoldRgb, baseColor.a),
+                        0.14f * tintPulse);
                     Color dc = shimmer;
                     dc.a = Mathf.Clamp01(baseColor.a + Mathf.Sin(Time.unscaledTime * 1.35f + phase) * 0.045f);
                     dustImg.color = dc;
@@ -654,9 +675,9 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
             float sp = weatherFireRainStreakSpeeds[i];
             float phase = i < weatherFireRainStreakPhases.Count ? weatherFireRainStreakPhases[i] : 0f;
             Vector2 p = rt.anchoredPosition;
-            p.x -= sp * 0.42f * dt;
-            p.x += Mathf.Sin(Time.unscaledTime * 3.2f + phase) * 26f * dt;
-            p.y -= sp * dt;
+            p.x -= sp * 0.18f * dt;
+            p.x += Mathf.Sin(Time.unscaledTime * 2.4f + phase) * 14f * dt;
+            p.y -= sp * 0.72f * dt;
             if (p.y < bottom || p.x < left)
             {
                 p.y = top + Random.Range(0f, 120f);
@@ -1047,6 +1068,8 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
             if (fieldTextChanged) RefreshFieldCardVisualTuningOnly();
         }
 
+        UpdateFieldSelectHaloVisibility();
+        UpdateFieldRestrictionBadges();
     }
 
     private void UpdatePlayerHandAreaYOffsetAnimated(float targetY)
@@ -1195,13 +1218,12 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         if (sharedUIFont != null) enemyHeroHpText.font = sharedUIFont;
         enemyHeroHpText.fontSize = hpNumSize;
         enemyHeroHpText.alignment = TextAlignmentOptions.TopLeft;
-        enemyHeroHpText.color = new Color(1f, 0.55f, 0.45f, 1f);
+        enemyHeroHpText.color = BattleUiColors.FoeHp;
         enemyHeroHpText.enableWordWrapping = false;
         enemyHeroHpText.raycastTarget = false;
         enemyHeroHpText.richText = true;
         Outline eo = enemyHeroObj.AddComponent<Outline>();
-        eo.effectColor = new Color(0f, 0f, 0f, 0.92f);
-        eo.effectDistance = new Vector2(3f, -3f);
+        BattleUiColors.ApplyHpOutline(eo);
 
         GameObject playerHeroObj = new GameObject("PlayerHeroHpHud", typeof(RectTransform), typeof(TextMeshProUGUI));
         playerHeroObj.transform.SetParent(canvasParent, false);
@@ -1215,13 +1237,12 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         if (sharedUIFont != null) playerHeroHpText.font = sharedUIFont;
         playerHeroHpText.fontSize = hpNumSize;
         playerHeroHpText.alignment = TextAlignmentOptions.BottomLeft;
-        playerHeroHpText.color = new Color(0.55f, 0.92f, 1f, 1f);
+        playerHeroHpText.color = BattleUiColors.AllyHp;
         playerHeroHpText.enableWordWrapping = false;
         playerHeroHpText.raycastTarget = false;
         playerHeroHpText.richText = true;
         Outline po = playerHeroObj.AddComponent<Outline>();
-        po.effectColor = new Color(0f, 0f, 0f, 0.92f);
-        po.effectDistance = new Vector2(3f, -3f);
+        BattleUiColors.ApplyHpOutline(po);
 
         heroHudTitleSize = titleSize;
 
@@ -1250,12 +1271,12 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         if (playerHeroHpText != null)
         {
             playerHeroHpText.text =
-                "<size=" + t + "><color=#E8FFFFFF>我方英雄</color></size>\n<b>" + p + "</b>";
+                "<size=" + t + "><color=#A8CEC6>我方英雄</color></size>\n<b>" + p + "</b>";
         }
         if (enemyHeroHpText != null)
         {
             enemyHeroHpText.text =
-                "<size=" + t + "><color=#E8FFFFFF>敵方英雄</color></size>\n<b>" + e + "</b>";
+                "<size=" + t + "><color=#E0AA90>敵方英雄</color></size>\n<b>" + e + "</b>";
         }
 
         if (playerHeroDamaged && playerHeroDamagedFxRoutine == null && !BattleAutoSimPlugin.IsRunning)
@@ -1284,7 +1305,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
 
         float flash = Mathf.Clamp(heroDamageMonochromeFlashSeconds, 0.08f, 0.12f);
         float recover = Mathf.Clamp(heroDamageMonochromeRecoverSeconds, 0.12f, 0.4f);
-        const float peakAlpha = 0.92f;
+        float peakAlpha = BattleFxColors.HurtMonoFlashPeakAlpha;
 
         heroDamageMonochromeFlashRt.SetAsLastSibling();
         heroDamageMonochromeFlashCg.alpha = peakAlpha;
@@ -1315,11 +1336,11 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         turnBannerPanelRt.sizeDelta = new Vector2(540f, 112f);
 
         Image bg = go.GetComponent<Image>();
-        bg.color = new Color(0.34f, 0.4f, 0.3f, 0.95f);
+        bg.color = BattleUiColors.TurnBg;
         bg.raycastTarget = false;
 
         Shadow sh = go.GetComponent<Shadow>();
-        sh.effectColor = new Color(0f, 0f, 0f, 0.5f);
+        sh.effectColor = BattleUiColors.ShadowUi;
         sh.effectDistance = new Vector2(6f, -7f);
 
         turnBannerCg = go.GetComponent<CanvasGroup>();
@@ -1339,14 +1360,13 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         if (sharedUIFont != null) turnBannerTmp.font = sharedUIFont;
         turnBannerTmp.fontSize = 42f;
         turnBannerTmp.alignment = TextAlignmentOptions.Center;
-        turnBannerTmp.color = new Color(0.98f, 0.96f, 0.9f, 1f);
+        turnBannerTmp.color = BattleUiColors.TurnBannerText;
         turnBannerTmp.raycastTarget = false;
         turnBannerTmp.enableWordWrapping = true;
         turnBannerTmp.text = string.Empty;
 
         Outline ol = textGo.AddComponent<Outline>();
-        ol.effectColor = new Color(0f, 0f, 0f, 0.78f);
-        ol.effectDistance = new Vector2(2.5f, -2.5f);
+        BattleUiColors.ApplyHpOutline(ol);
     }
 
     /// <summary>將「你的回合／敵方操作中…」置於同 Canvas 下其他戰鬥 UI 之上，並維持在除錯面板之下（除錯為最後子物件）。</summary>
@@ -1419,7 +1439,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
             case BattleTurnBannerKind.PlayerTurn:
                 turnBannerPlayerFromIdleTimeout = false;
                 turnBannerTmp.text = "你的回合";
-                turnBannerTmp.color = new Color(0.63f, 0.86f, 0.62f, 1f);
+                turnBannerTmp.color = BattleUiColors.TurnPlayer;
                 turnBannerPanelRt.anchoredPosition = Vector2.zero;
                 turnBannerPanelRt.gameObject.SetActive(true);
                 turnBannerCg.alpha = 0f;
@@ -1430,7 +1450,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
                 break;
             case BattleTurnBannerKind.EnemyTurn:
                 turnBannerTmp.text = "敵方操作中...";
-                turnBannerTmp.color = new Color(0.88f, 0.56f, 0.45f, 1f);
+                turnBannerTmp.color = BattleUiColors.TurnEnemy;
                 turnBannerPanelRt.anchoredPosition = Vector2.zero;
                 turnBannerPanelRt.gameObject.SetActive(true);
                 turnBannerCg.alpha = 0f;
@@ -1796,7 +1816,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         openingRollPanel.anchoredPosition = Vector2.zero;
         openingRollPanel.sizeDelta = new Vector2(520f, 172f);
         Image openingRollBg = openingRollPanelObj.GetComponent<Image>();
-        openingRollBg.color = new Color(0.45f, 0.36f, 0.3f, 1f);
+        openingRollBg.color = BattleUiColors.PanelCream;
         openingRollGroup = openingRollPanelObj.GetComponent<CanvasGroup>();
         openingRollGroup.alpha = 0f;
         openingRollPanelObj.SetActive(false);
@@ -1813,7 +1833,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         if (sharedUIFont != null) openingRollDiceText.font = sharedUIFont;
         openingRollDiceText.fontSize = 34f;
         openingRollDiceText.alignment = TextAlignmentOptions.Center;
-        openingRollDiceText.color = new Color(0.98f, 0.98f, 0.98f, 1f);
+        openingRollDiceText.color = BattleUiColors.InkSoft;
         openingRollDiceText.text = string.Empty;
 
         openingPlayerDicePips = CreateDicePipGrid(openingRollPanelObj.transform, "OpeningPlayerDiceIcon", new Vector2(-132f, 44f));
@@ -1831,7 +1851,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         if (sharedUIFont != null) openingRollFirstText.font = sharedUIFont;
         openingRollFirstText.fontSize = 28f;
         openingRollFirstText.alignment = TextAlignmentOptions.Center;
-        openingRollFirstText.color = new Color(1f, 0.9f, 0.4f, 1f);
+        openingRollFirstText.color = BattleUiColors.TurnPlayer;
         openingRollFirstText.text = string.Empty;
 
         EnsureUIAudioSource(parent);
@@ -1945,7 +1965,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         weatherForecastOverlayRt.offsetMin = Vector2.zero;
         weatherForecastOverlayRt.offsetMax = Vector2.zero;
         Image weatherOverlayBg = weatherOverlayObj.GetComponent<Image>();
-        weatherOverlayBg.color = new Color(0.12f, 0.08f, 0.06f, 0.62f);
+        weatherOverlayBg.color = BattleUiColors.DimHeavy;
         weatherOverlayBg.raycastTarget = true;
         weatherForecastOverlayCg = weatherOverlayObj.GetComponent<CanvasGroup>();
         weatherForecastOverlayCg.alpha = 0f;
@@ -1960,7 +1980,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         weatherCardRt.offsetMin = Vector2.zero;
         weatherCardRt.offsetMax = Vector2.zero;
         Image weatherCardBg = weatherCardObj.GetComponent<Image>();
-        weatherCardBg.color = new Color(0.94f, 0.9f, 0.82f, 0.985f);
+        weatherCardBg.color = BattleUiColors.PanelMilk985;
 
         GameObject weatherTitleObj = new GameObject("WeatherForecastTitle", typeof(RectTransform), typeof(TextMeshProUGUI));
         weatherTitleObj.transform.SetParent(weatherCardRt, false);
@@ -1974,7 +1994,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         if (sharedUIFont != null) weatherForecastTitleTmp.font = sharedUIFont;
         weatherForecastTitleTmp.fontSize = 62f;
         weatherForecastTitleTmp.alignment = TextAlignmentOptions.Center;
-        weatherForecastTitleTmp.color = new Color(0.28f, 0.22f, 0.16f, 1f);
+        weatherForecastTitleTmp.color = BattleUiColors.Ink;
         weatherForecastTitleTmp.text = "天氣預報：無";
         weatherForecastTitleTmp.raycastTarget = false;
 
@@ -1989,7 +2009,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         if (sharedUIFont != null) weatherForecastBodyTmp.font = sharedUIFont;
         weatherForecastBodyTmp.fontSize = 44f;
         weatherForecastBodyTmp.alignment = TextAlignmentOptions.Top;
-        weatherForecastBodyTmp.color = new Color(0.2f, 0.16f, 0.12f, 1f);
+        weatherForecastBodyTmp.color = BattleUiColors.InkSoft;
         weatherForecastBodyTmp.enableWordWrapping = true;
         weatherForecastBodyTmp.text = "本回合無額外天氣效果。";
         weatherForecastBodyTmp.raycastTarget = false;
@@ -2023,9 +2043,9 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         activeWeatherEffectPanelRt.offsetMin = new Vector2(32f, 30f);
         activeWeatherEffectPanelRt.offsetMax = new Vector2(-22f, -30f);
         Image activeWeatherPanelBg = activeWeatherPanelObj.GetComponent<Image>();
-        activeWeatherPanelBg.color = new Color(0.92f, 0.89f, 0.82f, 0.96f);
+        activeWeatherPanelBg.color = BattleUiColors.PanelCream96;
         Outline activeWeatherPanelOutline = activeWeatherPanelObj.AddComponent<Outline>();
-        activeWeatherPanelOutline.effectColor = new Color(0.44f, 0.36f, 0.26f, 0.35f);
+        activeWeatherPanelOutline.effectColor = BattleUiColors.PanelEdge35;
         activeWeatherPanelOutline.effectDistance = new Vector2(2f, -2f);
         activeWeatherPanelObj.SetActive(false);
 
@@ -2040,7 +2060,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         if (sharedUIFont != null) activeWeatherEffectPanelSummaryTmp.font = sharedUIFont;
         activeWeatherEffectPanelSummaryTmp.fontSize = 29f;
         activeWeatherEffectPanelSummaryTmp.alignment = TextAlignmentOptions.TopLeft;
-        activeWeatherEffectPanelSummaryTmp.color = new Color(0.27f, 0.23f, 0.18f, 1f);
+        activeWeatherEffectPanelSummaryTmp.color = BattleUiColors.Ink;
         activeWeatherEffectPanelSummaryTmp.enableWordWrapping = true;
         activeWeatherEffectPanelSummaryTmp.lineSpacing = 10f;
         activeWeatherEffectPanelSummaryTmp.richText = true;
@@ -2054,7 +2074,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         activeWeatherDividerRt.anchorMax = new Vector2(0.34f, 1f);
         activeWeatherDividerRt.sizeDelta = new Vector2(2f, -76f);
         Image activeWeatherDividerImg = activeWeatherDividerObj.GetComponent<Image>();
-        activeWeatherDividerImg.color = new Color(0.56f, 0.49f, 0.36f, 0.35f);
+        activeWeatherDividerImg.color = BattleUiColors.PanelEdge35;
         activeWeatherDividerImg.raycastTarget = false;
 
         GameObject activeWeatherPanelTextObj = new GameObject("ActiveWeatherEffectPanelText", typeof(RectTransform), typeof(TextMeshProUGUI));
@@ -2068,7 +2088,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         if (sharedUIFont != null) activeWeatherEffectPanelTextTmp.font = sharedUIFont;
         activeWeatherEffectPanelTextTmp.fontSize = 31f;
         activeWeatherEffectPanelTextTmp.alignment = TextAlignmentOptions.TopLeft;
-        activeWeatherEffectPanelTextTmp.color = new Color(0.2f, 0.16f, 0.12f, 1f);
+        activeWeatherEffectPanelTextTmp.color = BattleUiColors.InkSoft;
         activeWeatherEffectPanelTextTmp.enableWordWrapping = true;
         activeWeatherEffectPanelTextTmp.lineSpacing = 10f;
         activeWeatherEffectPanelTextTmp.richText = true;
@@ -2113,10 +2133,10 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         heroDamageMonochromeFlashRt.SetAsLastSibling();
 
         // Build a non-intrusive vignette by darkening only screen edges.
-        CreateHeroDamageVignetteEdge(overlayObj.transform, "Top", new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, 0f), new Vector2(0f, 180f), new Color(0f, 0f, 0f, 0.85f));
-        CreateHeroDamageVignetteEdge(overlayObj.transform, "Bottom", new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 0f), new Vector2(0f, 180f), new Color(0f, 0f, 0f, 0.85f));
-        CreateHeroDamageVignetteEdge(overlayObj.transform, "Left", new Vector2(0f, 0f), new Vector2(0f, 1f), new Vector2(0f, 0.5f), new Vector2(0f, 0f), new Vector2(210f, 0f), new Color(0f, 0f, 0f, 0.78f));
-        CreateHeroDamageVignetteEdge(overlayObj.transform, "Right", new Vector2(1f, 0f), new Vector2(1f, 1f), new Vector2(1f, 0.5f), new Vector2(0f, 0f), new Vector2(210f, 0f), new Color(0f, 0f, 0f, 0.78f));
+        CreateHeroDamageVignetteEdge(overlayObj.transform, "Top", new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, 0f), new Vector2(0f, 180f), BattleFxColors.VignetteWarmTopBottom);
+        CreateHeroDamageVignetteEdge(overlayObj.transform, "Bottom", new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 0f), new Vector2(0f, 180f), BattleFxColors.VignetteWarmTopBottom);
+        CreateHeroDamageVignetteEdge(overlayObj.transform, "Left", new Vector2(0f, 0f), new Vector2(0f, 1f), new Vector2(0f, 0.5f), new Vector2(0f, 0f), new Vector2(210f, 0f), BattleFxColors.VignetteWarmSoft);
+        CreateHeroDamageVignetteEdge(overlayObj.transform, "Right", new Vector2(1f, 0f), new Vector2(1f, 1f), new Vector2(1f, 0.5f), new Vector2(0f, 0f), new Vector2(210f, 0f), BattleFxColors.VignetteWarmSoft);
 
         heroDamageMonochromeFlashCg = overlayObj.GetComponent<CanvasGroup>();
         heroDamageMonochromeFlashCg.alpha = 0f;
@@ -2255,7 +2275,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         pausePanel.offsetMin = Vector2.zero;
         pausePanel.offsetMax = Vector2.zero;
         Image pauseBg = pausePanelObj.GetComponent<Image>();
-        pauseBg.color = new Color(0.12f, 0.08f, 0.06f, 0.62f);
+        pauseBg.color = BattleUiColors.DimHeavy;
 
         GameObject pauseCardObj = new GameObject("PauseCard", typeof(RectTransform), typeof(Image));
         pauseCardObj.transform.SetParent(pausePanelObj.transform, false);
@@ -2266,7 +2286,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         pauseCardRt.anchoredPosition = Vector2.zero;
         pauseCardRt.sizeDelta = new Vector2(760f, 420f);
         Image pauseCardBg = pauseCardObj.GetComponent<Image>();
-        pauseCardBg.color = new Color(0.92f, 0.88f, 0.8f, 0.96f);
+        pauseCardBg.color = BattleUiColors.PanelCream96;
 
         GameObject titleObj = new GameObject("PauseTitle", typeof(RectTransform), typeof(TextMeshProUGUI));
         titleObj.transform.SetParent(pauseCardObj.transform, false);
@@ -2280,7 +2300,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         if (sharedUIFont != null) title.font = sharedUIFont;
         title.fontSize = 68f;
         title.alignment = TextAlignmentOptions.Center;
-        title.color = new Color(0.24f, 0.2f, 0.16f, 1f);
+        title.color = BattleUiColors.Ink;
         title.text = "Paused";
 
         Button resumeBtn = CreateButton(pauseCardObj.transform, "ResumeButton", "Resume", new Vector2(0f, 0f), TogglePause, true);
@@ -2343,10 +2363,10 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         fxCg.blocksRaycasts = false;
         fxCg.interactable = false;
 
-        weatherFireRainFxRt = CreateWeatherFxLayer(weatherScreenFxRoot, "WeatherFireRainFx", new Color(1f, 0.36f, 0.16f, 0.03f));
-        weatherHolyLightFxRt = CreateWeatherFxLayer(weatherScreenFxRoot, "WeatherHolyLightFx", new Color(0.98f, 0.96f, 0.9f, 0.04f));
-        weatherFogFxRt = CreateWeatherFxLayer(weatherScreenFxRoot, "WeatherFogFx", new Color(0.76f, 0.82f, 0.9f, 0.11f));
-        weatherGaleFxRt = CreateWeatherFxLayer(weatherScreenFxRoot, "WeatherGaleFx", new Color(0.7f, 0.84f, 1f, 0.09f));
+        weatherFireRainFxRt = CreateWeatherFxLayer(weatherScreenFxRoot, "WeatherEmberHearthFx", BattleFxColors.WeatherFireBase);
+        weatherHolyLightFxRt = CreateWeatherFxLayer(weatherScreenFxRoot, "WeatherWarmLamplightFx", BattleFxColors.WeatherHolyBase);
+        weatherFogFxRt = CreateWeatherFxLayer(weatherScreenFxRoot, "WeatherTrainingMistFx", BattleFxColors.WeatherFogBase);
+        weatherGaleFxRt = CreateWeatherFxLayer(weatherScreenFxRoot, "WeatherHallDraftFx", BattleFxColors.WeatherGaleBase);
 
         if (weatherHolyLightFxRt != null)
         {
@@ -2376,7 +2396,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
 
             for (int i = 0; i < 16; i++)
             {
-                GameObject dustObj = new GameObject("HolyLightDust_" + i, typeof(RectTransform), typeof(Image));
+                GameObject dustObj = new GameObject("LamplightMote_" + i, typeof(RectTransform), typeof(Image));
                 dustObj.transform.SetParent(weatherHolyLightFxRt, false);
                 RectTransform dustRt = dustObj.GetComponent<RectTransform>();
                 dustRt.anchorMin = new Vector2(0.5f, 0.5f);
@@ -2387,10 +2407,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
                 dustRt.anchoredPosition = new Vector2(Random.Range(-420f, 420f), Random.Range(-260f, 300f));
                 Image dustImg = dustObj.GetComponent<Image>();
                 dustImg.sprite = GetUnitWhiteSprite();
-                bool useLavender = Random.value < 0.18f; // low ratio lavender accents
-                Color baseColor = useLavender
-                    ? new Color(0.92f, 0.9f, 0.98f, Random.Range(0.04f, 0.082f))
-                    : new Color(0.96f, 0.98f, 0.9f, Random.Range(0.045f, 0.095f));
+                Color baseColor = BattleFxColors.RandomHolyDust();
                 dustImg.color = baseColor;
                 dustImg.raycastTarget = false;
                 weatherHolyLightDustRects.Add(dustRt);
@@ -2416,17 +2433,17 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
             weatherFogBoatHullImg = null;
             weatherFogBoatBaseY = -120f;
 
-            AddFogEdgeLayer(CreateHolyLightEdge(weatherFogFxRt, "TsunamiTopOuter", new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, 0f), new Vector2(0f, 150f), 0.1f), 0.1f);
-            AddFogEdgeLayer(CreateHolyLightEdge(weatherFogFxRt, "TsunamiBottomOuter", new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 0f), new Vector2(0f, 220f), 0.18f), 0.18f);
-            AddFogEdgeLayer(CreateHolyLightEdge(weatherFogFxRt, "TsunamiLeftOuter", new Vector2(0f, 0f), new Vector2(0f, 1f), new Vector2(0f, 0.5f), new Vector2(0f, 0f), new Vector2(124f, 0f), 0.11f), 0.11f);
-            AddFogEdgeLayer(CreateHolyLightEdge(weatherFogFxRt, "TsunamiRightOuter", new Vector2(1f, 0f), new Vector2(1f, 1f), new Vector2(1f, 0.5f), new Vector2(0f, 0f), new Vector2(124f, 0f), 0.11f), 0.11f);
-            AddFogEdgeLayer(CreateHolyLightEdge(weatherFogFxRt, "TsunamiBottomInner", new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 0f), new Vector2(0f, 128f), 0.11f), 0.11f);
-            AddFogEdgeLayer(CreateHolyLightEdge(weatherFogFxRt, "TsunamiSideInnerL", new Vector2(0f, 0f), new Vector2(0f, 1f), new Vector2(0f, 0.5f), new Vector2(0f, 0f), new Vector2(84f, 0f), 0.075f), 0.075f);
-            AddFogEdgeLayer(CreateHolyLightEdge(weatherFogFxRt, "TsunamiSideInnerR", new Vector2(1f, 0f), new Vector2(1f, 1f), new Vector2(1f, 0.5f), new Vector2(0f, 0f), new Vector2(84f, 0f), 0.075f), 0.075f);
+            AddFogEdgeLayer(CreateHolyLightEdge(weatherFogFxRt, "MistTopOuter", new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, 0f), new Vector2(0f, 150f), 0.1f), 0.1f);
+            AddFogEdgeLayer(CreateHolyLightEdge(weatherFogFxRt, "MistBottomOuter", new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 0f), new Vector2(0f, 220f), 0.18f), 0.18f);
+            AddFogEdgeLayer(CreateHolyLightEdge(weatherFogFxRt, "MistLeftOuter", new Vector2(0f, 0f), new Vector2(0f, 1f), new Vector2(0f, 0.5f), new Vector2(0f, 0f), new Vector2(124f, 0f), 0.11f), 0.11f);
+            AddFogEdgeLayer(CreateHolyLightEdge(weatherFogFxRt, "MistRightOuter", new Vector2(1f, 0f), new Vector2(1f, 1f), new Vector2(1f, 0.5f), new Vector2(0f, 0f), new Vector2(124f, 0f), 0.11f), 0.11f);
+            AddFogEdgeLayer(CreateHolyLightEdge(weatherFogFxRt, "MistBottomInner", new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 0f), new Vector2(0f, 128f), 0.11f), 0.11f);
+            AddFogEdgeLayer(CreateHolyLightEdge(weatherFogFxRt, "MistSideInnerL", new Vector2(0f, 0f), new Vector2(0f, 1f), new Vector2(0f, 0.5f), new Vector2(0f, 0f), new Vector2(84f, 0f), 0.075f), 0.075f);
+            AddFogEdgeLayer(CreateHolyLightEdge(weatherFogFxRt, "MistSideInnerR", new Vector2(1f, 0f), new Vector2(1f, 1f), new Vector2(1f, 0.5f), new Vector2(0f, 0f), new Vector2(84f, 0f), 0.075f), 0.075f);
 
             for (int i = 0; i < 7; i++)
             {
-                GameObject fogBandObj = new GameObject("TsunamiWaveBand_" + i, typeof(RectTransform), typeof(Image));
+                GameObject fogBandObj = new GameObject("TrainingMistWisp_" + i, typeof(RectTransform), typeof(Image));
                 fogBandObj.transform.SetParent(weatherFogFxRt, false);
                 RectTransform fogBandRt = fogBandObj.GetComponent<RectTransform>();
                 fogBandRt.anchorMin = new Vector2(0.5f, 0.5f);
@@ -2436,7 +2453,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
                 fogBandRt.anchoredPosition = new Vector2(Random.Range(-520f, 520f), Random.Range(-300f, 300f));
                 Image fogBandImg = fogBandObj.GetComponent<Image>();
                 fogBandImg.sprite = GetUnitWhiteSprite();
-                fogBandImg.color = new Color(0.38f, 0.62f, 0.8f, Random.Range(0.08f, 0.14f));
+                fogBandImg.color = BattleFxColors.RandomFogWave();
                 fogBandImg.raycastTarget = false;
                 weatherFogBands.Add(fogBandRt);
                 weatherFogBandImages.Add(fogBandImg);
@@ -2446,7 +2463,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
 
             for (int i = 0; i < 18; i++)
             {
-                GameObject foamDotObj = new GameObject("TsunamiFoamDot_" + i, typeof(RectTransform), typeof(Image));
+                GameObject foamDotObj = new GameObject("TrainingMistSpeck_" + i, typeof(RectTransform), typeof(Image));
                 foamDotObj.transform.SetParent(weatherFogFxRt, false);
                 RectTransform foamRt = foamDotObj.GetComponent<RectTransform>();
                 foamRt.anchorMin = new Vector2(0.5f, 0.5f);
@@ -2457,61 +2474,32 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
                 foamRt.anchoredPosition = new Vector2(Random.Range(-560f, 560f), Random.Range(-240f, 240f));
                 Image foamImg = foamDotObj.GetComponent<Image>();
                 foamImg.sprite = GetUnitWhiteSprite();
-                foamImg.color = new Color(0.93f, 0.98f, 1f, Random.Range(0.08f, 0.16f));
+                foamImg.color = BattleFxColors.RandomFogFoam();
                 foamImg.raycastTarget = false;
                 weatherFogFoamDots.Add(foamRt);
                 weatherFogFoamDotImages.Add(foamImg);
                 weatherFogFoamDotSpeeds.Add(Random.Range(36f, 78f));
             }
 
-            GameObject boatObj = new GameObject("TsunamiBoatSilhouette", typeof(RectTransform));
-            boatObj.transform.SetParent(weatherFogFxRt, false);
-            weatherFogBoatRt = boatObj.GetComponent<RectTransform>();
-            weatherFogBoatRt.anchorMin = new Vector2(0.5f, 0.5f);
-            weatherFogBoatRt.anchorMax = new Vector2(0.5f, 0.5f);
-            weatherFogBoatRt.pivot = new Vector2(0.5f, 0.5f);
-            weatherFogBoatRt.sizeDelta = new Vector2(96f, 72f);
-            weatherFogBoatRt.anchoredPosition = new Vector2(340f, -120f);
-            weatherFogBoatBaseY = -120f;
-
-            GameObject hullObj = new GameObject("Hull", typeof(RectTransform), typeof(Image));
-            hullObj.transform.SetParent(boatObj.transform, false);
-            RectTransform hullRt = hullObj.GetComponent<RectTransform>();
-            hullRt.anchorMin = new Vector2(0.5f, 0.5f);
-            hullRt.anchorMax = new Vector2(0.5f, 0.5f);
-            hullRt.pivot = new Vector2(0.5f, 0.5f);
-            hullRt.sizeDelta = new Vector2(82f, 16f);
-            hullRt.anchoredPosition = new Vector2(0f, -20f);
-            weatherFogBoatHullImg = hullObj.GetComponent<Image>();
-            weatherFogBoatHullImg.sprite = GetUnitWhiteSprite();
-            weatherFogBoatHullImg.color = new Color(0.05f, 0.09f, 0.14f, 0.3f);
-            weatherFogBoatHullImg.raycastTarget = false;
-
-            GameObject mastObj = new GameObject("Mast", typeof(RectTransform), typeof(Image));
-            mastObj.transform.SetParent(boatObj.transform, false);
-            RectTransform mastRt = mastObj.GetComponent<RectTransform>();
-            mastRt.anchorMin = new Vector2(0.5f, 0.5f);
-            mastRt.anchorMax = new Vector2(0.5f, 0.5f);
-            mastRt.pivot = new Vector2(0.5f, 0f);
-            mastRt.sizeDelta = new Vector2(3f, 34f);
-            mastRt.anchoredPosition = new Vector2(-6f, -16f);
-            Image mastImg = mastObj.GetComponent<Image>();
-            mastImg.sprite = GetUnitWhiteSprite();
-            mastImg.color = new Color(0.05f, 0.09f, 0.14f, 0.32f);
-            mastImg.raycastTarget = false;
-
-            GameObject sailObj = new GameObject("Sail", typeof(RectTransform), typeof(Image));
-            sailObj.transform.SetParent(boatObj.transform, false);
-            RectTransform sailRt = sailObj.GetComponent<RectTransform>();
-            sailRt.anchorMin = new Vector2(0.5f, 0.5f);
-            sailRt.anchorMax = new Vector2(0.5f, 0.5f);
-            sailRt.pivot = new Vector2(0f, 0.5f);
-            sailRt.sizeDelta = new Vector2(26f, 22f);
-            sailRt.anchoredPosition = new Vector2(-4f, -2f);
-            Image sailImg = sailObj.GetComponent<Image>();
-            sailImg.sprite = GetUnitWhiteSprite();
-            sailImg.color = new Color(0.07f, 0.11f, 0.17f, 0.22f);
-            sailImg.raycastTarget = false;
+            weatherFogBoatRt = null;
+            weatherFogBoatHullImg = null;
+            for (int i = 0; i < 5; i++)
+            {
+                GameObject pillarObj = new GameObject("TrainingHallPillar_" + i, typeof(RectTransform), typeof(Image));
+                pillarObj.transform.SetParent(weatherFogFxRt, false);
+                RectTransform pillarRt = pillarObj.GetComponent<RectTransform>();
+                pillarRt.anchorMin = new Vector2(0.5f, 0.5f);
+                pillarRt.anchorMax = new Vector2(0.5f, 0.5f);
+                pillarRt.pivot = new Vector2(0.5f, 0f);
+                float pw = Random.Range(12f, 22f);
+                float ph = Random.Range(100f, 180f);
+                pillarRt.sizeDelta = new Vector2(pw, ph);
+                pillarRt.anchoredPosition = new Vector2(Random.Range(-520f, 520f), Random.Range(-200f, -60f));
+                Image pillarImg = pillarObj.GetComponent<Image>();
+                pillarImg.sprite = GetUnitWhiteSprite();
+                pillarImg.color = BattleFxColors.WithAlpha(BattleFxColors.WeatherFogSilhouetteRgb, Random.Range(0.16f, 0.26f));
+                pillarImg.raycastTarget = false;
+            }
         }
 
         if (weatherGaleFxRt != null)
@@ -2535,25 +2523,20 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
             AddGaleNightLayer(CreateHolyLightEdge(weatherGaleFxRt, "GaleNightVignetteL", new Vector2(0f, 0f), new Vector2(0f, 1f), new Vector2(0f, 0.5f), Vector2.zero, new Vector2(120f, 0f), 0.11f), 0.11f);
             AddGaleNightLayer(CreateHolyLightEdge(weatherGaleFxRt, "GaleNightVignetteR", new Vector2(1f, 0f), new Vector2(1f, 1f), new Vector2(1f, 0.5f), Vector2.zero, new Vector2(120f, 0f), 0.11f), 0.11f);
 
-            for (int i = 0; i < 16; i++)
+            for (int i = 0; i < 14; i++)
             {
-                GameObject leafObj = new GameObject("GaleLeaf_" + i, typeof(RectTransform), typeof(Image));
+                GameObject leafObj = new GameObject("HallDraftPaper_" + i, typeof(RectTransform), typeof(Image));
                 leafObj.transform.SetParent(weatherGaleFxRt, false);
                 RectTransform leafRt = leafObj.GetComponent<RectTransform>();
                 leafRt.anchorMin = new Vector2(0.5f, 0.5f);
                 leafRt.anchorMax = new Vector2(0.5f, 0.5f);
                 leafRt.pivot = new Vector2(0.5f, 0.5f);
-                float s = Random.Range(8f, 16f);
-                leafRt.sizeDelta = new Vector2(s * 1.4f, s * 0.7f);
+                float s = Random.Range(6f, 11f);
+                leafRt.sizeDelta = new Vector2(s * 1.85f, s * 0.5f);
                 leafRt.anchoredPosition = new Vector2(Random.Range(-420f, 760f), Random.Range(-240f, 300f));
                 Image leafImg = leafObj.GetComponent<Image>();
                 leafImg.sprite = GetUnitWhiteSprite();
-                Color leafColor;
-                float roll = Random.value;
-                if (roll < 0.45f) leafColor = new Color(0.42f, 0.58f, 0.32f, Random.Range(0.22f, 0.42f)); // green
-                else if (roll < 0.72f) leafColor = new Color(0.63f, 0.48f, 0.24f, Random.Range(0.2f, 0.38f)); // brown
-                else if (roll < 0.9f) leafColor = new Color(0.74f, 0.38f, 0.2f, Random.Range(0.2f, 0.36f)); // orange
-                else leafColor = new Color(0.56f, 0.2f, 0.2f, Random.Range(0.18f, 0.34f)); // red
+                Color leafColor = BattleFxColors.RandomHallDraftPaper();
                 leafImg.color = leafColor;
                 leafImg.raycastTarget = false;
                 weatherGaleLeafRects.Add(leafRt);
@@ -2564,7 +2547,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
 
             for (int i = 0; i < 11; i++)
             {
-                GameObject windObj = new GameObject("GaleWindLine_" + i, typeof(RectTransform), typeof(Image));
+                GameObject windObj = new GameObject("HallDraftBreeze_" + i, typeof(RectTransform), typeof(Image));
                 windObj.transform.SetParent(weatherGaleFxRt, false);
                 RectTransform windRt = windObj.GetComponent<RectTransform>();
                 windRt.anchorMin = new Vector2(0.5f, 0.5f);
@@ -2575,7 +2558,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
                 windRt.rotation = Quaternion.Euler(0f, 0f, Random.Range(-8f, 6f));
                 Image windImg = windObj.GetComponent<Image>();
                 windImg.sprite = GetUnitWhiteSprite();
-                windImg.color = new Color(0.75f, 0.86f, 0.92f, Random.Range(0.08f, 0.16f));
+                windImg.color = BattleFxColors.RandomGaleWind();
                 windImg.raycastTarget = false;
                 weatherGaleWindLineRects.Add(windRt);
                 weatherGaleWindLineImgs.Add(windImg);
@@ -2589,23 +2572,23 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
             weatherFireRainStreakSpeeds.Clear();
             weatherFireRainStreakImages.Clear();
             weatherFireRainStreakPhases.Clear();
-            for (int i = 0; i < 26; i++)
+            for (int i = 0; i < 22; i++)
             {
-                GameObject dropObj = new GameObject("FireRainDrop_" + i, typeof(RectTransform), typeof(Image));
+                GameObject dropObj = new GameObject("HearthEmber_" + i, typeof(RectTransform), typeof(Image));
                 dropObj.transform.SetParent(weatherFireRainFxRt, false);
                 RectTransform dropRt = dropObj.GetComponent<RectTransform>();
                 dropRt.anchorMin = new Vector2(0.5f, 0.5f);
                 dropRt.anchorMax = new Vector2(0.5f, 0.5f);
                 dropRt.pivot = new Vector2(0.5f, 0.5f);
-                dropRt.sizeDelta = new Vector2(Random.Range(2.2f, 4.2f), Random.Range(42f, 86f));
-                dropRt.rotation = Quaternion.Euler(0f, 0f, 22f);
+                dropRt.sizeDelta = new Vector2(Random.Range(3f, 7f), Random.Range(10f, 24f));
+                dropRt.rotation = Quaternion.Euler(0f, 0f, Random.Range(-18f, 18f));
                 dropRt.anchoredPosition = new Vector2(Random.Range(-960f, 960f), Random.Range(-560f, 560f));
                 Image dropImg = dropObj.GetComponent<Image>();
                 dropImg.sprite = GetUnitWhiteSprite();
-                dropImg.color = new Color(1f, 0.56f, 0.26f, Random.Range(0.17f, 0.32f));
+                dropImg.color = BattleFxColors.RandomFireDrop();
                 dropImg.raycastTarget = false;
                 weatherFireRainStreaks.Add(dropRt);
-                weatherFireRainStreakSpeeds.Add(Random.Range(480f, 760f));
+                weatherFireRainStreakSpeeds.Add(Random.Range(95f, 185f));
                 weatherFireRainStreakImages.Add(dropImg);
                 weatherFireRainStreakPhases.Add(Random.Range(0f, Mathf.PI * 2f));
             }
@@ -2653,7 +2636,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         edgeRt.sizeDelta = sizeDelta;
         Image edgeImg = edgeObj.GetComponent<Image>();
         edgeImg.sprite = GetUnitWhiteSprite();
-        edgeImg.color = new Color(1f, 0.98f, 0.84f, alpha);
+        edgeImg.color = BattleFxColors.HolyEdge(alpha);
         edgeImg.raycastTarget = false;
         return edgeImg;
     }
@@ -2668,12 +2651,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
     private void AddFogEdgeLayer(Image img, float baseAlpha)
     {
         if (img == null) return;
-        Color c = img.color;
-        c.r = 0.42f;
-        c.g = 0.63f;
-        c.b = 0.78f;
-        c.a = baseAlpha;
-        img.color = c;
+        img.color = BattleFxColors.FogEdge(baseAlpha);
         weatherFogEdgeImgs.Add(img);
         weatherFogEdgeBaseAlphas.Add(baseAlpha);
     }
@@ -2681,12 +2659,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
     private void AddGaleNightLayer(Image img, float baseAlpha)
     {
         if (img == null) return;
-        Color c = img.color;
-        c.r = 0.08f;
-        c.g = 0.14f;
-        c.b = 0.11f;
-        c.a = baseAlpha;
-        img.color = c;
+        img.color = BattleFxColors.GaleNightEdge(baseAlpha);
         weatherGaleNightEdgeImgs.Add(img);
         weatherGaleNightEdgeBaseAlphas.Add(baseAlpha);
     }
@@ -2727,7 +2700,10 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
     {
         if (battleManager == null) return;
         if (battleManager.GetBattleResult() != 0) return;
-        PlayerProfileCsvService.RecordPlayerQuit();
+        string difficulty = battleManager != null
+            ? battleManager.GetBattleDifficultyLabelForRecord()
+            : BattleDifficultyRuntime.ResolveForBattleRecord();
+        PlayerProfileCsvService.RecordPlayerQuit(difficulty);
     }
 
     private IEnumerator GiveUpAfterLoseMessage()
@@ -2784,7 +2760,8 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         rt.sizeDelta = GetBattleCardFxDisplayedSize(0.62f);
 
         Image img = ghost.GetComponent<Image>();
-        img.color = new Color(0.16f, 0.22f, 0.45f, 1f); // facedown card back
+        img.sprite = GetUnitWhiteSprite();
+        img.color = BattleFxColors.DrawGhostBack;
 
         GameObject frontObj = Instantiate(battleCardPrefab, ghost.transform);
         frontObj.name = "DrawFrontFace";
@@ -2880,7 +2857,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
             lrt.sizeDelta = rootRt.sizeDelta;
             lrt.anchoredPosition = new Vector2(-i * 3f, i * 3f);
             Image li = layer.GetComponent<Image>();
-            li.color = i == 2 ? new Color(0.16f, 0.22f, 0.45f, 1f) : new Color(0.08f, 0.1f, 0.2f, 0.92f);
+            li.color = i == 2 ? BattleUiColors.DeckTop : BattleUiColors.DeckShadow;
         }
 
         if (isPlayerPile) playerDeckPileRt = rootRt;
@@ -3088,10 +3065,38 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
             // No field target: skip swing animation to avoid "air attack" visuals.
             return;
         }
+        EnsureFieldMonstersForAttackFx();
         deferFieldRefreshDuringAttack = true;
+        deferEnemyFieldRefresh = true;
         pendingFieldRefreshAfterAttack = true;
         if (attackFxRoutine != null) StopCoroutine(attackFxRoutine);
         attackFxRoutine = StartCoroutine(PlayAttackFx(attackData));
+    }
+
+    /// <summary>敵方攻擊／我方反擊前確保場上怪獸物件存在（出牌動畫 defer 期間可能尚未建立 enemyFieldCardObj）。</summary>
+    private void EnsureFieldMonstersForAttackFx()
+    {
+        if (battleManager == null) return;
+        bool needRefresh = false;
+        if (battleManager.PlayerHasFieldMonster() && playerFieldCardObj == null) needRefresh = true;
+        if (battleManager.EnemyHasFieldMonster() && enemyFieldCardObj == null) needRefresh = true;
+        if (!needRefresh) return;
+
+        bool prevDeferEnemy = deferEnemyFieldRefresh;
+        bool prevDeferAttack = deferFieldRefreshDuringAttack;
+        deferEnemyFieldRefresh = false;
+        deferFieldRefreshDuringAttack = false;
+        RefreshFieldCards();
+        lastFieldSignature = ComputeFieldSignature();
+        deferEnemyFieldRefresh = prevDeferEnemy;
+        deferFieldRefreshDuringAttack = prevDeferAttack;
+    }
+
+    /// <summary>供 <see cref="BattleSimulationManager"/> 在敵方回合／我方結束回合攻擊後等待衝刺＋反擊動畫播畢。</summary>
+    public IEnumerator WaitForAttackFxRoutine()
+    {
+        while (attackFxRoutine != null)
+            yield return null;
     }
 
     private IEnumerator PlayAttackFx(BattleSimulationManager.AttackVisualData attackData)
@@ -3110,6 +3115,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         float hitFxDur = battleManager != null ? Mathf.Max(0.1f, battleManager.hitShakeDuration) : 0.28f;
         float counterGap = battleManager != null ? Mathf.Max(0f, battleManager.counterAttackGapDuration) : 0.45f;
         Vector2 start = attackerRt.anchoredPosition;
+        // 主動攻擊：長距離水平衝刺 + 紅色受擊 + 回彈（反擊見 PlayCounterAttackFx，原地斬擊 + 藍色斬線／擴散環）。
         Vector2 hitOffset = attackerIsPlayer ? new Vector2(74f, 0f) : new Vector2(-74f, 0f);
         Vector3 baseScale = attackerRt.localScale;
 
@@ -3132,22 +3138,34 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
             {
                 // First show defender getting hit, then add a pause before counter-hit feedback.
                 yield return StartCoroutine(PlayDamageFlash(targetObj, hitFxDur));
+                if (attackData.attackerDamage > 0)
+                    StartCoroutine(PlayFloatingDamageNumber(targetObj, attackData.attackerDamage, FloatingDamageKind.Attack));
                 ApplyPreviewDamageToFieldCard(targetObj, attackData.attackerDamage);
-                RefreshFieldCards();
-                lastFieldSignature = ComputeFieldSignature();
                 if (counterGap > 0f) yield return new WaitForSecondsRealtime(counterGap);
-                if (attackerObj != null && attackData.counterTriggered)
+                if (attackData.counterTriggered)
                 {
-                    yield return StartCoroutine(PlayDamageFlash(attackerObj, hitFxDur * 0.9f));
-                    ApplyPreviewDamageToFieldCard(attackerObj, attackData.counterDamage);
-                    RefreshFieldCards();
-                    lastFieldSignature = ComputeFieldSignature();
+                    bool counterFromPlayer = !attackerIsPlayer;
+                    GameObject counterAttacker = GetFieldMonsterObject(counterFromPlayer);
+                    GameObject counterTarget = GetFieldMonsterObject(attackerIsPlayer);
+                    if (counterAttacker != null && counterTarget != null)
+                    {
+                        yield return StartCoroutine(PlayCounterAttackFx(
+                            counterAttacker,
+                            counterTarget,
+                            attackData.counterDamage,
+                            hitFxDur,
+                            counterFromPlayer));
+                    }
                 }
             }
         }
 
+        attackerObj = GetFieldMonsterObject(attackerIsPlayer);
+        attackerRt = attackerObj != null ? attackerObj.GetComponent<RectTransform>() : null;
+        if (attackerRt == null) yield break;
+
         t = 0f;
-        Vector2 from = attackerRt != null ? attackerRt.anchoredPosition : start + hitOffset;
+        Vector2 from = attackerRt.anchoredPosition;
         float returnDur = half * 0.78f;
         while (t < returnDur && attackerRt != null)
         {
@@ -3194,6 +3212,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         finally
         {
             deferFieldRefreshDuringAttack = false;
+            deferEnemyFieldRefresh = false;
             if (pendingFieldRefreshAfterAttack)
             {
                 RefreshFieldCards();
@@ -3204,6 +3223,11 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         }
     }
 
+    private GameObject GetFieldMonsterObject(bool isPlayerSide)
+    {
+        return isPlayerSide ? playerFieldCardObj : enemyFieldCardObj;
+    }
+
     private void ApplyPreviewDamageToFieldCard(GameObject cardObj, int damage)
     {
         if (cardObj == null || damage <= 0) return;
@@ -3211,16 +3235,19 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         if (display == null || display.healthText == null) return;
 
         int currentHp;
-        if (display.card is MonsterCard mc)
-            currentHp = mc.healthPoint;
-        else if (!int.TryParse(display.healthText.text, out currentHp))
-            return;
+        if (!int.TryParse(display.healthText.text, out currentHp))
+        {
+            if (display.card is MonsterCard mc)
+                currentHp = mc.healthPoint;
+            else
+                return;
+        }
         int nextHp = Mathf.Max(0, currentHp - damage);
         display.healthText.richText = false;
         display.healthText.text = nextHp.ToString();
         if (nextHp < currentHp)
         {
-            display.healthText.color = new Color(1f, 0.28f, 0.28f, 1f);
+            display.healthText.color = BattleFxColors.FieldHpHurt;
         }
     }
 
@@ -3242,6 +3269,16 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
 
     private IEnumerator PlayDamageFlash(GameObject targetObj, float duration)
     {
+        yield return PlayColorFlashOnCard(targetObj, duration, BattleFxColors.HurtFlashPeak);
+    }
+
+    private IEnumerator PlayCounterDamageFlash(GameObject targetObj, float duration)
+    {
+        yield return PlayColorFlashOnCard(targetObj, duration, BattleFxColors.CounterFlashPeak);
+    }
+
+    private IEnumerator PlayColorFlashOnCard(GameObject targetObj, float duration, Color peakColor)
+    {
         if (targetObj == null) yield break;
         RectTransform targetRt = targetObj.GetComponent<RectTransform>();
         if (targetRt == null) yield break;
@@ -3260,18 +3297,19 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         overlayRt.offsetMax = Vector2.zero;
 
         Image overlayImg = overlayObj.GetComponent<Image>();
-        overlayImg.color = new Color(1f, 0.15f, 0.15f, 0.9f);
+        overlayImg.color = peakColor;
         CanvasGroup cg = overlayObj.GetComponent<CanvasGroup>();
         cg.alpha = 0f;
 
         float half = Mathf.Max(0.05f, duration * 0.45f);
         float fade = Mathf.Max(0.05f, duration * 0.55f);
+        const float flashCgPeak = 0.75f;
         float t = 0f;
 
         while (t < half && overlayObj != null)
         {
             t += Time.unscaledDeltaTime;
-            cg.alpha = Mathf.Clamp01(t / half) * 0.75f;
+            cg.alpha = Mathf.Clamp01(t / half) * flashCgPeak;
             yield return null;
         }
 
@@ -3286,6 +3324,455 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         }
 
         if (overlayObj != null) Destroy(overlayObj);
+    }
+
+    /// <summary>反擊：原地扭身斬擊 + 斜向斬線 + 擴散環（與主動攻擊的長距離衝刺區隔）。</summary>
+    private IEnumerator PlayCounterAttackFx(
+        GameObject counterAttackerObj,
+        GameObject counterTargetObj,
+        int counterDamage,
+        float hitFxDur,
+        bool counterFromPlayer)
+    {
+        if (counterAttackerObj == null || counterTargetObj == null) yield break;
+        RectTransform counterRt = counterAttackerObj.GetComponent<RectTransform>();
+        RectTransform targetRt = counterTargetObj.GetComponent<RectTransform>();
+        if (counterRt == null) yield break;
+
+        bool counterIsPlayer = counterFromPlayer;
+        Vector2 counterPosStart = counterRt.anchoredPosition;
+        Vector3 counterScaleStart = counterRt.localScale;
+        float rotStart = counterRt.localEulerAngles.z;
+        float windUpRot = counterIsPlayer ? -14f : 14f;
+        float strikeRot = counterIsPlayer ? 11f : -11f;
+        Vector2 microJab = counterIsPlayer ? new Vector2(16f, 6f) : new Vector2(-16f, 6f);
+
+        StartCoroutine(PlayCounterAttackLabel(counterAttackerObj, counterFromPlayer));
+
+        const float windUpDur = 0.07f;
+        float t = 0f;
+        while (t < windUpDur && counterRt != null)
+        {
+            t += Time.unscaledDeltaTime;
+            float p = Mathf.Clamp01(t / windUpDur);
+            float eased = p * p;
+            counterRt.localScale = Vector3.Lerp(counterScaleStart, counterScaleStart * 0.94f, eased);
+            counterRt.localEulerAngles = new Vector3(0f, 0f, Mathf.LerpAngle(rotStart, rotStart + windUpRot, eased));
+            yield return null;
+        }
+
+        if (TryGetCardCenterInUiRoot(counterAttackerObj, out Vector2 slashFrom) &&
+            TryGetCardCenterInUiRoot(counterTargetObj, out Vector2 slashTo))
+        {
+            yield return StartCoroutine(PlayCounterSlashBeam(slashFrom, slashTo, 0.11f));
+        }
+
+        const float strikeDur = 0.09f;
+        t = 0f;
+        while (t < strikeDur && counterRt != null)
+        {
+            t += Time.unscaledDeltaTime;
+            float p = Mathf.Clamp01(t / strikeDur);
+            float snap = 1f - Mathf.Pow(1f - p, 3f);
+            counterRt.anchoredPosition = Vector2.Lerp(counterPosStart, counterPosStart + microJab, snap);
+            counterRt.localScale = Vector3.Lerp(counterScaleStart * 0.94f, counterScaleStart * 1.1f, snap);
+            counterRt.localEulerAngles = new Vector3(0f, 0f, Mathf.LerpAngle(rotStart + windUpRot, rotStart + strikeRot, snap));
+            yield return null;
+        }
+
+        if (TryGetCardCenterInUiRoot(counterTargetObj, out Vector2 ringCenter))
+            yield return StartCoroutine(PlayCounterImpactRing(ringCenter, hitFxDur * 0.85f));
+        if (targetRt != null)
+            yield return StartCoroutine(PlayHitShake(targetRt, hitFxDur * 0.75f, 11f));
+        if (counterDamage > 0)
+            StartCoroutine(PlayFloatingDamageNumber(counterTargetObj, counterDamage, FloatingDamageKind.Counter));
+        yield return StartCoroutine(PlayCounterDamageFlash(counterTargetObj, hitFxDur * 0.55f));
+        ApplyPreviewDamageToFieldCard(counterTargetObj, counterDamage);
+
+        const float recoverDur = 0.1f;
+        t = 0f;
+        while (t < recoverDur && counterRt != null)
+        {
+            t += Time.unscaledDeltaTime;
+            float p = Mathf.Clamp01(t / recoverDur);
+            float eased = p * p * (3f - 2f * p);
+            counterRt.anchoredPosition = Vector2.Lerp(counterPosStart + microJab, counterPosStart, eased);
+            counterRt.localScale = Vector3.Lerp(counterScaleStart * 1.1f, counterScaleStart, eased);
+            counterRt.localEulerAngles = new Vector3(0f, 0f, Mathf.LerpAngle(rotStart + strikeRot, rotStart, eased));
+            yield return null;
+        }
+
+        if (counterRt != null)
+        {
+            counterRt.anchoredPosition = counterPosStart;
+            counterRt.localScale = counterScaleStart;
+            counterRt.localEulerAngles = new Vector3(0f, 0f, rotStart);
+        }
+    }
+
+    private bool TryGetCardCenterInUiRoot(GameObject cardObj, out Vector2 localInUiRoot)
+    {
+        localInUiRoot = Vector2.zero;
+        if (cardObj == null || uiRoot == null) return false;
+        RectTransform cardRt = cardObj.GetComponent<RectTransform>();
+        if (cardRt == null) return false;
+        Canvas canvas = uiRoot.GetComponentInParent<Canvas>();
+        Camera cam = canvas != null && canvas.renderMode != RenderMode.ScreenSpaceOverlay ? canvas.worldCamera : null;
+        Vector2 screen = RectTransformUtility.WorldToScreenPoint(cam, cardRt.TransformPoint(Vector3.zero));
+        return RectTransformUtility.ScreenPointToLocalPointInRectangle(uiRoot, screen, cam, out localInUiRoot);
+    }
+
+    private IEnumerator PlayCounterSlashBeam(Vector2 fromLocal, Vector2 toLocal, float duration)
+    {
+        if (uiRoot == null) yield break;
+        Vector2 delta = toLocal - fromLocal;
+        float length = Mathf.Max(48f, delta.magnitude * 0.92f);
+        float angle = Mathf.Atan2(delta.y, delta.x) * Mathf.Rad2Deg;
+
+        GameObject slashObj = new GameObject("CounterSlashBeam", typeof(RectTransform), typeof(Image), typeof(CanvasGroup));
+        slashObj.transform.SetParent(uiRoot, false);
+        slashObj.transform.SetAsLastSibling();
+        RectTransform slashRt = slashObj.GetComponent<RectTransform>();
+        slashRt.anchorMin = slashRt.anchorMax = new Vector2(0.5f, 0.5f);
+        slashRt.pivot = new Vector2(0.15f, 0.5f);
+        slashRt.sizeDelta = new Vector2(length, 14f);
+        slashRt.anchoredPosition = fromLocal + delta * 0.22f;
+        slashRt.localRotation = Quaternion.Euler(0f, 0f, angle - 8f);
+        Image slashImg = slashObj.GetComponent<Image>();
+        slashImg.sprite = GetUnitWhiteSprite();
+        slashImg.color = BattleFxColors.CounterSlashCore;
+        slashImg.raycastTarget = false;
+        CanvasGroup cg = slashObj.GetComponent<CanvasGroup>();
+        cg.alpha = 0f;
+        slashRt.localScale = new Vector3(0.35f, 1f, 1f);
+
+        float t = 0f;
+        while (t < duration && slashObj != null)
+        {
+            t += Time.unscaledDeltaTime;
+            float p = Mathf.Clamp01(t / duration);
+            float flash = p < 0.45f ? p / 0.45f : 1f - (p - 0.45f) / 0.55f;
+            cg.alpha = Mathf.Clamp01(flash) * 0.95f;
+            slashRt.localScale = new Vector3(Mathf.Lerp(0.35f, 1.05f, p), Mathf.Lerp(0.6f, 1.35f, p), 1f);
+            yield return null;
+        }
+        if (slashObj != null) Destroy(slashObj);
+    }
+
+    private IEnumerator PlayCounterImpactRing(Vector2 centerLocal, float duration)
+    {
+        if (uiRoot == null) yield break;
+        GameObject ringObj = new GameObject("CounterImpactRing", typeof(RectTransform), typeof(Image), typeof(CanvasGroup));
+        ringObj.transform.SetParent(uiRoot, false);
+        ringObj.transform.SetAsLastSibling();
+        RectTransform ringRt = ringObj.GetComponent<RectTransform>();
+        ringRt.anchorMin = ringRt.anchorMax = new Vector2(0.5f, 0.5f);
+        ringRt.pivot = new Vector2(0.5f, 0.5f);
+        ringRt.anchoredPosition = centerLocal;
+        ringRt.sizeDelta = new Vector2(72f, 72f);
+        Image ringImg = ringObj.GetComponent<Image>();
+        ringImg.sprite = GetUnitWhiteSprite();
+        ringImg.color = BattleFxColors.CounterRingPeak;
+        ringImg.raycastTarget = false;
+        CanvasGroup cg = ringObj.GetComponent<CanvasGroup>();
+        cg.alpha = 0f;
+
+        float t = 0f;
+        while (t < duration && ringObj != null)
+        {
+            t += Time.unscaledDeltaTime;
+            float p = Mathf.Clamp01(t / duration);
+            cg.alpha = (1f - p) * 0.85f;
+            float scale = Mathf.Lerp(0.55f, 1.65f, p);
+            ringRt.localScale = Vector3.one * scale;
+            yield return null;
+        }
+        if (ringObj != null) Destroy(ringObj);
+    }
+
+    private const float CounterAttackLabelTotalDuration = 1.18f;
+    private const float FloatingDamageTotalDuration = 1.05f;
+
+    private enum FloatingDamageKind
+    {
+        Attack,
+        Counter
+    }
+
+    /// <summary>場上受擊：卡面右上方浮出 -傷害 並上飄淡出（主動攻擊紅系、反擊藍系）。</summary>
+    private IEnumerator PlayFloatingDamageNumber(GameObject targetObj, int damage, FloatingDamageKind kind)
+    {
+        if (targetObj == null || damage <= 0) yield break;
+
+        Transform old = targetObj.transform.Find("FloatingDamageLabel");
+        if (old != null) Destroy(old.gameObject);
+
+        string damageText = "-" + damage;
+        float badgeW = damage >= 100 ? 128f : damage >= 10 ? 104f : 84f;
+        float fontSize = damage >= 100 ? 36f : damage >= 10 ? 40f : 44f;
+
+        bool isCounter = kind == FloatingDamageKind.Counter;
+        Color bg = isCounter ? BattleFxColors.CounterLabelBg : BattleFxColors.DamageLabelBg;
+        Color border = isCounter ? BattleFxColors.CounterDamageLabelBorder : BattleFxColors.DamageLabelBorder;
+        Color textColor = isCounter ? BattleFxColors.CounterDamageLabelText : BattleFxColors.DamageLabelText;
+        Color glow = isCounter ? BattleFxColors.CounterDamageLabelGlow : BattleFxColors.DamageLabelGlow;
+        Color shadow = isCounter ? BattleFxColors.CounterLabelShadow : BattleFxColors.DamageLabelShadow;
+
+        GameObject labelObj = new GameObject("FloatingDamageLabel", typeof(RectTransform), typeof(CanvasGroup));
+        labelObj.transform.SetParent(targetObj.transform, false);
+        labelObj.transform.SetAsLastSibling();
+        RectTransform labelRt = labelObj.GetComponent<RectTransform>();
+        labelRt.anchorMin = new Vector2(0.52f, 1f);
+        labelRt.anchorMax = new Vector2(0.52f, 1f);
+        labelRt.pivot = new Vector2(0f, 0f);
+        labelRt.anchoredPosition = new Vector2(10f, 22f);
+        labelRt.sizeDelta = new Vector2(badgeW, 50f);
+
+        GameObject shadowObj = new GameObject("Shadow", typeof(RectTransform), typeof(Image));
+        shadowObj.transform.SetParent(labelObj.transform, false);
+        RectTransform shadowRt = shadowObj.GetComponent<RectTransform>();
+        shadowRt.anchorMin = Vector2.zero;
+        shadowRt.anchorMax = Vector2.one;
+        shadowRt.offsetMin = new Vector2(4f, -6f);
+        shadowRt.offsetMax = new Vector2(8f, -2f);
+        Image shadowImg = shadowObj.GetComponent<Image>();
+        shadowImg.sprite = GetUnitWhiteSprite();
+        shadowImg.color = shadow;
+        shadowImg.raycastTarget = false;
+
+        GameObject glowObj = new GameObject("Glow", typeof(RectTransform), typeof(Image));
+        glowObj.transform.SetParent(labelObj.transform, false);
+        RectTransform glowRt = glowObj.GetComponent<RectTransform>();
+        glowRt.anchorMin = Vector2.zero;
+        glowRt.anchorMax = Vector2.one;
+        glowRt.offsetMin = new Vector2(-8f, -6f);
+        glowRt.offsetMax = new Vector2(8f, 6f);
+        Image glowImg = glowObj.GetComponent<Image>();
+        glowImg.sprite = GetUnitWhiteSprite();
+        glowImg.color = glow;
+        glowImg.raycastTarget = false;
+
+        GameObject bgObj = new GameObject("Badge", typeof(RectTransform), typeof(Image));
+        bgObj.transform.SetParent(labelObj.transform, false);
+        RectTransform bgRt = bgObj.GetComponent<RectTransform>();
+        bgRt.anchorMin = Vector2.zero;
+        bgRt.anchorMax = Vector2.one;
+        bgRt.offsetMin = bgRt.offsetMax = Vector2.zero;
+        Image bgImg = bgObj.GetComponent<Image>();
+        bgImg.sprite = GetUnitWhiteSprite();
+        bgImg.color = bg;
+        bgImg.raycastTarget = false;
+
+        GameObject borderObj = new GameObject("Border", typeof(RectTransform), typeof(Image));
+        borderObj.transform.SetParent(labelObj.transform, false);
+        borderObj.transform.SetSiblingIndex(3);
+        RectTransform borderRt = borderObj.GetComponent<RectTransform>();
+        borderRt.anchorMin = Vector2.zero;
+        borderRt.anchorMax = Vector2.one;
+        borderRt.offsetMin = new Vector2(-3f, -3f);
+        borderRt.offsetMax = new Vector2(3f, 3f);
+        Image borderImg = borderObj.GetComponent<Image>();
+        borderImg.sprite = GetUnitWhiteSprite();
+        borderImg.color = border;
+        borderImg.raycastTarget = false;
+
+        GameObject textObj = new GameObject("Text", typeof(RectTransform), typeof(TextMeshProUGUI));
+        textObj.transform.SetParent(labelObj.transform, false);
+        textObj.transform.SetAsLastSibling();
+        RectTransform textRt = textObj.GetComponent<RectTransform>();
+        textRt.anchorMin = Vector2.zero;
+        textRt.anchorMax = Vector2.one;
+        textRt.offsetMin = textRt.offsetMax = Vector2.zero;
+        TextMeshProUGUI tmp = textObj.GetComponent<TextMeshProUGUI>();
+        TMP_FontAsset font = ResolveUIFont();
+        if (font != null) tmp.font = font;
+        tmp.text = damageText;
+        tmp.fontSize = fontSize;
+        tmp.fontStyle = FontStyles.Bold;
+        tmp.alignment = TextAlignmentOptions.Center;
+        tmp.color = textColor;
+        tmp.outlineWidth = 0.24f;
+        tmp.outlineColor = new Color32(0, 0, 0, 230);
+        tmp.raycastTarget = false;
+
+        CanvasGroup cg = labelObj.GetComponent<CanvasGroup>();
+        cg.alpha = 0f;
+        Vector2 posStart = labelRt.anchoredPosition;
+        Vector2 posEnd = posStart + new Vector2(14f, 34f);
+        labelRt.localScale = Vector3.one * 0.55f;
+
+        const float popDur = 0.12f;
+        const float holdDur = 0.48f;
+        const float fadeDur = FloatingDamageTotalDuration - popDur - holdDur;
+        float t = 0f;
+
+        while (t < popDur && labelObj != null)
+        {
+            t += Time.unscaledDeltaTime;
+            float p = Mathf.Clamp01(t / popDur);
+            float eased = 1f - Mathf.Pow(1f - p, 3f);
+            cg.alpha = eased;
+            labelRt.localScale = Vector3.one * Mathf.Lerp(0.55f, 1.12f, eased);
+            labelRt.anchoredPosition = Vector2.Lerp(posStart, posStart + new Vector2(4f, 6f), eased);
+            yield return null;
+        }
+
+        t = 0f;
+        while (t < holdDur && labelObj != null)
+        {
+            t += Time.unscaledDeltaTime;
+            float p = Mathf.Clamp01(t / holdDur);
+            cg.alpha = 1f;
+            labelRt.anchoredPosition = Vector2.Lerp(posStart + new Vector2(4f, 6f), posEnd, p * 0.55f);
+            labelRt.localScale = Vector3.one * (1.12f + Mathf.Sin(t * 11f) * 0.025f);
+            yield return null;
+        }
+
+        t = 0f;
+        Vector2 fadeStart = labelRt != null ? labelRt.anchoredPosition : posEnd;
+        while (t < fadeDur && labelObj != null)
+        {
+            t += Time.unscaledDeltaTime;
+            float p = Mathf.Clamp01(t / fadeDur);
+            cg.alpha = 1f - p;
+            labelRt.anchoredPosition = Vector2.Lerp(fadeStart, posEnd + new Vector2(6f, 12f), p);
+            labelRt.localScale = Vector3.one * Mathf.Lerp(1.12f, 0.9f, p);
+            yield return null;
+        }
+
+        if (labelObj != null) Destroy(labelObj);
+    }
+
+    private IEnumerator PlayCounterAttackLabel(GameObject counterAttackerObj, bool counterFromPlayer)
+    {
+        if (counterAttackerObj == null) yield break;
+        Transform old = counterAttackerObj.transform.Find("CounterAttackLabel");
+        if (old != null) Destroy(old.gameObject);
+
+        GameObject labelObj = new GameObject("CounterAttackLabel", typeof(RectTransform), typeof(CanvasGroup));
+        labelObj.transform.SetParent(counterAttackerObj.transform, false);
+        labelObj.transform.SetAsLastSibling();
+        RectTransform labelRt = labelObj.GetComponent<RectTransform>();
+        labelRt.anchorMin = new Vector2(0.5f, 1f);
+        labelRt.anchorMax = new Vector2(0.5f, 1f);
+        labelRt.pivot = new Vector2(0.5f, 0f);
+        labelRt.anchoredPosition = new Vector2(0f, 26f);
+        labelRt.sizeDelta = new Vector2(148f, 56f);
+
+        GameObject shadowObj = new GameObject("Shadow", typeof(RectTransform), typeof(Image));
+        shadowObj.transform.SetParent(labelObj.transform, false);
+        RectTransform shadowRt = shadowObj.GetComponent<RectTransform>();
+        shadowRt.anchorMin = Vector2.zero;
+        shadowRt.anchorMax = Vector2.one;
+        shadowRt.offsetMin = new Vector2(5f, -5f);
+        shadowRt.offsetMax = new Vector2(9f, -1f);
+        Image shadowImg = shadowObj.GetComponent<Image>();
+        shadowImg.sprite = GetUnitWhiteSprite();
+        shadowImg.color = BattleFxColors.CounterLabelShadow;
+        shadowImg.raycastTarget = false;
+
+        GameObject glowObj = new GameObject("Glow", typeof(RectTransform), typeof(Image));
+        glowObj.transform.SetParent(labelObj.transform, false);
+        RectTransform glowRt = glowObj.GetComponent<RectTransform>();
+        glowRt.anchorMin = Vector2.zero;
+        glowRt.anchorMax = Vector2.one;
+        glowRt.offsetMin = new Vector2(-10f, -8f);
+        glowRt.offsetMax = new Vector2(10f, 8f);
+        Image glowImg = glowObj.GetComponent<Image>();
+        glowImg.sprite = GetUnitWhiteSprite();
+        glowImg.color = BattleFxColors.CounterLabelGlow;
+        glowImg.raycastTarget = false;
+
+        GameObject bgObj = new GameObject("Badge", typeof(RectTransform), typeof(Image));
+        bgObj.transform.SetParent(labelObj.transform, false);
+        RectTransform bgRt = bgObj.GetComponent<RectTransform>();
+        bgRt.anchorMin = Vector2.zero;
+        bgRt.anchorMax = Vector2.one;
+        bgRt.offsetMin = Vector2.zero;
+        bgRt.offsetMax = Vector2.zero;
+        Image bgImg = bgObj.GetComponent<Image>();
+        bgImg.sprite = GetUnitWhiteSprite();
+        bgImg.color = BattleFxColors.CounterLabelBg;
+        bgImg.raycastTarget = false;
+
+        GameObject borderObj = new GameObject("Border", typeof(RectTransform), typeof(Image));
+        borderObj.transform.SetParent(labelObj.transform, false);
+        borderObj.transform.SetSiblingIndex(3);
+        RectTransform borderRt = borderObj.GetComponent<RectTransform>();
+        borderRt.anchorMin = Vector2.zero;
+        borderRt.anchorMax = Vector2.one;
+        borderRt.offsetMin = new Vector2(-4f, -4f);
+        borderRt.offsetMax = new Vector2(4f, 4f);
+        Image borderImg = borderObj.GetComponent<Image>();
+        borderImg.sprite = GetUnitWhiteSprite();
+        borderImg.color = BattleFxColors.CounterLabelBorder;
+        borderImg.raycastTarget = false;
+
+        GameObject textObj = new GameObject("Text", typeof(RectTransform), typeof(TextMeshProUGUI));
+        textObj.transform.SetParent(labelObj.transform, false);
+        textObj.transform.SetAsLastSibling();
+        RectTransform textRt = textObj.GetComponent<RectTransform>();
+        textRt.anchorMin = Vector2.zero;
+        textRt.anchorMax = Vector2.one;
+        textRt.offsetMin = textRt.offsetMax = Vector2.zero;
+        TextMeshProUGUI tmp = textObj.GetComponent<TextMeshProUGUI>();
+        TMP_FontAsset font = ResolveUIFont();
+        if (font != null) tmp.font = font;
+        tmp.text = "反擊";
+        tmp.fontSize = 34f;
+        tmp.fontStyle = FontStyles.Bold;
+        tmp.alignment = TextAlignmentOptions.Center;
+        tmp.color = BattleFxColors.CounterLabelText;
+        tmp.outlineWidth = 0.22f;
+        tmp.outlineColor = new Color32(0, 0, 0, 220);
+        tmp.raycastTarget = false;
+
+        CanvasGroup cg = labelObj.GetComponent<CanvasGroup>();
+        cg.alpha = 0f;
+        labelRt.localScale = Vector3.one * 0.65f;
+        labelRt.localRotation = Quaternion.Euler(0f, 0f, counterFromPlayer ? -5f : 5f);
+
+        const float popDur = 0.14f;
+        const float holdDur = 0.72f;
+        const float fadeDur = CounterAttackLabelTotalDuration - popDur - holdDur;
+        float t = 0f;
+
+        while (t < popDur && labelObj != null)
+        {
+            t += Time.unscaledDeltaTime;
+            float p = Mathf.Clamp01(t / popDur);
+            float eased = 1f - Mathf.Pow(1f - p, 3f);
+            cg.alpha = eased;
+            labelRt.localScale = Vector3.one * Mathf.Lerp(0.65f, 1.08f, eased);
+            yield return null;
+        }
+
+        t = 0f;
+        while (t < holdDur && labelObj != null)
+        {
+            t += Time.unscaledDeltaTime;
+            cg.alpha = 1f;
+            float pulse = 1f + Mathf.Sin(t * 9.5f) * 0.03f;
+            labelRt.localScale = Vector3.one * (1.08f * pulse);
+            if (glowRt != null)
+            {
+                float glowPulse = 1f + Mathf.Sin(t * 9.5f) * 0.08f;
+                glowRt.localScale = Vector3.one * glowPulse;
+            }
+            yield return null;
+        }
+
+        t = 0f;
+        while (t < fadeDur && labelObj != null)
+        {
+            t += Time.unscaledDeltaTime;
+            float p = Mathf.Clamp01(t / fadeDur);
+            cg.alpha = 1f - p;
+            labelRt.localScale = Vector3.one * Mathf.Lerp(1.08f, 0.88f, p);
+            yield return null;
+        }
+
+        if (labelObj != null) Destroy(labelObj);
     }
 
     private IEnumerator PlayEnemyCardAnimation(Card card)
@@ -3402,7 +3889,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         spellCastOverlayRoot.offsetMax = Vector2.zero;
 
         Image dim = rootObj.GetComponent<Image>();
-        dim.color = new Color(0f, 0f, 0f, 1f);
+        ApplySpellCastDimImageStyle(dim);
         dim.raycastTarget = true;
 
         spellCastOverlayGroup = rootObj.GetComponent<CanvasGroup>();
@@ -3460,6 +3947,14 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         rootObj.SetActive(false);
     }
 
+    private static void ApplySpellCastDimImageStyle(Image dim)
+    {
+        if (dim == null) return;
+        dim.sprite = GetUnitWhiteSprite();
+        dim.type = Image.Type.Simple;
+        dim.color = BattleFxColors.SpellCastDimImage;
+    }
+
     private void ApplySpellCastOverlayTypographyFix()
     {
         if (spellCastTitleTmp != null)
@@ -3477,6 +3972,8 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         }
         if (spellCastOverlayRoot != null)
         {
+            ApplySpellCastDimImageStyle(spellCastOverlayRoot.GetComponent<Image>());
+
             Transform panel = spellCastOverlayRoot.Find("SpellCastPanel");
             RectTransform panelRt = panel != null ? panel.GetComponent<RectTransform>() : null;
             if (panelRt != null) panelRt.sizeDelta = new Vector2(1080f, 640f);
@@ -3564,26 +4061,79 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
     {
         EnsureTooltip();
         if (tooltipPanel == null || tooltipText == null || uiRoot == null || source == null) return;
-        Image tipBg = tooltipPanel.GetComponent<Image>();
-        if (tipBg != null) tipBg.color = new Color(0f, 0f, 0f, HandTooltipBackgroundAlpha);
+        if (handTooltipTitleTmp != null)
+            handTooltipTitleTmp.gameObject.SetActive(false);
+        if (handTooltipSubtitleTmp != null)
+            handTooltipSubtitleTmp.gameObject.SetActive(false);
+        if (handTooltipBodyTmp != null)
+            handTooltipBodyTmp.gameObject.SetActive(false);
+        tooltipText.gameObject.SetActive(true);
 
-        // Only long-press flow should raise original hand card.
-        // Hover-preview flow uses an overlay ghost and should not move original card.
-        BattleHandLongPressTooltip longPress = source.GetComponent<BattleHandLongPressTooltip>();
-        if (source.parent == handArea && longPress != null && longPress.enabled)
-        {
-            RaiseLongPressedCard(source);
-        }
+        Image tipBg = tooltipPanel.GetComponent<Image>();
+        if (tipBg != null) tipBg.color = new Color(0.08f, 0.07f, 0.1f, HandTooltipBackgroundAlpha);
 
         tooltipText.text = message;
         tooltipPanel.gameObject.SetActive(true);
-        tooltipPanel.SetAsLastSibling(); // keep tooltip readable above raised card
-        // Stick tooltip to the left side of the pressed card.
-        Vector3 world = source.TransformPoint(new Vector3(0f, source.rect.height * 0.6f, 0f));
-        Vector2 local;
-        RectTransformUtility.ScreenPointToLocalPointInRectangle(uiRoot, RectTransformUtility.WorldToScreenPoint(null, world), null, out local);
-        Vector2 pos = local + new Vector2(0f, 6f);
-        tooltipPanel.anchoredPosition = pos;
+        tooltipPanel.SetAsLastSibling();
+        PositionHandTooltipNearCard(source);
+    }
+
+    public bool TryGetHandLongPressTooltipContent(Card card, out HandLongPressTooltipModel model)
+    {
+        model = default;
+        if (battleManager == null || card == null) return false;
+        return battleManager.TryGetCardHandLongPressTooltipModel(card, out model);
+    }
+
+    public void ShowHandLongPressTooltip(RectTransform source, Card card)
+    {
+        if (!TryGetHandLongPressTooltipContent(card, out HandLongPressTooltipModel model)) return;
+        EnsureTooltip();
+        if (tooltipPanel == null || uiRoot == null || source == null) return;
+
+        if (tooltipText != null)
+            tooltipText.gameObject.SetActive(false);
+        if (handTooltipTitleTmp != null)
+        {
+            handTooltipTitleTmp.gameObject.SetActive(true);
+            handTooltipTitleTmp.text = model.heading ?? string.Empty;
+        }
+        if (handTooltipSubtitleTmp != null)
+        {
+            handTooltipSubtitleTmp.gameObject.SetActive(!string.IsNullOrWhiteSpace(model.subtitleRich));
+            handTooltipSubtitleTmp.text = model.subtitleRich ?? string.Empty;
+        }
+        if (handTooltipBodyTmp != null)
+        {
+            handTooltipBodyTmp.gameObject.SetActive(!string.IsNullOrWhiteSpace(model.bodyRich));
+            handTooltipBodyTmp.text = model.bodyRich ?? string.Empty;
+        }
+
+        Image tipBg = tooltipPanel.GetComponent<Image>();
+        if (tipBg != null) tipBg.color = new Color(0.1f, 0.09f, 0.12f, HandTooltipBackgroundAlpha);
+
+        if (source.parent == handArea)
+            RaiseLongPressedCard(source);
+
+        tooltipPanel.gameObject.SetActive(true);
+        tooltipPanel.SetAsLastSibling();
+        PositionHandTooltipNearCard(source);
+    }
+
+    public void HideHandLongPressTooltip()
+    {
+        HideTooltip();
+    }
+
+    private void PositionHandTooltipNearCard(RectTransform source)
+    {
+        Vector3 world = source.TransformPoint(new Vector3(0f, source.rect.height * HandTooltipAnchorYNormalized, 0f));
+        Canvas canvas = uiRoot.GetComponentInParent<Canvas>();
+        Camera cam = canvas != null && canvas.renderMode != RenderMode.ScreenSpaceOverlay ? canvas.worldCamera : null;
+        Vector2 screen = RectTransformUtility.WorldToScreenPoint(cam, world);
+        RectTransformUtility.ScreenPointToLocalPointInRectangle(uiRoot, screen, cam, out Vector2 local);
+        tooltipPanel.pivot = new Vector2(0f, 0f);
+        tooltipPanel.anchoredPosition = local + new Vector2(HandTooltipOffsetX, HandTooltipOffsetY);
     }
 
     private void HideTooltip()
@@ -3594,39 +4144,107 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
 
     private void EnsureTooltip()
     {
-        if (tooltipPanel != null) return;
+        if (tooltipPanel != null && handTooltipTitleTmp != null) return;
         if (uiRoot == null) return;
 
-        GameObject panelObj = new GameObject("HandTooltip", typeof(RectTransform), typeof(Image));
-        panelObj.transform.SetParent(uiRoot, false);
-        tooltipPanel = panelObj.GetComponent<RectTransform>();
-        tooltipPanel.anchorMin = new Vector2(0.5f, 0.5f);
-        tooltipPanel.anchorMax = new Vector2(0.5f, 0.5f);
-        tooltipPanel.pivot = new Vector2(0.5f, 0.5f);
-        tooltipPanel.sizeDelta = new Vector2(HandTooltipPanelWidth, HandTooltipPanelHeight);
-        tooltipPanel.anchoredPosition = new Vector2(280f, 0f);
+        if (tooltipPanel != null)
+        {
+            for (int i = tooltipPanel.childCount - 1; i >= 0; i--)
+                Destroy(tooltipPanel.GetChild(i).gameObject);
+            tooltipText = null;
+            handTooltipTitleTmp = null;
+            handTooltipSubtitleTmp = null;
+            handTooltipBodyTmp = null;
+        }
 
-        Image bg = panelObj.GetComponent<Image>();
-        bg.color = new Color(0.14f, 0.1f, 0.08f, HandTooltipBackgroundAlpha);
+        if (tooltipPanel == null)
+        {
+            GameObject panelObj = new GameObject("HandTooltip", typeof(RectTransform), typeof(Image));
+            panelObj.transform.SetParent(uiRoot, false);
+            tooltipPanel = panelObj.GetComponent<RectTransform>();
+            tooltipPanel.anchorMin = new Vector2(0.5f, 0.5f);
+            tooltipPanel.anchorMax = new Vector2(0.5f, 0.5f);
+            tooltipPanel.pivot = new Vector2(0f, 0f);
+            tooltipPanel.sizeDelta = new Vector2(HandTooltipPanelWidth, HandTooltipPanelHeight);
+        }
 
-        GameObject txtObj = new GameObject("TooltipText", typeof(RectTransform), typeof(Text));
-        txtObj.transform.SetParent(panelObj.transform, false);
-        RectTransform txtRect = txtObj.GetComponent<RectTransform>();
-        txtRect.anchorMin = Vector2.zero;
-        txtRect.anchorMax = Vector2.one;
-        txtRect.offsetMin = new Vector2(16f, 14f);
-        txtRect.offsetMax = new Vector2(-16f, -14f);
+        Image bg = tooltipPanel.GetComponent<Image>();
+        bg.color = new Color(0.1f, 0.09f, 0.12f, HandTooltipBackgroundAlpha);
 
-        tooltipText = txtObj.GetComponent<Text>();
+        TMP_FontAsset font = ResolveUIFont();
+        const float padH = 32f;
+        const float padTop = 30f;
+        const float padBottom = 28f;
+        const float titleH = 54f;
+        const float subtitleH = 46f;
+        const float titleGap = 8f;
+        const float subtitleGap = 14f;
+
+        handTooltipTitleTmp = CreateHandTooltipTextBlock(
+            "Title", tooltipPanel, font, HandTooltipTitleFontSize, FontStyles.Bold,
+            BattleUiColors.TurnBannerText, padH, padTop, titleH);
+        handTooltipSubtitleTmp = CreateHandTooltipTextBlock(
+            "Subtitle", tooltipPanel, font, HandTooltipSubtitleFontSize, FontStyles.Bold,
+            new Color(0.78f, 0.88f, 0.98f, 1f), padH, padTop + titleH + titleGap, subtitleH);
+        float bodyTop = padTop + titleH + titleGap + subtitleH + subtitleGap;
+        handTooltipBodyTmp = CreateHandTooltipTextBlock(
+            "Body", tooltipPanel, font, HandTooltipBodyFontSize, FontStyles.Normal,
+            new Color(0.9f, 0.93f, 0.97f, 1f), padH, bodyTop, 0f, padBottom);
+
+        RectTransform bodyRt = handTooltipBodyTmp.rectTransform;
+        bodyRt.anchorMin = Vector2.zero;
+        bodyRt.anchorMax = Vector2.one;
+        bodyRt.offsetMin = new Vector2(padH, padBottom);
+        bodyRt.offsetMax = new Vector2(-padH, -(bodyTop));
+
+        GameObject legacyTxt = new GameObject("TooltipTextLegacy", typeof(RectTransform), typeof(Text));
+        legacyTxt.transform.SetParent(tooltipPanel, false);
+        RectTransform legacyRt = legacyTxt.GetComponent<RectTransform>();
+        legacyRt.anchorMin = Vector2.zero;
+        legacyRt.anchorMax = Vector2.one;
+        legacyRt.offsetMin = new Vector2(16f, 14f);
+        legacyRt.offsetMax = new Vector2(-16f, -14f);
+        tooltipText = legacyTxt.GetComponent<Text>();
+        tooltipText.supportRichText = true;
         tooltipText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
         tooltipText.fontSize = HandTooltipFontSize;
-        tooltipText.lineSpacing = 1.05f;
-        tooltipText.horizontalOverflow = HorizontalWrapMode.Wrap;
-        tooltipText.verticalOverflow = VerticalWrapMode.Truncate;
-        tooltipText.color = new Color(0.98f, 0.95f, 0.9f, 1f);
-        tooltipText.alignment = TextAnchor.UpperLeft;
+        tooltipText.gameObject.SetActive(false);
 
-        panelObj.SetActive(false);
+        tooltipPanel.gameObject.SetActive(false);
+    }
+
+    private static TextMeshProUGUI CreateHandTooltipTextBlock(
+        string name,
+        Transform parent,
+        TMP_FontAsset font,
+        int fontSize,
+        FontStyles style,
+        Color color,
+        float padLeft,
+        float padTop,
+        float height,
+        float padBottom = 0f)
+    {
+        GameObject go = new GameObject(name, typeof(RectTransform), typeof(TextMeshProUGUI));
+        go.transform.SetParent(parent, false);
+        RectTransform rt = go.GetComponent<RectTransform>();
+        rt.anchorMin = new Vector2(0f, 1f);
+        rt.anchorMax = new Vector2(1f, 1f);
+        rt.pivot = new Vector2(0.5f, 1f);
+        rt.offsetMin = new Vector2(padLeft, -padTop - height);
+        rt.offsetMax = new Vector2(-padLeft, -padTop);
+        TextMeshProUGUI tmp = go.GetComponent<TextMeshProUGUI>();
+        if (font != null) tmp.font = font;
+        tmp.fontSize = fontSize;
+        tmp.fontStyle = style;
+        tmp.richText = true;
+        tmp.enableWordWrapping = true;
+        tmp.overflowMode = TextOverflowModes.Overflow;
+        tmp.alignment = TextAlignmentOptions.TopLeft;
+        tmp.color = color;
+        tmp.lineSpacing = style == FontStyles.Normal ? 12f : 0f;
+        tmp.paragraphSpacing = style == FontStyles.Normal ? 6f : 0f;
+        return tmp;
     }
 
     private void ApplyPrefabVisualTuning(CardDisplay display, bool isFieldCard = false, bool isFieldSpellCard = false)
@@ -4123,7 +4741,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
             glareImg.sprite = GetUnitWhiteSprite();
             glareImg.type = Image.Type.Simple;
             glareImg.raycastTarget = false;
-            glareImg.color = new Color(0.62f, 0.2f, 0.9f, 0f);
+            glareImg.color = BattleFxColors.GazeGlare(0f);
 
             void BuildEye(string name, float xPos, out Image scleraOut, out RectTransform pupilRtOut)
             {
@@ -4146,7 +4764,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
                 scleraOut.sprite = GetUnitWhiteSprite();
                 scleraOut.type = Image.Type.Simple;
                 scleraOut.raycastTarget = false;
-                scleraOut.color = new Color(0.93f, 0.91f, 1f, 0f);
+                scleraOut.color = BattleFxColors.GazeSclera(0f);
 
                 GameObject pupil = new GameObject("Pupil", typeof(RectTransform), typeof(Image));
                 pupil.transform.SetParent(eye.transform, false);
@@ -4159,7 +4777,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
                 pImg.sprite = GetUnitWhiteSprite();
                 pImg.type = Image.Type.Simple;
                 pImg.raycastTarget = false;
-                pImg.color = new Color(0.1f, 0.05f, 0.18f, 1f);
+                pImg.color = BattleFxColors.GazePupilRgb;
             }
 
             Image scleraL;
@@ -4170,8 +4788,6 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
             BuildEye("EyeR", 36f, out scleraR, out pupilRrt);
 
             float t = 0f;
-            Color scleraBase = new Color(0.93f, 0.91f, 1f, 0.96f);
-            Color scleraStrike = new Color(1f, 0.38f, 0.48f, 1f);
             while (t < dur && root != null)
             {
                 t += Time.unscaledDeltaTime;
@@ -4186,15 +4802,14 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
                 pupilRrt.localScale = new Vector3(1f, pyR, 1f);
 
                 float strike = LinGazeEyeStrikeDamagePeak01(u);
-                float scleraA = Mathf.Lerp(0f, scleraBase.a, intro);
-                Color sclNow = Color.Lerp(scleraBase, scleraStrike, strike * 0.82f);
-                sclNow.a = scleraA;
+                Color sclNow = BattleFxColors.GazeScleraStrike(strike);
+                sclNow.a = Mathf.Lerp(0f, sclNow.a, intro);
                 scleraL.color = sclNow;
                 scleraR.color = sclNow;
 
                 float glareBase = 0.1f + 0.06f * Mathf.Sin(u * Mathf.PI * 2.4f);
                 float glareA = Mathf.Lerp(0f, glareBase + 0.34f * strike, intro) * outro;
-                glareImg.color = new Color(0.68f + 0.1f * strike, 0.19f + 0.06f * strike, 0.9f, glareA);
+                glareImg.color = BattleFxColors.GazeGlare(glareA);
 
                 float lift = 2.4f * strike * (1f - strike * 0.35f);
                 glareRt.anchoredPosition = new Vector2(0f, 20f + lift);
@@ -4288,7 +4903,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
             goImg.sprite = GetUnitWhiteSprite();
             goImg.type = Image.Type.Simple;
             goImg.raycastTarget = false;
-            goImg.color = new Color(0.15f, 0.92f, 0.38f, 0.18f);
+            goImg.color = BattleFxColors.HealGlowOuter;
             CanvasGroup goCg = glowOuter.AddComponent<CanvasGroup>();
 
             GameObject glowInner = new GameObject("LesserHealGlowInner", typeof(RectTransform), typeof(Image));
@@ -4304,7 +4919,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
             giImg.sprite = GetUnitWhiteSprite();
             giImg.type = Image.Type.Simple;
             giImg.raycastTarget = false;
-            giImg.color = new Color(0.35f, 1f, 0.55f, 0.28f);
+            giImg.color = BattleFxColors.HealGlowInner;
             CanvasGroup giCg = glowInner.AddComponent<CanvasGroup>();
 
             GameObject floatObj = new GameObject("LesserHealFloat", typeof(RectTransform), typeof(TextMeshProUGUI));
@@ -4324,7 +4939,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
             floatTmp.alignment = TextAlignmentOptions.TopRight;
             floatTmp.font = sharedUIFont != null ? sharedUIFont : TMP_Settings.defaultFontAsset;
             floatTmp.text = "+" + healAmount;
-            floatTmp.color = new Color(0.45f, 1f, 0.62f, 1f);
+            floatTmp.color = BattleFxColors.HealFloat;
             CanvasGroup fCg = floatObj.AddComponent<CanvasGroup>();
 
             Vector2 floatStart = fRt.anchoredPosition;
@@ -4338,7 +4953,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
                 goCg.alpha = Mathf.Clamp01(0.2f * pulse * tail + 0.06f);
                 giCg.alpha = Mathf.Clamp01(0.36f * pulse * tail + 0.1f);
                 float fade = Mathf.Lerp(1f, 0f, Mathf.Clamp01((t - 0.4f) / 1.15f));
-                floatTmp.color = new Color(0.45f, 1f, 0.62f, fade);
+                floatTmp.color = BattleFxColors.WithAlpha(BattleFxColors.HealFloat, fade);
                 fCg.alpha = fade;
                 float drift = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(t / 0.85f));
                 fRt.anchoredPosition = floatStart + new Vector2(18f, 32f) * drift;
@@ -4377,7 +4992,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         rect.sizeDelta = new Vector2(120f, 36f);
 
         Image image = buttonObj.GetComponent<Image>();
-        image.color = new Color(1f, 1f, 1f, 0.95f);
+        image.color = BattleUiColors.BtnPrimary;
         image.raycastTarget = true;
 
         Button button = buttonObj.GetComponent<Button>();
@@ -4397,8 +5012,9 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
         text.fontSize = 20;
         text.alignment = TextAnchor.MiddleCenter;
-        text.color = Color.black;
+        text.color = BattleUiColors.BtnPrimaryText;
 
+        BattleUiColors.ApplyButtonStyle(button, name);
         return button;
     }
 
@@ -4430,6 +5046,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
             quickEndTurnButton = sceneEndTurnButton;
             quickEndTurnButton.onClick.RemoveListener(battleManager.EndPlayerTurn);
             quickEndTurnButton.onClick.AddListener(battleManager.EndPlayerTurn);
+            BattleUiColors.ApplyButtonStyle(sceneEndTurnButton, sceneEndTurnButton.gameObject.name);
             return;
         }
 
@@ -4443,6 +5060,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         quickEndRect.sizeDelta = new Vector2(220f, 66f);
         Text quickEndLabel = quickEndTurnButton.GetComponentInChildren<Text>();
         if (quickEndLabel != null) quickEndLabel.fontSize = 30;
+        BattleUiColors.ApplyButtonStyle(quickEndTurnButton, quickEndTurnButton.gameObject.name);
     }
 
     private TMP_FontAsset ResolveUIFont()

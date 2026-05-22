@@ -175,6 +175,13 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         {
             AttachLinGazeShieldFieldVisual(cardObj);
         }
+        else if (card is MonsterCard)
+        {
+            AttachFieldSelectHalo(cardObj);
+            ApplyFieldRestrictionBadge(cardObj, enemy
+                ? battleManager.GetEnemyFieldMonsterStatusBadge()
+                : battleManager.GetPlayerFieldMonsterStatusBadge());
+        }
 
         if (!existedBefore)
         {
@@ -213,7 +220,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         imgHalo.sprite = GetUnitWhiteSprite();
         imgHalo.type = Image.Type.Simple;
         imgHalo.raycastTarget = false;
-        imgHalo.color = new Color(0.65f, 0.88f, 1f, 0.06f);
+        imgHalo.color = BattleFxColors.FieldHaloCore;
         CanvasGroup cgHalo = goHalo.AddComponent<CanvasGroup>();
 
         GameObject goInner = new GameObject("ShieldRingInner", typeof(RectTransform), typeof(Image));
@@ -228,7 +235,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         imgInner.sprite = GetUnitWhiteSprite();
         imgInner.type = Image.Type.Simple;
         imgInner.raycastTarget = false;
-        imgInner.color = new Color(0.55f, 0.95f, 1f, 0.24f);
+        imgInner.color = BattleFxColors.FieldHaloInner;
         CanvasGroup cgInner = goInner.AddComponent<CanvasGroup>();
 
         GameObject goOuter = new GameObject("ShieldRingOuter", typeof(RectTransform), typeof(Image));
@@ -243,7 +250,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         imgOuter.sprite = GetUnitWhiteSprite();
         imgOuter.type = Image.Type.Simple;
         imgOuter.raycastTarget = false;
-        imgOuter.color = new Color(0.4f, 0.82f, 1f, 0.16f);
+        imgOuter.color = BattleFxColors.FieldHaloOuter;
         CanvasGroup cgOuter = goOuter.AddComponent<CanvasGroup>();
 
         LinGazeShieldFieldVisual driver = shieldRoot.AddComponent<LinGazeShieldFieldVisual>();
@@ -321,8 +328,259 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
 
         bool isDamaged = monster.healthPoint < monster.healthPointMax;
         display.healthText.color = isDamaged
-            ? new Color(1f, 0.28f, 0.28f, 1f)
+            ? BattleFxColors.FieldHpHurt
             : Color.white;
+    }
+
+    /// <summary>場上怪獸常駐選取光暈（§3.4 FIELD_HALO_*）。</summary>
+    private void AttachFieldSelectHalo(GameObject fieldCardRoot)
+    {
+        if (fieldCardRoot == null) return;
+
+        Transform existing = fieldCardRoot.transform.Find("FieldSelectHaloRoot");
+        if (existing != null) return;
+
+        GameObject haloRoot = new GameObject("FieldSelectHaloRoot", typeof(RectTransform));
+        haloRoot.transform.SetParent(fieldCardRoot.transform, false);
+        RectTransform rootRt = haloRoot.GetComponent<RectTransform>();
+        rootRt.anchorMin = Vector2.zero;
+        rootRt.anchorMax = Vector2.one;
+        rootRt.offsetMin = Vector2.zero;
+        rootRt.offsetMax = Vector2.zero;
+        rootRt.localScale = Vector3.one;
+        haloRoot.transform.SetAsFirstSibling();
+
+        CreateFieldHaloImage(haloRoot.transform, "FieldHaloOuter", Vector2.zero, Vector2.one,
+            new Vector2(-22f, -22f), new Vector2(22f, 22f), BattleFxColors.FieldHaloOuter);
+        CreateFieldHaloImage(haloRoot.transform, "FieldHaloInner", Vector2.zero, Vector2.one,
+            new Vector2(-12f, -12f), new Vector2(12f, 12f), BattleFxColors.FieldHaloInner);
+        CreateFieldHaloImage(haloRoot.transform, "FieldHaloCore", new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+            Vector2.zero, Vector2.zero, BattleFxColors.FieldHaloCore, new Vector2(0.5f, 0.5f), new Vector2(168f, 168f));
+        haloRoot.SetActive(false);
+    }
+
+    private void CreateFieldHaloImage(
+        Transform parent,
+        string name,
+        Vector2 anchorMin,
+        Vector2 anchorMax,
+        Vector2 offsetMin,
+        Vector2 offsetMax,
+        Color color,
+        Vector2? pivot = null,
+        Vector2? sizeDelta = null)
+    {
+        GameObject go = new GameObject(name, typeof(RectTransform), typeof(Image));
+        go.transform.SetParent(parent, false);
+        RectTransform rt = go.GetComponent<RectTransform>();
+        rt.anchorMin = anchorMin;
+        rt.anchorMax = anchorMax;
+        rt.pivot = pivot ?? new Vector2(0.5f, 0.5f);
+        if (sizeDelta.HasValue)
+        {
+            rt.sizeDelta = sizeDelta.Value;
+            rt.anchoredPosition = Vector2.zero;
+        }
+        else
+        {
+            rt.offsetMin = offsetMin;
+            rt.offsetMax = offsetMax;
+        }
+
+        Image img = go.GetComponent<Image>();
+        img.sprite = GetUnitWhiteSprite();
+        img.type = Image.Type.Simple;
+        img.raycastTarget = false;
+        img.color = color;
+    }
+
+    private void UpdateFieldSelectHaloVisibility()
+    {
+        if (battleManager == null) return;
+        bool playerTurn = battleManager.IsPlayerTurn();
+        SetFieldSelectHaloVisible(playerFieldCardObj, playerTurn && battleManager.PlayerHasFieldMonster());
+        SetFieldSelectHaloVisible(enemyFieldCardObj,
+            playerTurn && battleManager.PlayerHasFieldMonster() && battleManager.EnemyHasFieldMonster());
+    }
+
+    private void UpdateFieldRestrictionBadges()
+    {
+        if (battleManager == null) return;
+        ApplyFieldRestrictionBadge(playerFieldCardObj, battleManager.GetPlayerFieldMonsterStatusBadge());
+        ApplyFieldRestrictionBadge(enemyFieldCardObj, battleManager.GetEnemyFieldMonsterStatusBadge());
+    }
+
+    private void ApplyFieldRestrictionBadge(GameObject fieldRoot, BattleSimulationManager.FieldMonsterStatusBadge badge)
+    {
+        if (fieldRoot == null) return;
+
+        Transform existing = fieldRoot.transform.Find(FieldCardStatusIndex.UiFieldRestrictionBadge);
+        if (!badge.HasValue)
+        {
+            if (existing != null)
+                existing.gameObject.SetActive(false);
+            return;
+        }
+
+        bool isCounterBlock = badge.Primary == FieldCardStatusIndex.BadgeCannotCounter;
+        Color border = isCounterBlock
+            ? BattleFxColors.RestrictionBadgeBorderCounter
+            : BattleFxColors.RestrictionBadgeBorderAttack;
+
+        GameObject badgeRoot;
+        TextMeshProUGUI primaryTmp;
+        TextMeshProUGUI secondaryTmp;
+        RectTransform badgeRt;
+        if (existing == null)
+        {
+            badgeRoot = new GameObject(FieldCardStatusIndex.UiFieldRestrictionBadge, typeof(RectTransform), typeof(CanvasGroup));
+            badgeRoot.transform.SetParent(fieldRoot.transform, false);
+            badgeRoot.transform.SetAsLastSibling();
+            badgeRt = badgeRoot.GetComponent<RectTransform>();
+            badgeRt.anchorMin = badgeRt.anchorMax = new Vector2(0.5f, 0.5f);
+            badgeRt.pivot = new Vector2(0.5f, 0.5f);
+            badgeRt.anchoredPosition = Vector2.zero;
+            badgeRt.sizeDelta = new Vector2(152f, 72f);
+
+            GameObject shadowObj = new GameObject("Shadow", typeof(RectTransform), typeof(Image));
+            shadowObj.transform.SetParent(badgeRoot.transform, false);
+            RectTransform shadowRt = shadowObj.GetComponent<RectTransform>();
+            shadowRt.anchorMin = Vector2.zero;
+            shadowRt.anchorMax = Vector2.one;
+            shadowRt.offsetMin = new Vector2(5f, -5f);
+            shadowRt.offsetMax = new Vector2(9f, -1f);
+            Image shadowImg = shadowObj.GetComponent<Image>();
+            shadowImg.sprite = GetUnitWhiteSprite();
+            shadowImg.color = BattleFxColors.RestrictionBadgeShadow;
+            shadowImg.raycastTarget = false;
+
+            GameObject glowObj = new GameObject("Glow", typeof(RectTransform), typeof(Image));
+            glowObj.transform.SetParent(badgeRoot.transform, false);
+            RectTransform glowRt = glowObj.GetComponent<RectTransform>();
+            glowRt.anchorMin = Vector2.zero;
+            glowRt.anchorMax = Vector2.one;
+            glowRt.offsetMin = new Vector2(-10f, -8f);
+            glowRt.offsetMax = new Vector2(10f, 8f);
+            Image glowImg = glowObj.GetComponent<Image>();
+            glowImg.sprite = GetUnitWhiteSprite();
+            glowImg.color = BattleFxColors.RestrictionBadgeGlow;
+            glowImg.raycastTarget = false;
+
+            GameObject bgObj = new GameObject("Badge", typeof(RectTransform), typeof(Image));
+            bgObj.transform.SetParent(badgeRoot.transform, false);
+            RectTransform bgRt = bgObj.GetComponent<RectTransform>();
+            bgRt.anchorMin = Vector2.zero;
+            bgRt.anchorMax = Vector2.one;
+            bgRt.offsetMin = bgRt.offsetMax = Vector2.zero;
+            Image bgImg = bgObj.GetComponent<Image>();
+            bgImg.sprite = GetUnitWhiteSprite();
+            bgImg.color = BattleFxColors.RestrictionBadgeBg;
+            bgImg.raycastTarget = false;
+
+            GameObject borderObj = new GameObject("Border", typeof(RectTransform), typeof(Image));
+            borderObj.transform.SetParent(badgeRoot.transform, false);
+            borderObj.name = "Border";
+            borderObj.transform.SetSiblingIndex(3);
+            RectTransform borderRt = borderObj.GetComponent<RectTransform>();
+            borderRt.anchorMin = Vector2.zero;
+            borderRt.anchorMax = Vector2.one;
+            borderRt.offsetMin = new Vector2(-3f, -3f);
+            borderRt.offsetMax = new Vector2(3f, 3f);
+            Image borderImg = borderObj.GetComponent<Image>();
+            borderImg.sprite = GetUnitWhiteSprite();
+            borderImg.raycastTarget = false;
+
+            GameObject primaryObj = new GameObject("Primary", typeof(RectTransform), typeof(TextMeshProUGUI));
+            primaryObj.transform.SetParent(badgeRoot.transform, false);
+            RectTransform primaryRt = primaryObj.GetComponent<RectTransform>();
+            primaryRt.anchorMin = new Vector2(0f, 0.48f);
+            primaryRt.anchorMax = new Vector2(1f, 1f);
+            primaryRt.offsetMin = new Vector2(6f, 0f);
+            primaryRt.offsetMax = new Vector2(-6f, -4f);
+            primaryTmp = primaryObj.GetComponent<TextMeshProUGUI>();
+            TMP_FontAsset font = ResolveUIFont();
+            if (font != null) primaryTmp.font = font;
+            primaryTmp.fontSize = 22f;
+            primaryTmp.fontStyle = FontStyles.Bold;
+            primaryTmp.alignment = TextAlignmentOptions.Center;
+            primaryTmp.color = BattleFxColors.RestrictionBadgePrimary;
+            primaryTmp.outlineWidth = 0.2f;
+            primaryTmp.outlineColor = new Color32(0, 0, 0, 210);
+            primaryTmp.raycastTarget = false;
+
+            GameObject secondaryObj = new GameObject("Secondary", typeof(RectTransform), typeof(TextMeshProUGUI));
+            secondaryObj.transform.SetParent(badgeRoot.transform, false);
+            RectTransform secondaryRt = secondaryObj.GetComponent<RectTransform>();
+            secondaryRt.anchorMin = new Vector2(0f, 0f);
+            secondaryRt.anchorMax = new Vector2(1f, 0.5f);
+            secondaryRt.offsetMin = new Vector2(6f, 4f);
+            secondaryRt.offsetMax = new Vector2(-6f, 0f);
+            secondaryTmp = secondaryObj.GetComponent<TextMeshProUGUI>();
+            if (font != null) secondaryTmp.font = font;
+            secondaryTmp.fontSize = 19f;
+            secondaryTmp.fontStyle = FontStyles.Bold;
+            secondaryTmp.alignment = TextAlignmentOptions.Center;
+            secondaryTmp.color = BattleFxColors.RestrictionBadgeSecondary;
+            secondaryTmp.outlineWidth = 0.16f;
+            secondaryTmp.outlineColor = new Color32(0, 0, 0, 180);
+            secondaryTmp.raycastTarget = false;
+
+            FieldRestrictionBadgePulse pulse = badgeRoot.AddComponent<FieldRestrictionBadgePulse>();
+            pulse.Bind(badgeRt);
+        }
+        else
+        {
+            badgeRoot = existing.gameObject;
+            badgeRt = badgeRoot.GetComponent<RectTransform>();
+            primaryTmp = badgeRoot.transform.Find("Primary")?.GetComponent<TextMeshProUGUI>();
+            secondaryTmp = badgeRoot.transform.Find("Secondary")?.GetComponent<TextMeshProUGUI>();
+            Transform borderT = badgeRoot.transform.Find("Border");
+            if (borderT != null)
+            {
+                Image borderImg = borderT.GetComponent<Image>();
+                if (borderImg != null) borderImg.color = border;
+            }
+        }
+
+        if (badgeRoot == null || primaryTmp == null || secondaryTmp == null) return;
+
+        badgeRoot.SetActive(true);
+        badgeRoot.transform.SetAsLastSibling();
+        primaryTmp.text = badge.Primary;
+        secondaryTmp.text = string.IsNullOrEmpty(badge.Secondary) ? string.Empty : badge.Secondary;
+        secondaryTmp.gameObject.SetActive(!string.IsNullOrEmpty(badge.Secondary));
+
+        Transform borderTransform = badgeRoot.transform.Find("Border");
+        if (borderTransform != null)
+        {
+            Image borderImg = borderTransform.GetComponent<Image>();
+            if (borderImg != null) borderImg.color = border;
+        }
+    }
+
+    private sealed class FieldRestrictionBadgePulse : MonoBehaviour
+    {
+        private RectTransform targetRt;
+
+        public void Bind(RectTransform rt)
+        {
+            targetRt = rt;
+        }
+
+        private void Update()
+        {
+            if (targetRt == null) return;
+            float pulse = 1f + Mathf.Sin(Time.unscaledTime * 4.2f) * 0.035f;
+            targetRt.localScale = Vector3.one * pulse;
+        }
+    }
+
+    private static void SetFieldSelectHaloVisible(GameObject fieldRoot, bool visible)
+    {
+        if (fieldRoot == null) return;
+        Transform halo = fieldRoot.transform.Find("FieldSelectHaloRoot");
+        if (halo != null)
+            halo.gameObject.SetActive(visible);
     }
 
     private IEnumerator AnimateSpawn(GameObject obj, bool enemy, bool isSpell)

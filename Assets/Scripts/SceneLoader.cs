@@ -30,7 +30,6 @@ public class SceneLoader : MonoBehaviour
     private GameObject battlePreviewOverlayRoot;
     private TextMeshProUGUI battlePreviewPressureText;
     private TextMeshProUGUI battlePreviewDeckText;
-    private TextMeshProUGUI battlePreviewDeckSummaryText;
     private readonly List<Image> battlePreviewMetricBarFills = new List<Image>(3);
     private readonly List<TextMeshProUGUI> battlePreviewMetricValueTexts = new List<TextMeshProUGUI>(3);
     private Coroutine battlePreviewMetricAnimRoutine;
@@ -40,9 +39,11 @@ public class SceneLoader : MonoBehaviour
     [Header("Runtime UI Sprite Fallback")]
     [Tooltip("Optional sliced sprite for runtime-generated modal/button backgrounds. Leave empty to use plain rectangle.")]
     [SerializeField] private Sprite runtimeRoundedUiSprite;
-    private ScrollRect battlePreviewDeckScrollRect;
-    private Button battlePreviewDifficultyToggleButton;
-    private RectTransform battlePreviewDifficultyRowRt;
+    private const int BattlePreviewLayoutVersion = 4;
+    private const float BattlePreviewIntelColumnStart = 0.58f;
+    private const float BattlePreviewDifficultyRailWidthPx = 232f;
+    private const float BattlePreviewSummaryPaneLeftInsetPx = 244f;
+    private int battlePreviewLayoutBuilt;
     private readonly List<Button> battlePreviewDifficultyButtons = new List<Button>(5);
 
     private enum BattleDifficultyTier
@@ -74,7 +75,6 @@ public class SceneLoader : MonoBehaviour
     }
 
     [SerializeField] private BattleDifficultyTier selectedDifficultyTier = BattleDifficultyTier.Normal;
-    [SerializeField] private bool difficultyButtonsExpanded = true;
     [Header("Difficulty Design Profiles (Designer-tunable)")]
     [SerializeField] private List<DifficultyDesignProfile> difficultyProfiles = new List<DifficultyDesignProfile>
     {
@@ -131,19 +131,27 @@ public class SceneLoader : MonoBehaviour
         {
             tier = BattleDifficultyTier.Boss,
             labelZh = "魔王",
-            locked = true,
-            deckStrengthIndex = 85,
-            spellRatioIndex = 80,
-            overLimitToleranceIndex = 90,
-            revealRatio = 0.35f,
-            scoreMultiplier = 1.28f,
-            useFixedDeck = true
+            locked = false,
+            deckStrengthIndex = 92,
+            spellRatioIndex = 85,
+            overLimitToleranceIndex = 96,
+            revealRatio = 0.28f,
+            scoreMultiplier = 1.38f,
+            overLimitBias = 2,
+            minSpellsBias = 2,
+            useFixedDeck = true,
+            fixedDeckOverride = new int[]
+            {
+                13, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 16, 18, 19, 22, -1, -2, -3
+            }
         }
     };
     private bool pendingUseFixedEnemyDeck;
     private int[] pendingFixedEnemyDeckCardIds;
     private int pendingEnemyOverLimitAllowance;
     private int pendingMinEnemySpellsInDeck;
+    private EnemyAiPlayStyle pendingEnemyAiPlayStyle = EnemyAiPlayStyle.Greedy;
+    private string pendingDifficultyLabelZh = BattleDifficultyRuntime.DefaultLabelZh;
 
     private void Start()
     {
@@ -206,10 +214,13 @@ public class SceneLoader : MonoBehaviour
         SceneManager.LoadScene(persistentSceneName);
     }
 
-    public void RefreshEnterBattleState()
+    public void RefreshEnterBattleState() => RefreshEnterBattleState(true);
+
+    /// <param name="reloadFromDisk">剛在本場景儲存牌組／改名後請傳 false，避免立刻從舊備份重載覆蓋記憶體。</param>
+    public void RefreshEnterBattleState(bool reloadFromDisk)
     {
-        if (playerData == null) playerData = UnityEngine.Object.FindFirstObjectByType<PlayerData>();
-        if (playerData != null) playerData.LoadPlayerData();
+        if (playerData == null) playerData = PlayerData.ResolveCanonical();
+        if (reloadFromDisk && playerData != null) playerData.LoadPlayerData();
 
         bool hasDeck = HasBuiltDeck();
         // IMPORTANT: only control explicitly assigned battle button.
@@ -273,11 +284,20 @@ public class SceneLoader : MonoBehaviour
         }
         if (manager != null)
         {
+            string label = string.IsNullOrWhiteSpace(pendingDifficultyLabelZh)
+                ? BattleLaunchContext.PeekDifficultyLabelZh()
+                : pendingDifficultyLabelZh;
+            if (!string.IsNullOrWhiteSpace(label))
+                BattleLaunchContext.SetPendingDifficultyLabelZh(label);
+            manager.ApplyLaunchContextDifficulty();
             manager.QueueRuntimeDifficultyConfig(
                 pendingUseFixedEnemyDeck,
                 pendingFixedEnemyDeckCardIds,
                 pendingEnemyOverLimitAllowance,
-                pendingMinEnemySpellsInDeck);
+                pendingMinEnemySpellsInDeck,
+                pendingEnemyAiPlayStyle,
+                label);
+            manager.CaptureBattleDifficultyForRecords();
         }
     }
 
@@ -304,8 +324,21 @@ public class SceneLoader : MonoBehaviour
         pendingFixedEnemyDeckCardIds = cfg.FixedDeckIds;
         pendingEnemyOverLimitAllowance = cfg.OverLimitAllowance;
         pendingMinEnemySpellsInDeck = cfg.MinSpellsInDeck;
+        pendingEnemyAiPlayStyle = MapDifficultyToEnemyAiPlayStyle(selectedDifficultyTier);
+        pendingDifficultyLabelZh = cfg.LabelZh;
+        BattleLaunchContext.SetPendingDifficultyLabelZh(pendingDifficultyLabelZh);
         HideBattlePreviewModal();
         StartBattleSceneLoad();
+    }
+
+    private static EnemyAiPlayStyle MapDifficultyToEnemyAiPlayStyle(BattleDifficultyTier tier)
+    {
+        switch (tier)
+        {
+            case BattleDifficultyTier.Hard: return EnemyAiPlayStyle.SchemingHard;
+            case BattleDifficultyTier.Boss: return EnemyAiPlayStyle.SchemingBoss;
+            default: return EnemyAiPlayStyle.Greedy;
+        }
     }
 
     private void OnBattlePreviewGiveUpClicked()
@@ -315,7 +348,11 @@ public class SceneLoader : MonoBehaviour
 
     private void EnsureBattlePreviewUi()
     {
-        if (battlePreviewOverlayRoot != null) return;
+        if (battlePreviewOverlayRoot != null)
+        {
+            if (battlePreviewLayoutBuilt == BattlePreviewLayoutVersion) return;
+            DestroyBattlePreviewUi();
+        }
 
         Canvas parentCanvas = null;
         if (enterBattleButton != null) parentCanvas = enterBattleButton.GetComponentInParent<Canvas>();
@@ -428,18 +465,20 @@ public class SceneLoader : MonoBehaviour
         chipRowRt.anchorMax = new Vector2(1f, 1f);
         chipRowRt.pivot = new Vector2(1f, 1f);
         chipRowRt.anchoredPosition = new Vector2(-34f, -102f);
-        chipRowRt.sizeDelta = new Vector2(538f, 28f);
+        chipRowRt.sizeDelta = new Vector2(360f, 28f);
         CreateHeaderChip(chipRowObj.transform, "ChipThreat", "戰況摘要", new Vector2(0f, 0f), 170f);
-        CreateHeaderChip(chipRowObj.transform, "ChipDeck", "敵方情報", new Vector2(184f, 0f), 170f);
-        CreateHeaderChip(chipRowObj.transform, "ChipDesign", "戰前準備", new Vector2(368f, 0f), 170f);
+        CreateHeaderChip(chipRowObj.transform, "ChipIntel", "作戰情報", new Vector2(200f, 0f), 150f);
+
+        const float previewFooterHeight = 100f;
+        const float previewContentBottom = previewFooterHeight + 12f;
 
         GameObject pressureBlockObj = new GameObject("PressureBlock", typeof(RectTransform), typeof(Image));
         pressureBlockObj.transform.SetParent(panelObj.transform, false);
         RectTransform pressureRt = pressureBlockObj.GetComponent<RectTransform>();
         pressureRt.anchorMin = new Vector2(0f, 0f);
-        pressureRt.anchorMax = new Vector2(0.34f, 1f);
-        pressureRt.offsetMin = new Vector2(34f, 132f);
-        pressureRt.offsetMax = new Vector2(-16f, -132f);
+        pressureRt.anchorMax = new Vector2(BattlePreviewIntelColumnStart, 1f);
+        pressureRt.offsetMin = new Vector2(34f, previewContentBottom);
+        pressureRt.offsetMax = new Vector2(-12f, -132f);
         Image pressureBg = pressureBlockObj.GetComponent<Image>();
         pressureBg.color = new Color(0.88f, 0.92f, 0.83f, 1f);
 
@@ -453,113 +492,130 @@ public class SceneLoader : MonoBehaviour
         Image pressureInnerBg = pressureInnerCardObj.GetComponent<Image>();
         pressureInnerBg.color = new Color(0.95f, 0.97f, 0.91f, 1f);
 
-        GameObject deckBlockObj = new GameObject("DeckBlock", typeof(RectTransform), typeof(Image));
+        GameObject deckBlockObj = new GameObject("IntelBlock", typeof(RectTransform), typeof(Image));
         deckBlockObj.transform.SetParent(panelObj.transform, false);
         RectTransform deckBlockRt = deckBlockObj.GetComponent<RectTransform>();
-        deckBlockRt.anchorMin = new Vector2(0.34f, 0f);
+        deckBlockRt.anchorMin = new Vector2(BattlePreviewIntelColumnStart, 0f);
         deckBlockRt.anchorMax = new Vector2(1f, 1f);
-        deckBlockRt.offsetMin = new Vector2(26f, 132f);
+        deckBlockRt.offsetMin = new Vector2(20f, previewContentBottom);
         deckBlockRt.offsetMax = new Vector2(-34f, -132f);
         Image deckBg = deckBlockObj.GetComponent<Image>();
         deckBg.color = new Color(0.9f, 0.93f, 0.86f, 1f);
 
-        GameObject deckSummaryCardObj = new GameObject("DeckSummaryCard", typeof(RectTransform), typeof(Image));
-        deckSummaryCardObj.transform.SetParent(deckBlockObj.transform, false);
-        RectTransform deckSummaryRt = deckSummaryCardObj.GetComponent<RectTransform>();
-        deckSummaryRt.anchorMin = new Vector2(0f, 1f);
-        deckSummaryRt.anchorMax = new Vector2(1f, 1f);
-        deckSummaryRt.pivot = new Vector2(0.5f, 1f);
-        deckSummaryRt.offsetMin = new Vector2(10f, -112f);
-        deckSummaryRt.offsetMax = new Vector2(-10f, -10f);
-        Image deckSummaryBg = deckSummaryCardObj.GetComponent<Image>();
-        deckSummaryBg.color = new Color(0.94f, 0.96f, 0.9f, 1f);
-
-        GameObject deckSummaryTmpObj = new GameObject("DeckSummaryLabel", typeof(RectTransform), typeof(TextMeshProUGUI));
-        deckSummaryTmpObj.transform.SetParent(deckSummaryCardObj.transform, false);
-        RectTransform deckSummaryTmpRt = deckSummaryTmpObj.GetComponent<RectTransform>();
-        deckSummaryTmpRt.anchorMin = new Vector2(0f, 0f);
-        deckSummaryTmpRt.anchorMax = new Vector2(1f, 1f);
-        deckSummaryTmpRt.offsetMin = new Vector2(16f, 10f);
-        deckSummaryTmpRt.offsetMax = new Vector2(-16f, -10f);
-        TextMeshProUGUI deckSummaryTmp = deckSummaryTmpObj.GetComponent<TextMeshProUGUI>();
-        if (battlePreviewFontAsset != null) deckSummaryTmp.font = battlePreviewFontAsset;
-        deckSummaryTmp.fontSize = 26f;
-        deckSummaryTmp.color = new Color(0.27f, 0.34f, 0.21f, 1f);
-        deckSummaryTmp.alignment = TextAlignmentOptions.MidlineLeft;
-        deckSummaryTmp.text = "揭露: 0/0 | 法術占比: 0%";
-        battlePreviewDeckSummaryText = deckSummaryTmp;
-
-        GameObject deckDetailCardObj = new GameObject("DeckDetailCard", typeof(RectTransform), typeof(Image));
-        deckDetailCardObj.transform.SetParent(deckBlockObj.transform, false);
-        RectTransform deckDetailRt = deckDetailCardObj.GetComponent<RectTransform>();
-        deckDetailRt.anchorMin = new Vector2(0f, 0f);
-        deckDetailRt.anchorMax = new Vector2(1f, 1f);
-        deckDetailRt.offsetMin = new Vector2(10f, 10f);
-        deckDetailRt.offsetMax = new Vector2(-10f, -116f);
-        Image deckDetailBg = deckDetailCardObj.GetComponent<Image>();
-        deckDetailBg.color = new Color(0.95f, 0.97f, 0.92f, 1f);
+        GameObject intelInnerCardObj = new GameObject("IntelInnerCard", typeof(RectTransform), typeof(Image));
+        intelInnerCardObj.transform.SetParent(deckBlockObj.transform, false);
+        RectTransform intelInnerRt = intelInnerCardObj.GetComponent<RectTransform>();
+        intelInnerRt.anchorMin = new Vector2(0f, 0f);
+        intelInnerRt.anchorMax = new Vector2(1f, 1f);
+        intelInnerRt.offsetMin = new Vector2(10f, 10f);
+        intelInnerRt.offsetMax = new Vector2(-10f, -10f);
+        intelInnerCardObj.GetComponent<Image>().color = new Color(0.95f, 0.97f, 0.92f, 1f);
 
         GameObject centerDividerObj = new GameObject("CenterDivider", typeof(RectTransform), typeof(Image));
         centerDividerObj.transform.SetParent(panelObj.transform, false);
         RectTransform centerDividerRt = centerDividerObj.GetComponent<RectTransform>();
-        centerDividerRt.anchorMin = new Vector2(0.34f, 0f);
-        centerDividerRt.anchorMax = new Vector2(0.34f, 1f);
+        centerDividerRt.anchorMin = new Vector2(BattlePreviewIntelColumnStart, 0f);
+        centerDividerRt.anchorMax = new Vector2(BattlePreviewIntelColumnStart, 1f);
         centerDividerRt.pivot = new Vector2(0.5f, 0.5f);
-        centerDividerRt.offsetMin = new Vector2(0f, 132f);
+        centerDividerRt.offsetMin = new Vector2(0f, previewContentBottom);
         centerDividerRt.offsetMax = new Vector2(2f, -132f);
-        Image centerDividerImg = centerDividerObj.GetComponent<Image>();
-        centerDividerImg.color = new Color(0.61f, 0.53f, 0.35f, 0.5f);
+        centerDividerObj.GetComponent<Image>().color = new Color(0.61f, 0.53f, 0.35f, 0.5f);
 
-        battlePreviewPressureText = CreatePreviewBlockText(pressureInnerCardObj.transform, "PressureText");
+        GameObject diffRailObj = new GameObject("DifficultyRail", typeof(RectTransform), typeof(Image), typeof(VerticalLayoutGroup));
+        diffRailObj.transform.SetParent(pressureInnerCardObj.transform, false);
+        RectTransform diffRailRt = diffRailObj.GetComponent<RectTransform>();
+        diffRailRt.anchorMin = new Vector2(0f, 0f);
+        diffRailRt.anchorMax = new Vector2(0f, 1f);
+        diffRailRt.pivot = new Vector2(0f, 0.5f);
+        diffRailRt.anchoredPosition = Vector2.zero;
+        diffRailRt.sizeDelta = new Vector2(BattlePreviewDifficultyRailWidthPx, 0f);
+        Image diffRailBg = diffRailObj.GetComponent<Image>();
+        diffRailBg.color = new Color(0.78f, 0.84f, 0.70f, 1f);
+        Outline diffRailOutline = diffRailObj.AddComponent<Outline>();
+        diffRailOutline.effectColor = new Color(0.32f, 0.40f, 0.26f, 0.85f);
+        diffRailOutline.effectDistance = new Vector2(2f, -2f);
+        VerticalLayoutGroup diffVlg = diffRailObj.GetComponent<VerticalLayoutGroup>();
+        diffVlg.spacing = 10f;
+        diffVlg.padding = new RectOffset(12, 12, 14, 14);
+        diffVlg.childAlignment = TextAnchor.UpperCenter;
+        diffVlg.childControlWidth = true;
+        diffVlg.childControlHeight = true;
+        diffVlg.childForceExpandWidth = true;
+        diffVlg.childForceExpandHeight = false;
+
+        GameObject diffTitleObj = new GameObject("DifficultyTitle", typeof(RectTransform), typeof(TextMeshProUGUI), typeof(LayoutElement));
+        diffTitleObj.transform.SetParent(diffRailObj.transform, false);
+        diffTitleObj.GetComponent<LayoutElement>().preferredHeight = 40f;
+        TextMeshProUGUI diffTitleTmp = diffTitleObj.GetComponent<TextMeshProUGUI>();
+        if (battlePreviewFontAsset != null) diffTitleTmp.font = battlePreviewFontAsset;
+        diffTitleTmp.text = "難度";
+        diffTitleTmp.fontSize = 30f;
+        diffTitleTmp.fontStyle = FontStyles.Bold;
+        diffTitleTmp.alignment = TextAlignmentOptions.Center;
+        diffTitleTmp.color = new Color(0.22f, 0.28f, 0.18f, 1f);
+
+        CreateDifficultyButtons(diffRailObj.transform);
+
+        GameObject summaryPaneObj = new GameObject("SummaryPane", typeof(RectTransform));
+        summaryPaneObj.transform.SetParent(pressureInnerCardObj.transform, false);
+        RectTransform summaryPaneRt = summaryPaneObj.GetComponent<RectTransform>();
+        summaryPaneRt.anchorMin = Vector2.zero;
+        summaryPaneRt.anchorMax = Vector2.one;
+        summaryPaneRt.offsetMin = new Vector2(BattlePreviewSummaryPaneLeftInsetPx, 8f);
+        summaryPaneRt.offsetMax = new Vector2(-8f, -8f);
+
+        battlePreviewPressureText = CreatePreviewBlockText(summaryPaneObj.transform, "PressureText");
         if (battlePreviewPressureText != null)
         {
             RectTransform pressureTextRt = battlePreviewPressureText.rectTransform;
-            pressureTextRt.offsetMin = new Vector2(20f, 180f);
-            pressureTextRt.offsetMax = new Vector2(-20f, -20f);
+            pressureTextRt.offsetMin = new Vector2(12f, 178f);
+            pressureTextRt.offsetMax = new Vector2(-12f, -8f);
+            battlePreviewPressureText.fontSize = 28f;
         }
-        CreatePressureMetricsChart(pressureInnerCardObj.transform);
-        battlePreviewDeckText = CreatePreviewScrollableText(deckDetailCardObj.transform, "DeckText");
-
-        battlePreviewDifficultyToggleButton = CreateModalButton(panelObj.transform, "DifficultyToggleButton", "敵方難度");
-        RectTransform diffToggleRt = battlePreviewDifficultyToggleButton.GetComponent<RectTransform>();
-        diffToggleRt.anchorMin = new Vector2(0f, 0f);
-        diffToggleRt.anchorMax = new Vector2(0f, 0f);
-        diffToggleRt.pivot = new Vector2(0f, 0f);
-        diffToggleRt.anchoredPosition = new Vector2(24f, 20f);
-        diffToggleRt.sizeDelta = new Vector2(280f, 90f);
-        battlePreviewDifficultyToggleButton.onClick.AddListener(ToggleDifficultyButtonsExpanded);
-
-        GameObject diffRowObj = new GameObject("DifficultyRow", typeof(RectTransform));
-        diffRowObj.transform.SetParent(panelObj.transform, false);
-        battlePreviewDifficultyRowRt = diffRowObj.GetComponent<RectTransform>();
-        battlePreviewDifficultyRowRt.anchorMin = new Vector2(0f, 0f);
-        battlePreviewDifficultyRowRt.anchorMax = new Vector2(0f, 0f);
-        battlePreviewDifficultyRowRt.pivot = new Vector2(0f, 0f);
-        battlePreviewDifficultyRowRt.anchoredPosition = new Vector2(314f, 20f);
-        battlePreviewDifficultyRowRt.sizeDelta = new Vector2(1020f, 90f);
-        CreateDifficultyButtons(battlePreviewDifficultyRowRt);
-        ApplyDifficultyButtonsExpandedState();
+        CreatePressureMetricsChart(summaryPaneObj.transform);
+        battlePreviewDeckText = CreatePreviewBlockText(intelInnerCardObj.transform, "IntelText");
 
         battlePreviewStartButton = CreateModalButton(panelObj.transform, "StartBattleButton", "開始對戰");
         RectTransform startRt = battlePreviewStartButton.GetComponent<RectTransform>();
-        startRt.anchorMin = new Vector2(1f, 0f);
-        startRt.anchorMax = new Vector2(1f, 0f);
-        startRt.pivot = new Vector2(1f, 0f);
-        startRt.anchoredPosition = new Vector2(-24f, 20f);
-        startRt.sizeDelta = new Vector2(280f, 90f);
+        startRt.anchorMin = new Vector2(0.5f, 0f);
+        startRt.anchorMax = new Vector2(0.5f, 0f);
+        startRt.pivot = new Vector2(0.5f, 0f);
+        startRt.anchoredPosition = new Vector2(150f, 16f);
+        startRt.sizeDelta = new Vector2(300f, 72f);
         battlePreviewStartButton.onClick.AddListener(OnBattlePreviewStartClicked);
 
         battlePreviewGiveUpButton = CreateModalButton(panelObj.transform, "GiveUpButton", "放棄");
         RectTransform giveUpRt = battlePreviewGiveUpButton.GetComponent<RectTransform>();
-        giveUpRt.anchorMin = new Vector2(1f, 0f);
-        giveUpRt.anchorMax = new Vector2(1f, 0f);
-        giveUpRt.pivot = new Vector2(1f, 0f);
-        giveUpRt.anchoredPosition = new Vector2(-320f, 20f);
-        giveUpRt.sizeDelta = new Vector2(280f, 90f);
+        giveUpRt.anchorMin = new Vector2(0.5f, 0f);
+        giveUpRt.anchorMax = new Vector2(0.5f, 0f);
+        giveUpRt.pivot = new Vector2(0.5f, 0f);
+        giveUpRt.anchoredPosition = new Vector2(-150f, 16f);
+        giveUpRt.sizeDelta = new Vector2(300f, 72f);
         battlePreviewGiveUpButton.onClick.AddListener(OnBattlePreviewGiveUpClicked);
 
         battlePreviewOverlayRoot = overlay;
+        battlePreviewLayoutBuilt = BattlePreviewLayoutVersion;
         battlePreviewOverlayRoot.SetActive(false);
+    }
+
+    private void DestroyBattlePreviewUi()
+    {
+        if (battlePreviewMetricAnimRoutine != null)
+        {
+            StopCoroutine(battlePreviewMetricAnimRoutine);
+            battlePreviewMetricAnimRoutine = null;
+        }
+        if (battlePreviewOverlayRoot != null)
+            Destroy(battlePreviewOverlayRoot);
+        battlePreviewOverlayRoot = null;
+        battlePreviewPressureText = null;
+        battlePreviewDeckText = null;
+        battlePreviewStartButton = null;
+        battlePreviewGiveUpButton = null;
+        battlePreviewMetricBarFills.Clear();
+        battlePreviewMetricValueTexts.Clear();
+        battlePreviewDifficultyButtons.Clear();
+        battlePreviewLayoutBuilt = 0;
     }
 
     private TextMeshProUGUI CreatePreviewBlockText(Transform parent, string objName)
@@ -580,86 +636,6 @@ public class SceneLoader : MonoBehaviour
         tmp.overflowMode = TextOverflowModes.Overflow;
         tmp.richText = true;
         tmp.lineSpacing = 8f;
-        return tmp;
-    }
-
-    private TextMeshProUGUI CreatePreviewScrollableText(Transform parent, string objName)
-    {
-        GameObject scrollObj = new GameObject(objName + "ScrollRect", typeof(RectTransform), typeof(ScrollRect));
-        scrollObj.transform.SetParent(parent, false);
-        RectTransform scrollRt = scrollObj.GetComponent<RectTransform>();
-        scrollRt.anchorMin = new Vector2(0f, 0f);
-        scrollRt.anchorMax = new Vector2(1f, 1f);
-        scrollRt.offsetMin = new Vector2(20f, 20f);
-        scrollRt.offsetMax = new Vector2(-20f, -20f);
-
-        GameObject viewportObj = new GameObject(objName + "Viewport", typeof(RectTransform), typeof(RectMask2D));
-        viewportObj.transform.SetParent(scrollObj.transform, false);
-        RectTransform viewportRt = viewportObj.GetComponent<RectTransform>();
-        viewportRt.anchorMin = new Vector2(0f, 0f);
-        viewportRt.anchorMax = new Vector2(1f, 1f);
-        viewportRt.offsetMin = new Vector2(0f, 0f);
-        viewportRt.offsetMax = new Vector2(0f, 0f);
-
-        GameObject contentObj = new GameObject(objName + "Content", typeof(RectTransform), typeof(TextMeshProUGUI));
-        contentObj.transform.SetParent(viewportObj.transform, false);
-        RectTransform contentRt = contentObj.GetComponent<RectTransform>();
-        contentRt.anchorMin = new Vector2(0f, 1f);
-        contentRt.anchorMax = new Vector2(1f, 1f);
-        contentRt.pivot = new Vector2(0.5f, 1f);
-        contentRt.anchoredPosition = Vector2.zero;
-        contentRt.sizeDelta = new Vector2(0f, 0f);
-        TextMeshProUGUI tmp = contentObj.GetComponent<TextMeshProUGUI>();
-        if (battlePreviewFontAsset != null) tmp.font = battlePreviewFontAsset;
-        tmp.fontSize = 30f;
-        tmp.alignment = TextAlignmentOptions.TopLeft;
-        tmp.color = new Color(0.2f, 0.17f, 0.12f, 1f);
-        tmp.enableWordWrapping = true;
-        tmp.overflowMode = TextOverflowModes.Overflow;
-        tmp.richText = true;
-        tmp.lineSpacing = 8f;
-
-        ScrollRect scrollRect = scrollObj.GetComponent<ScrollRect>();
-        scrollRect.horizontal = false;
-        scrollRect.movementType = ScrollRect.MovementType.Clamped;
-        scrollRect.viewport = viewportRt;
-        scrollRect.content = contentRt;
-        scrollRect.scrollSensitivity = 24f;
-        battlePreviewDeckScrollRect = scrollRect;
-
-        // Match DeckManager scrollbar layout/feel for consistency.
-        GameObject scrollbarObj = new GameObject("RuntimeVerticalScrollbar", typeof(RectTransform), typeof(Image), typeof(Scrollbar));
-        scrollbarObj.transform.SetParent(viewportObj.transform, false);
-        RectTransform barRt = scrollbarObj.GetComponent<RectTransform>();
-        barRt.anchorMin = new Vector2(1f, 0f);
-        barRt.anchorMax = new Vector2(1f, 1f);
-        barRt.pivot = new Vector2(1f, 0.5f);
-        barRt.sizeDelta = new Vector2(18f, 0f);
-        barRt.anchoredPosition = new Vector2(-1f, 0f);
-        scrollbarObj.transform.SetAsLastSibling();
-        Image barImg = scrollbarObj.GetComponent<Image>();
-        barImg.color = new Color(0.42f, 0.31f, 0.28f, 0.45f);
-        Scrollbar scrollbar = scrollbarObj.GetComponent<Scrollbar>();
-        scrollbar.direction = Scrollbar.Direction.BottomToTop;
-
-        GameObject handleObj = new GameObject("Handle", typeof(RectTransform), typeof(Image));
-        handleObj.transform.SetParent(scrollbarObj.transform, false);
-        RectTransform handleRt = handleObj.GetComponent<RectTransform>();
-        handleRt.anchorMin = new Vector2(0f, 0.75f);
-        handleRt.anchorMax = new Vector2(1f, 1f);
-        handleRt.offsetMin = new Vector2(2f, 2f);
-        handleRt.offsetMax = new Vector2(-2f, -2f);
-        Image handleImg = handleObj.GetComponent<Image>();
-        handleImg.color = new Color(0.96f, 0.92f, 0.85f, 0.95f);
-
-        scrollbar.targetGraphic = handleImg;
-        scrollbar.handleRect = handleRt;
-        scrollbar.value = 1f;
-        scrollbar.size = 0.2f;
-        scrollRect.verticalScrollbar = scrollbar;
-        scrollRect.verticalScrollbarVisibility = ScrollRect.ScrollbarVisibility.Permanent;
-        scrollRect.verticalScrollbarSpacing = 0f;
-
         return tmp;
     }
 
@@ -726,91 +702,112 @@ public class SceneLoader : MonoBehaviour
         battlePreviewMetricBarFills.Clear();
         battlePreviewMetricValueTexts.Clear();
 
-        GameObject chartObj = new GameObject("PressureMetricsChart", typeof(RectTransform));
-        chartObj.transform.SetParent(parent, false);
-        RectTransform chartRt = chartObj.GetComponent<RectTransform>();
-        chartRt.anchorMin = new Vector2(0f, 0f);
-        chartRt.anchorMax = new Vector2(1f, 0f);
-        chartRt.pivot = new Vector2(0.5f, 0f);
-        chartRt.anchoredPosition = new Vector2(0f, 12f);
-        chartRt.sizeDelta = new Vector2(-26f, 206f);
+        GameObject panelObj = new GameObject("PressureGaugesPanel", typeof(RectTransform), typeof(Image), typeof(VerticalLayoutGroup));
+        panelObj.transform.SetParent(parent, false);
+        RectTransform panelRt = panelObj.GetComponent<RectTransform>();
+        panelRt.anchorMin = new Vector2(0f, 0f);
+        panelRt.anchorMax = new Vector2(1f, 0f);
+        panelRt.pivot = new Vector2(0.5f, 0f);
+        panelRt.anchoredPosition = new Vector2(0f, 10f);
+        panelRt.sizeDelta = new Vector2(-16f, 168f);
+        Image panelBg = panelObj.GetComponent<Image>();
+        panelBg.color = new Color(0.36f, 0.42f, 0.30f, 0.22f);
+        Outline panelOutline = panelObj.AddComponent<Outline>();
+        panelOutline.effectColor = new Color(0.55f, 0.62f, 0.45f, 0.55f);
+        panelOutline.effectDistance = new Vector2(1f, -1f);
+        VerticalLayoutGroup panelVlg = panelObj.GetComponent<VerticalLayoutGroup>();
+        panelVlg.spacing = 12f;
+        panelVlg.padding = new RectOffset(14, 14, 12, 12);
+        panelVlg.childAlignment = TextAnchor.UpperLeft;
+        panelVlg.childControlWidth = true;
+        panelVlg.childControlHeight = true;
+        panelVlg.childForceExpandWidth = true;
+        panelVlg.childForceExpandHeight = false;
 
-        CreateOneMetricBar(chartRt, "Threat", "壓制", 0, new Color(0.50f, 0.82f, 0.50f, 1f));
-        CreateOneMetricBar(chartRt, "Burst", "爆發", 1, new Color(1f, 0.80f, 0.42f, 1f));
-        CreateOneMetricBar(chartRt, "Tempo", "節奏", 2, new Color(1f, 0.58f, 0.36f, 1f));
+        GameObject headerObj = new GameObject("GaugeHeader", typeof(RectTransform), typeof(TextMeshProUGUI), typeof(LayoutElement));
+        headerObj.transform.SetParent(panelObj.transform, false);
+        headerObj.GetComponent<LayoutElement>().preferredHeight = 28f;
+        TextMeshProUGUI headerTmp = headerObj.GetComponent<TextMeshProUGUI>();
+        if (battlePreviewFontAsset != null) headerTmp.font = battlePreviewFontAsset;
+        headerTmp.text = "壓力指標";
+        headerTmp.fontSize = 22f;
+        headerTmp.fontStyle = FontStyles.Bold;
+        headerTmp.color = new Color(0.88f, 0.94f, 0.82f, 1f);
+        headerTmp.alignment = TextAlignmentOptions.MidlineLeft;
+
+        CreateOnePressureGaugeRow(panelObj.transform, "Threat", "壓制", new Color(0.55f, 0.88f, 0.58f, 1f));
+        CreateOnePressureGaugeRow(panelObj.transform, "Burst", "爆發", new Color(1f, 0.78f, 0.38f, 1f));
+        CreateOnePressureGaugeRow(panelObj.transform, "Tempo", "節奏", new Color(1f, 0.62f, 0.34f, 1f));
     }
 
-    private void CreateOneMetricBar(RectTransform parent, string key, string label, int index, Color fillColor)
+    private void CreateOnePressureGaugeRow(Transform parent, string key, string label, Color fillColor)
     {
-        float blockW = 140f;
-        float spacing = 18f;
-        float x = index * (blockW + spacing);
+        GameObject rowObj = new GameObject(key + "GaugeRow", typeof(RectTransform), typeof(HorizontalLayoutGroup), typeof(LayoutElement));
+        rowObj.transform.SetParent(parent, false);
+        LayoutElement rowLe = rowObj.GetComponent<LayoutElement>();
+        rowLe.preferredHeight = 44f;
+        rowLe.minHeight = 40f;
+        HorizontalLayoutGroup rowHlg = rowObj.GetComponent<HorizontalLayoutGroup>();
+        rowHlg.spacing = 10f;
+        rowHlg.padding = new RectOffset(0, 0, 2, 2);
+        rowHlg.childAlignment = TextAnchor.MiddleLeft;
+        rowHlg.childControlWidth = true;
+        rowHlg.childControlHeight = true;
+        rowHlg.childForceExpandWidth = false;
+        rowHlg.childForceExpandHeight = true;
 
-        GameObject blockObj = new GameObject(key + "MetricBlock", typeof(RectTransform));
-        blockObj.transform.SetParent(parent, false);
-        RectTransform blockRt = blockObj.GetComponent<RectTransform>();
-        blockRt.anchorMin = new Vector2(0f, 0f);
-        blockRt.anchorMax = new Vector2(0f, 1f);
-        blockRt.pivot = new Vector2(0f, 0f);
-        blockRt.anchoredPosition = new Vector2(x, 0f);
-        blockRt.sizeDelta = new Vector2(blockW, 0f);
-
-        GameObject frameObj = new GameObject(key + "BarFrame", typeof(RectTransform), typeof(Image));
-        frameObj.transform.SetParent(blockObj.transform, false);
-        RectTransform frameRt = frameObj.GetComponent<RectTransform>();
-        frameRt.anchorMin = new Vector2(0.5f, 0f);
-        frameRt.anchorMax = new Vector2(0.5f, 1f);
-        frameRt.pivot = new Vector2(0.5f, 0f);
-        frameRt.anchoredPosition = new Vector2(0f, 30f);
-        frameRt.sizeDelta = new Vector2(58f, -64f);
-        Image frameImg = frameObj.GetComponent<Image>();
-        frameImg.color = new Color(0.82f, 0.78f, 0.68f, 1f);
-        frameImg.type = Image.Type.Sliced;
-
-        GameObject fillObj = new GameObject(key + "BarFill", typeof(RectTransform), typeof(Image));
-        fillObj.transform.SetParent(frameObj.transform, false);
-        RectTransform fillRt = fillObj.GetComponent<RectTransform>();
-        fillRt.anchorMin = new Vector2(0f, 0f);
-        fillRt.anchorMax = new Vector2(1f, 0f);
-        fillRt.pivot = new Vector2(0.5f, 0f);
-        fillRt.offsetMin = new Vector2(4f, 4f);
-        fillRt.offsetMax = new Vector2(-4f, 4f);
-        fillRt.sizeDelta = new Vector2(0f, 1f);
-        Image fillImg = fillObj.GetComponent<Image>();
-        fillImg.color = fillColor;
-        fillImg.type = Image.Type.Sliced;
-        battlePreviewMetricBarFills.Add(fillImg);
-
-        GameObject valueObj = new GameObject(key + "ValueText", typeof(RectTransform), typeof(TextMeshProUGUI));
-        valueObj.transform.SetParent(blockObj.transform, false);
-        RectTransform valueRt = valueObj.GetComponent<RectTransform>();
-        valueRt.anchorMin = new Vector2(0f, 1f);
-        valueRt.anchorMax = new Vector2(1f, 1f);
-        valueRt.pivot = new Vector2(0.5f, 1f);
-        valueRt.anchoredPosition = new Vector2(0f, 0f);
-        valueRt.sizeDelta = new Vector2(0f, 32f);
-        TextMeshProUGUI valueTmp = valueObj.GetComponent<TextMeshProUGUI>();
-        if (battlePreviewFontAsset != null) valueTmp.font = battlePreviewFontAsset;
-        valueTmp.text = "0";
-        valueTmp.fontSize = 21f;
-        valueTmp.alignment = TextAlignmentOptions.Center;
-        valueTmp.color = new Color(0.24f, 0.2f, 0.15f, 1f);
-        battlePreviewMetricValueTexts.Add(valueTmp);
-
-        GameObject labelObj = new GameObject(key + "LabelText", typeof(RectTransform), typeof(TextMeshProUGUI));
-        labelObj.transform.SetParent(blockObj.transform, false);
-        RectTransform labelRt = labelObj.GetComponent<RectTransform>();
-        labelRt.anchorMin = new Vector2(0f, 0f);
-        labelRt.anchorMax = new Vector2(1f, 0f);
-        labelRt.pivot = new Vector2(0.5f, 0f);
-        labelRt.anchoredPosition = new Vector2(0f, 2f);
-        labelRt.sizeDelta = new Vector2(0f, 28f);
+        GameObject labelObj = new GameObject(key + "Label", typeof(RectTransform), typeof(TextMeshProUGUI), typeof(LayoutElement));
+        labelObj.transform.SetParent(rowObj.transform, false);
+        labelObj.GetComponent<LayoutElement>().preferredWidth = 52f;
         TextMeshProUGUI labelTmp = labelObj.GetComponent<TextMeshProUGUI>();
         if (battlePreviewFontAsset != null) labelTmp.font = battlePreviewFontAsset;
         labelTmp.text = label;
-        labelTmp.fontSize = 19f;
-        labelTmp.alignment = TextAlignmentOptions.Center;
-        labelTmp.color = new Color(0.26f, 0.33f, 0.2f, 1f);
+        labelTmp.fontSize = 24f;
+        labelTmp.fontStyle = FontStyles.Bold;
+        labelTmp.alignment = TextAlignmentOptions.MidlineLeft;
+        labelTmp.color = new Color(0.90f, 0.95f, 0.86f, 1f);
+
+        GameObject trackObj = new GameObject(key + "Track", typeof(RectTransform), typeof(Image), typeof(LayoutElement));
+        trackObj.transform.SetParent(rowObj.transform, false);
+        LayoutElement trackLe = trackObj.GetComponent<LayoutElement>();
+        trackLe.flexibleWidth = 1f;
+        trackLe.preferredHeight = 28f;
+        trackLe.minHeight = 28f;
+        Image trackImg = trackObj.GetComponent<Image>();
+        trackImg.color = new Color(0.18f, 0.20f, 0.14f, 0.55f);
+
+        GameObject fillObj = new GameObject(key + "Fill", typeof(RectTransform), typeof(Image));
+        fillObj.transform.SetParent(trackObj.transform, false);
+        RectTransform fillRt = fillObj.GetComponent<RectTransform>();
+        fillRt.anchorMin = Vector2.zero;
+        fillRt.anchorMax = new Vector2(0f, 1f);
+        fillRt.pivot = new Vector2(0f, 0.5f);
+        fillRt.offsetMin = new Vector2(3f, 4f);
+        fillRt.offsetMax = new Vector2(-3f, -4f);
+        Image fillImg = fillObj.GetComponent<Image>();
+        fillImg.color = fillColor;
+        battlePreviewMetricBarFills.Add(fillImg);
+
+        GameObject shineObj = new GameObject(key + "Shine", typeof(RectTransform), typeof(Image));
+        shineObj.transform.SetParent(fillObj.transform, false);
+        RectTransform shineRt = shineObj.GetComponent<RectTransform>();
+        shineRt.anchorMin = new Vector2(0f, 0.55f);
+        shineRt.anchorMax = new Vector2(1f, 1f);
+        shineRt.offsetMin = new Vector2(2f, 0f);
+        shineRt.offsetMax = new Vector2(-2f, -2f);
+        shineObj.GetComponent<Image>().color = new Color(1f, 1f, 1f, 0.28f);
+
+        GameObject valueObj = new GameObject(key + "Value", typeof(RectTransform), typeof(TextMeshProUGUI), typeof(LayoutElement));
+        valueObj.transform.SetParent(rowObj.transform, false);
+        valueObj.GetComponent<LayoutElement>().preferredWidth = 48f;
+        TextMeshProUGUI valueTmp = valueObj.GetComponent<TextMeshProUGUI>();
+        if (battlePreviewFontAsset != null) valueTmp.font = battlePreviewFontAsset;
+        valueTmp.text = "0";
+        valueTmp.fontSize = 26f;
+        valueTmp.fontStyle = FontStyles.Bold;
+        valueTmp.alignment = TextAlignmentOptions.MidlineRight;
+        valueTmp.color = fillColor;
+        battlePreviewMetricValueTexts.Add(valueTmp);
     }
 
     private void RefreshBattlePreviewBodyText()
@@ -821,9 +818,9 @@ public class SceneLoader : MonoBehaviour
         EnsureCardStoreLoadedForPreview();
 
         BattleDifficultyConfig cfg = BuildDifficultyConfig(selectedDifficultyTier);
+        EnemyAiPlayStyle aiStyle = MapDifficultyToEnemyAiPlayStyle(selectedDifficultyTier);
         int playerDeckCount = playerData != null ? Mathf.Max(1, playerData.GetSelectedDeckTotalCount()) : 20;
         List<int> predictedDeck = BuildPredictedEnemyDeckKeys(playerDeckCount, cfg);
-        int revealCount = Mathf.Clamp(Mathf.FloorToInt(predictedDeck.Count * cfg.RevealRatio), 0, predictedDeck.Count);
 
         float threat = Mathf.Clamp((30f + cfg.OverLimitAllowance * 5.5f + (cfg.UseFixedDeck ? 8f : 0f)) * cfg.ScoreMultiplier, 0f, 100f);
         float burst = Mathf.Clamp((24f + CountSpellCards(predictedDeck) * 3.8f + cfg.MinSpellsInDeck * 5f) * cfg.ScoreMultiplier, 0f, 100f);
@@ -836,82 +833,107 @@ public class SceneLoader : MonoBehaviour
             _ => "Low"
         };
 
+        int total = Mathf.Max(1, predictedDeck.Count);
+        int spellCount = CountSpellCards(predictedDeck);
+        int spellRatio = Mathf.Clamp(Mathf.RoundToInt((spellCount * 100f) / total), 0, 100);
+
         StringBuilder pressureSb = new StringBuilder(512);
-        pressureSb.AppendLine("<size=120%><b>戰況摘要</b></size>");
-        pressureSb.AppendLine($"<size=112%><b>整體壓力等級: {MapTierToZhSimple(tier)}</b></size>");
-        pressureSb.AppendLine($"<color=#43573A>敵方難度: {cfg.LabelZh}</color>");
-        pressureSb.AppendLine($"<color=#6C533D>設計指數 - 牌組:{cfg.DeckStrengthIndex} 法術:{cfg.SpellRatioIndex} 超標:{cfg.OverLimitToleranceIndex}</color>");
+        pressureSb.AppendLine($"<size=112%><b>整體壓力: {MapTierToZhSimple(tier)}</b></size>");
+        pressureSb.AppendLine($"<color=#43573A>目前選擇: {cfg.LabelZh}</color>");
+        pressureSb.AppendLine($"<color=#6C533D>AI: {GetEnemyAiOneLinerZh(aiStyle)}</color>");
+        pressureSb.AppendLine($"<color=#6C533D>牌庫 {playerDeckCount} 張 · 法術至少 {cfg.MinSpellsInDeck} · 超額容許 ~{cfg.OverLimitAllowance}</color>");
         battlePreviewPressureText.text = SafePreviewText(pressureSb.ToString());
         RefreshPressureMetricChart(threat, burst, tempo);
 
-        StringBuilder deckSb = new StringBuilder(1024);
-        deckSb.AppendLine("<size=120%><b>詳細情報</b></size>");
-        deckSb.AppendLine("<size=112%><b>敵方牌組陣容</b></size>");
-        deckSb.AppendLine("<color=#43573A>可能出現的牌種</color>");
-        deckSb.AppendLine($"已揭露 <b>{revealCount}</b> / <b>{predictedDeck.Count}</b> 張");
-        deckSb.AppendLine("<color=#6C533D>* 以下為戰前情報, 實戰可能因抽牌順序不同而變化.</color>");
-        deckSb.AppendLine();
-
-        Dictionary<int, int> revealCounts = new Dictionary<int, int>();
-        for (int i = 0; i < revealCount; i++)
-        {
-            int key = predictedDeck[i];
-            if (!revealCounts.ContainsKey(key)) revealCounts[key] = 0;
-            revealCounts[key]++;
-        }
-        foreach (var kv in revealCounts)
-        {
-            deckSb.AppendLine(BuildEnemyDeckRowText(kv.Value, SafePreviewText(ResolveCardNameForPreview(kv.Key))));
-        }
-        int hiddenCount = predictedDeck.Count - revealCount;
-        if (hiddenCount > 0)
-            deckSb.AppendLine(BuildEnemyDeckRowText(hiddenCount, "??? (未揭露)"));
-
+        StringBuilder deckSb = new StringBuilder(640);
+        deckSb.AppendLine("<size=120%><b>作戰情報</b></size>");
+        deckSb.AppendLine($"<color=#43573A><b>出牌風格</b></color>  {GetEnemyAiBriefZh(aiStyle)}");
+        deckSb.AppendLine($"<color=#43573A><b>牌庫規模</b></color>  與你的牌組相同 ({playerDeckCount} 張)");
+        deckSb.AppendLine(
+            $"<color=#43573A><b>構築傾向</b></color>  法術至少 {cfg.MinSpellsInDeck} 張, 構築允許超過 30 張上限約 {cfg.OverLimitAllowance} 張");
+        deckSb.AppendLine($"<color=#6C533D>實戰牌組法術約 {spellRatio}%</color>");
         battlePreviewDeckText.text = SafePreviewText(deckSb.ToString());
-        if (battlePreviewDeckSummaryText != null)
-        {
-            int total = Mathf.Max(1, predictedDeck.Count);
-            int spellCount = CountSpellCards(predictedDeck);
-            int spellRatio = Mathf.Clamp(Mathf.RoundToInt((spellCount * 100f) / total), 0, 100);
-            battlePreviewDeckSummaryText.text = $"揭露: <b>{revealCount}</b>/<b>{predictedDeck.Count}</b>   法術占比: <b>{spellRatio}%</b>";
-        }
-        UpdateDeckScrollContentHeight();
-        if (battlePreviewDeckScrollRect != null)
-            battlePreviewDeckScrollRect.verticalNormalizedPosition = 1f;
         RefreshDifficultyButtonVisuals();
-    }
-
-    private void UpdateDeckScrollContentHeight()
-    {
-        if (battlePreviewDeckText == null || battlePreviewDeckScrollRect == null) return;
-        RectTransform contentRt = battlePreviewDeckText.rectTransform;
-        RectTransform viewportRt = battlePreviewDeckScrollRect.viewport;
-        if (contentRt == null || viewportRt == null) return;
-
-        Canvas.ForceUpdateCanvases();
-        battlePreviewDeckText.ForceMeshUpdate();
-        float preferred = Mathf.Max(0f, battlePreviewDeckText.preferredHeight);
-        float viewportH = Mathf.Max(0f, viewportRt.rect.height);
-
-        // Keep a small bottom breathing space; never smaller than viewport.
-        float targetH = Mathf.Max(viewportH + 4f, preferred + 28f);
-        Vector2 size = contentRt.sizeDelta;
-        size.y = targetH;
-        contentRt.sizeDelta = size;
-        LayoutRebuilder.ForceRebuildLayoutImmediate(contentRt);
     }
 
     private List<int> BuildPredictedEnemyDeckKeys(int targetCount, BattleDifficultyConfig cfg)
     {
         List<int> result = new List<int>(Mathf.Max(1, targetCount));
-        int[] sourceDeck = cfg.FixedDeckIds != null && cfg.FixedDeckIds.Length > 0
-            ? cfg.FixedDeckIds
-            : previewFixedEnemyDeckCardIds;
+        int[] sourceDeck = ResolveEnemySourceDeckKeys(cfg);
         if (!cfg.UseFixedDeck || sourceDeck == null || sourceDeck.Length == 0)
             return result;
         for (int i = 0; i < targetCount; i++)
             result.Add(sourceDeck[i % sourceDeck.Length]);
         return result;
+    }
+
+    private int[] ResolveEnemySourceDeckKeys(BattleDifficultyConfig cfg)
+    {
+        if (!cfg.UseFixedDeck) return null;
+        if (cfg.FixedDeckIds != null && cfg.FixedDeckIds.Length > 0)
+            return cfg.FixedDeckIds;
+        return previewFixedEnemyDeckCardIds;
+    }
+
+    private static List<int> BuildSortedUniquePoolKeys(int[] sourceDeck)
+    {
+        var keys = new List<int>();
+        if (sourceDeck == null || sourceDeck.Length == 0) return keys;
+        var seen = new HashSet<int>();
+        for (int i = 0; i < sourceDeck.Length; i++)
+        {
+            int key = sourceDeck[i];
+            if (seen.Add(key)) keys.Add(key);
+        }
+        keys.Sort(CompareEnemyPoolKey);
+        return keys;
+    }
+
+    private static int CompareEnemyPoolKey(int a, int b)
+    {
+        bool spellA = DeckCardId.IsSpellKey(a);
+        bool spellB = DeckCardId.IsSpellKey(b);
+        if (spellA != spellB) return spellA ? -1 : 1;
+        return a.CompareTo(b);
+    }
+
+    private static Dictionary<int, int> CountSourceDeckKeys(int[] sourceDeck)
+    {
+        var counts = new Dictionary<int, int>();
+        if (sourceDeck == null) return counts;
+        for (int i = 0; i < sourceDeck.Length; i++)
+        {
+            int key = sourceDeck[i];
+            if (!counts.ContainsKey(key)) counts[key] = 0;
+            counts[key]++;
+        }
+        return counts;
+    }
+
+    private static string GetEnemyAiOneLinerZh(EnemyAiPlayStyle style)
+    {
+        switch (style)
+        {
+            case EnemyAiPlayStyle.SchemingHard:
+                return "保留高稀有卡, 待時機出牌";
+            case EnemyAiPlayStyle.SchemingBoss:
+                return "積極囤牌, 高稀有卡更晚出手";
+            default:
+                return "有牌可出即依優先度打出";
+        }
+    }
+
+    private static string GetEnemyAiBriefZh(EnemyAiPlayStyle style)
+    {
+        switch (style)
+        {
+            case EnemyAiPlayStyle.SchemingHard:
+                return "困難 AI: 傾向保留 SR 以上卡牌, 在場面有利或需要斬殺時才打出.";
+            case EnemyAiPlayStyle.SchemingBoss:
+                return "魔王 AI: 傾向保留 R 以上卡牌, 囤牌條件比困難更嚴, 回合壓力更大.";
+            default:
+                return "標準 AI: 每回合在可出牌中選評分最高者立即打出.";
+        }
     }
 
     private static int CountSpellCards(List<int> keys)
@@ -1013,12 +1035,16 @@ public class SceneLoader : MonoBehaviour
     private void CreateOneDifficultyButton(Transform parent, string objName, string label, BattleDifficultyTier tier, int idx)
     {
         Button btn = CreateModalButton(parent, objName, label);
+        LayoutElement le = btn.gameObject.AddComponent<LayoutElement>();
+        le.preferredHeight = 68f;
+        le.minHeight = 60f;
         RectTransform rt = btn.GetComponent<RectTransform>();
-        rt.anchorMin = new Vector2(0f, 0f);
-        rt.anchorMax = new Vector2(0f, 0f);
-        rt.pivot = new Vector2(0f, 0f);
-        rt.anchoredPosition = new Vector2(idx * 198f, 0f);
-        rt.sizeDelta = new Vector2(186f, 90f);
+        rt.anchorMin = new Vector2(0f, 1f);
+        rt.anchorMax = new Vector2(1f, 1f);
+        rt.pivot = new Vector2(0.5f, 1f);
+        rt.sizeDelta = new Vector2(0f, 68f);
+        TextMeshProUGUI txt = btn.GetComponentInChildren<TextMeshProUGUI>();
+        if (txt != null) txt.fontSize = 34f;
         bool locked = IsTierLocked(tier);
         btn.interactable = !locked;
         btn.onClick.AddListener(() =>
@@ -1026,20 +1052,9 @@ public class SceneLoader : MonoBehaviour
             if (locked) return;
             selectedDifficultyTier = tier;
             RefreshBattlePreviewBodyText();
+            RefreshDifficultyButtonVisuals();
         });
         battlePreviewDifficultyButtons.Add(btn);
-    }
-
-    private void ToggleDifficultyButtonsExpanded()
-    {
-        difficultyButtonsExpanded = !difficultyButtonsExpanded;
-        ApplyDifficultyButtonsExpandedState();
-    }
-
-    private void ApplyDifficultyButtonsExpandedState()
-    {
-        if (battlePreviewDifficultyRowRt != null)
-            battlePreviewDifficultyRowRt.gameObject.SetActive(difficultyButtonsExpanded);
     }
 
     private void RefreshDifficultyButtonVisuals()
@@ -1050,26 +1065,55 @@ public class SceneLoader : MonoBehaviour
             if (btn == null) continue;
             BattleDifficultyTier tier = (BattleDifficultyTier)i;
             bool active = tier == selectedDifficultyTier;
+            bool locked = IsTierLocked(tier);
             Image img = btn.GetComponent<Image>();
             if (img != null)
             {
-                bool locked = IsTierLocked(tier);
                 if (locked) img.color = new Color(0.58f, 0.58f, 0.58f, 0.9f);
-                else img.color = active ? Color.white : new Color(0.4431373f, 0.28235295f, 0.24705884f, 1f);
+                else if (active) img.color = Color.white;
+                else img.color = GetDifficultyTierAccentColor(tier);
             }
             TextMeshProUGUI txt = btn.GetComponentInChildren<TextMeshProUGUI>();
             if (txt != null)
             {
-                bool locked = IsTierLocked(tier);
                 if (locked) txt.color = new Color(0.2f, 0.2f, 0.2f, 1f);
-                else txt.color = active ? Color.black : Color.white;
+                else txt.color = active ? new Color(0.12f, 0.1f, 0.08f, 1f) : Color.white;
+                if (active) txt.fontStyle = FontStyles.Bold;
+                else txt.fontStyle = FontStyles.Normal;
+                txt.fontSize = active ? 36f : 34f;
+            }
+
+            Outline outline = btn.GetComponent<Outline>();
+            if (active && !locked)
+            {
+                if (outline == null) outline = btn.gameObject.AddComponent<Outline>();
+                outline.effectColor = new Color(0.18f, 0.14f, 0.10f, 0.95f);
+                outline.effectDistance = new Vector2(3f, -3f);
+                outline.enabled = true;
+            }
+            else if (outline != null)
+            {
+                outline.enabled = false;
             }
         }
-        if (battlePreviewDifficultyToggleButton != null)
+    }
+
+    private static Color GetDifficultyTierAccentColor(BattleDifficultyTier tier)
+    {
+        switch (tier)
         {
-            TextMeshProUGUI txt = battlePreviewDifficultyToggleButton.GetComponentInChildren<TextMeshProUGUI>();
-            if (txt != null)
-                txt.text = difficultyButtonsExpanded ? "敵方難度▼" : "敵方難度►";
+            case BattleDifficultyTier.Intro:
+                return new Color(0.42f, 0.72f, 0.48f, 1f);
+            case BattleDifficultyTier.Easy:
+                return new Color(0.52f, 0.78f, 0.42f, 1f);
+            case BattleDifficultyTier.Normal:
+                return new Color(0.92f, 0.76f, 0.28f, 1f);
+            case BattleDifficultyTier.Hard:
+                return new Color(0.95f, 0.55f, 0.28f, 1f);
+            case BattleDifficultyTier.Boss:
+                return new Color(0.82f, 0.28f, 0.32f, 1f);
+            default:
+                return new Color(0.4431373f, 0.28235295f, 0.24705884f, 1f);
         }
     }
 
@@ -1080,7 +1124,7 @@ public class SceneLoader : MonoBehaviour
         EnsureProfileExists(BattleDifficultyTier.Easy, "簡單");
         EnsureProfileExists(BattleDifficultyTier.Normal, "普通");
         EnsureProfileExists(BattleDifficultyTier.Hard, "困難", false);
-        EnsureProfileExists(BattleDifficultyTier.Boss, "魔王", true);
+        EnsureProfileExists(BattleDifficultyTier.Boss, "魔王", false);
     }
 
     private void EnsureProfileExists(BattleDifficultyTier tier, string label, bool locked = false)
@@ -1205,7 +1249,7 @@ public class SceneLoader : MonoBehaviour
                 : null;
             if (fillRt != null)
             {
-                fillRt.anchorMax = new Vector2(1f, 0f);
+                fillRt.anchorMax = new Vector2(0f, 1f);
             }
             if (battlePreviewMetricValueTexts[i] != null)
             {
@@ -1230,7 +1274,7 @@ public class SceneLoader : MonoBehaviour
                     : null;
                 if (fillRt != null)
                 {
-                    fillRt.anchorMax = new Vector2(1f, current / 100f);
+                    fillRt.anchorMax = new Vector2(current / 100f, 1f);
                 }
                 if (battlePreviewMetricValueTexts[i] != null)
                 {
@@ -1248,7 +1292,7 @@ public class SceneLoader : MonoBehaviour
                 : null;
             if (fillRt != null)
             {
-                fillRt.anchorMax = new Vector2(1f, target / 100f);
+                fillRt.anchorMax = new Vector2(target / 100f, 1f);
             }
             if (battlePreviewMetricValueTexts[i] != null)
             {

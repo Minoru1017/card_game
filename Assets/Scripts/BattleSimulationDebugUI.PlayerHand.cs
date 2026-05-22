@@ -45,6 +45,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
             playerOpeningHandFlyRoutine = null;
         }
         HideTooltip();
+        BattleHandSkillLongPress.DismissAllShownTooltips();
         playerHandPressDepth = 0;
         for (int i = handArea.childCount - 1; i >= 0; i--)
         {
@@ -204,8 +205,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
 
         RectTransform bgRect = cardObj.GetComponent<RectTransform>();
         bgRect.localScale = Vector3.one * GetHandCardBackplateScale();
-        string skill = battleManager != null ? battleManager.GetCardSkillDescription(card) : string.Empty;
-        ConfigureHandHoverPreview(cardObj, rect, skill, null);
+        ConfigureHandHoverPreview(cardObj, rect, card, string.Empty);
         PrepareHandCardPointerRouting(cardObj);
         AttachDiscardDragBehavior(cardObj, card);
         AttachPlayerHandPressNotifier(cardObj, this);
@@ -231,10 +231,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         if (display != null)
         {
             display.SetCard(card);
-            if (card is SpellCard && display.effectText != null)
-            {
-                display.effectText.gameObject.SetActive(false);
-            }
+            HideSkillTextOnHandCardDisplay(display);
             ApplyPrefabVisualTuning(display);
             display.RefreshCardArtRarityOverlayExternal();
         }
@@ -245,18 +242,26 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
 
         Button button = cardObj.GetComponent<Button>();
         if (button == null) button = cardObj.AddComponent<Button>();
+        bool handLocked = IsPlayerHandCardLockedByFieldRule(card);
+        BattleHandSkillLongPress skillLongPress = null;
         button.onClick.AddListener(() =>
         {
+            if (skillLongPress != null && skillLongPress.ShouldSuppressClickAfterLongPress()) return;
             OnPlayerCardClicked(card, rect);
         });
-        bool handLocked = IsPlayerHandCardLockedByFieldRule(card);
         ApplyLinGazeHandCardLockedVisual(cardObj, handLocked);
         button.interactable = battleManager.IsPlayerTurn() && !handLocked;
-        string skillMessage = battleManager != null ? battleManager.GetCardSkillDescription(card) : string.Empty;
-        ConfigureHandHoverPreview(cardObj, rect, skillMessage, null);
+        ConfigureHandHoverPreview(cardObj, rect, card, string.Empty);
+        skillLongPress = cardObj.GetComponent<BattleHandSkillLongPress>();
         PrepareHandCardPointerRouting(cardObj);
         AttachDiscardDragBehavior(cardObj, card);
         AttachPlayerHandPressNotifier(cardObj, this);
+    }
+
+    private static void HideSkillTextOnHandCardDisplay(CardDisplay display)
+    {
+        if (display?.effectText != null)
+            display.effectText.gameObject.SetActive(false);
     }
 
     private void AttachDiscardDragBehavior(GameObject cardObj, Card card)
@@ -305,9 +310,8 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         if (b != null) b.targetGraphic = rootGraphic;
     }
 
-    /// <param name="hoverDelayedTooltipMessage">滑鼠停在上半部一段時間後的提示（與怪物牌相同觸發邏輯）。</param>
-    /// <param name="longPressTooltipMessage">長按浮窗；手牌一律 null（與怪物牌一致）。</param>
-    private void ConfigureHandHoverPreview(GameObject cardObj, RectTransform cardRect, string hoverDelayedTooltipMessage, string longPressTooltipMessage)
+    /// <param name="hoverDelayedTooltipMessage">手牌區不顯示技能懸停提示（傳空字串）。</param>
+    private void ConfigureHandHoverPreview(GameObject cardObj, RectTransform cardRect, Card card, string hoverDelayedTooltipMessage)
     {
         if (cardObj == null) return;
         if (cardRect == null) cardRect = cardObj.GetComponent<RectTransform>();
@@ -337,17 +341,14 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         preview.shouldSuppressHeavyHoverEffects = suppressWhenHandCardDimmed;
         preview.Setup(cardRect, uiRoot, 1.08f, 0.5f, hoverDelayedTooltipMessage, ShowTooltip, HideTooltip);
 
-        BattleHandLongPressTooltip lp = cardObj.GetComponent<BattleHandLongPressTooltip>();
-        if (!string.IsNullOrWhiteSpace(longPressTooltipMessage))
-        {
-            if (lp == null) lp = cardObj.AddComponent<BattleHandLongPressTooltip>();
-            lp.enabled = true;
-            lp.Setup(longPressTooltipMessage, ShowTooltip, HideTooltip);
-        }
-        else if (lp != null)
-        {
-            lp.enabled = false;
-        }
+        BattleHandLongPressTooltip legacyLp = cardObj.GetComponent<BattleHandLongPressTooltip>();
+        if (legacyLp != null) legacyLp.enabled = false;
+
+        BattleHandSkillLongPress skillLongPress = cardObj.GetComponent<BattleHandSkillLongPress>();
+        if (skillLongPress == null) skillLongPress = cardObj.AddComponent<BattleHandSkillLongPress>();
+        bool hasLongPress = TryGetHandLongPressTooltipContent(card, out _);
+        skillLongPress.enabled = hasLongPress;
+        skillLongPress.Setup(cardRect, card, this, suppressWhenHandCardDimmed);
     }
 
     private void OnPlayerCardClicked(Card card, RectTransform cardRect)

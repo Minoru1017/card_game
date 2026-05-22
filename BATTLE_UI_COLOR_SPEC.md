@@ -43,9 +43,9 @@
 
 | 排除項目 | 說明 |
 |----------|------|
-| 天氣全螢幕 FX | `CreateWeatherScreenFx` 各層 tint、粒子、船／葉／雨等 |
-| 英雄受傷回饋 FX | `HeroDamageVignette`、`HeroDamageMonochromeFlash`、HP 閃爍 lerp（`HURT_FLASH` 僅語意參考，**不實作**） |
-| 法術／攻擊演出 | 出牌飛行、燃燒、震動等程式動態色 |
+| 天氣全螢幕 FX | `CreateWeatherScreenFx` 各層 tint、粒子、船／葉／雨等 → 見 **`BATTLE_FX_COLOR_SPEC.md`** |
+| 英雄受傷回饋 FX | `HeroDamageVignette`、`HeroDamageMonochromeFlash`、HP 閃爍 lerp → 見 **`BATTLE_FX_COLOR_SPEC.md`**（UI 內 `HURT_FLASH` 為語意錨點） |
+| 法術／攻擊演出 | 出牌飛行、燃燒、震動、法術 dim 等 → 見 **`BATTLE_FX_COLOR_SPEC.md`** |
 | 場景背景圖 | `戰鬥背景` 等 Sprite 美術本身（非 UI 色票） |
 
 #### C. 除錯／批次模擬
@@ -469,6 +469,7 @@ xychart-beta
 | 2026-05-16 | 1.1 | 新增 §2：三本書／動森對照表、38 Token 加權量化、圓餅圖／長條圖 |
 | 2026-05-16 | 1.2 | §1 重訂：明確排除卡牌區、特效、除錯／批次模擬；§4 縮為 65 列實作範圍 |
 | 2026-05-16 | 1.2.1 | 新增 §8 列印說明；`tools/Export-BattleUiColorSpecPrint.ps1` → `Docs/BATTLE_UI_COLOR_SPEC.print.html` |
+| 2026-05-16 | 1.2.2 | §1.2-B 交叉引用姊妹文件 **`BATTLE_FX_COLOR_SPEC.md`**（特效配色） |
 
 ---
 

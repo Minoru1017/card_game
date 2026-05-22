@@ -7,6 +7,8 @@ using System;
 public class PlayerData : MonoBehaviour
 {
     public const int MaxPlayerSlots = 3;
+    /// <summary>Buildbeck UI 固定 5 個牌組分頁；須與場景按鈕數一致。</summary>
+    public const int MinDeckSlotCount = 5;
     public CardStore CardStore;
     public int playerCoins;
     /// <summary>Owned cards: key = runtime id (monster ≥0, spell &lt;0 via <see cref="DeckCardId"/>).</summary>
@@ -20,16 +22,56 @@ public class PlayerData : MonoBehaviour
     private Dictionary<int, int>[] deckSlotMaps;
     /// <summary>Per deck-slot display names (Buildbeck UI). Empty entry falls back to 「牌組{n}」.</summary>
     private string[] deckSlotDisplayNames;
+    /// <summary>怪物牌熟練度勝場（key = monster id）。</summary>
+    private readonly Dictionary<int, CardProficiencyWins> cardProficiencyWins = new Dictionary<int, CardProficiencyWins>();
     private readonly List<string> cachedOtherSlotRows = new List<string>(128);
 
     [Header("UI")]
     public TextMeshProUGUI coinsText;
 
+    /// <summary>唯一應讀寫存檔的 PlayerData（優先 DataManager 上的實例）。</summary>
+    public static PlayerData ResolveCanonical()
+    {
+        GameObject dmGo = GameObject.Find("DataManager");
+        if (dmGo != null)
+        {
+            PlayerData onDm = dmGo.GetComponent<PlayerData>();
+            if (onDm != null) return onDm;
+        }
+
+        PlayerData[] all = UnityEngine.Object.FindObjectsByType<PlayerData>(FindObjectsSortMode.None);
+        PlayerData withDeckManager = null;
+        PlayerData any = null;
+        for (int i = 0; i < all.Length; i++)
+        {
+            PlayerData p = all[i];
+            if (p == null) continue;
+            any ??= p;
+            if (p.GetComponent<DeckManager>() != null)
+                withDeckManager = p;
+        }
+
+        if (withDeckManager != null) return withDeckManager;
+        if (any != null) return any;
+        return UnityEngine.Object.FindFirstObjectByType<PlayerData>();
+    }
+
     void Awake()
     {
         if (CardStore != null) CardStore.LoadCardData();
-        LoadPlayerData();
-        RefreshCoins();
+        if (ResolveCanonical() == this)
+        {
+            EnsureMinimumDeckSlotCount();
+            LoadPlayerData();
+            RefreshCoins();
+        }
+    }
+
+    /// <summary>避免 prefab 上 deckSlotCount=3 導致第 4、5 槽名稱與牌組被 clamp 到槽位 2。</summary>
+    public void EnsureMinimumDeckSlotCount()
+    {
+        if (deckSlotCount < MinDeckSlotCount)
+            deckSlotCount = MinDeckSlotCount;
     }
 
     void Start()
@@ -53,7 +95,8 @@ public class PlayerData : MonoBehaviour
 
     private void EnsureDeckSlotMaps()
     {
-        if (deckSlotCount <= 0) deckSlotCount = 5;
+        EnsureMinimumDeckSlotCount();
+        if (deckSlotCount <= 0) deckSlotCount = MinDeckSlotCount;
 
         if (deckSlotMaps == null || deckSlotMaps.Length != deckSlotCount)
         {
@@ -128,15 +171,59 @@ public class PlayerData : MonoBehaviour
         EnsureDeckSlotMaps();
         for (int i = 0; i < deckSlotMaps.Length; i++)
             deckSlotMaps[i].Clear();
+        cardProficiencyWins.Clear();
+    }
+
+    public CardProficiencyWins GetCardProficiencyWins(int monsterId)
+    {
+        return cardProficiencyWins.TryGetValue(monsterId, out CardProficiencyWins wins) ? wins : default;
+    }
+
+    public void SetCardProficiencyWins(int monsterId, float progressAny, int winsNormalDifficulty)
+    {
+        if (progressAny <= 0.001f && winsNormalDifficulty <= 0)
+        {
+            cardProficiencyWins.Remove(monsterId);
+            return;
+        }
+
+        cardProficiencyWins[monsterId] = new CardProficiencyWins
+        {
+            progressAny = Mathf.Max(0f, progressAny),
+            winsNormalDifficulty = Mathf.Max(0, winsNormalDifficulty)
+        };
+    }
+
+    /// <summary>對戰結算：累加 toward-B 進度；普通難度勝利時 winsNormal +1。</summary>
+    public void AddCardProficiencyProgress(int monsterId, float progressDelta, bool addNormalWin)
+    {
+        if (progressDelta <= 0f && !addNormalWin) return;
+
+        CardProficiencyWins w = GetCardProficiencyWins(monsterId);
+        if (progressDelta > 0f)
+            w.progressAny = Mathf.Max(0f, w.progressAny + progressDelta);
+        if (addNormalWin)
+            w.winsNormalDifficulty++;
+        cardProficiencyWins[monsterId] = w;
     }
 
     public void LoadPlayerData()
     {
+        PlayerData canonical = ResolveCanonical();
+        if (canonical != null && canonical != this)
+        {
+            canonical.LoadPlayerData();
+            return;
+        }
+
+        EnsureMinimumDeckSlotCount();
         EnsureDeckSlotMaps();
 
         playerCollection.Clear();
         for (int s = 0; s < deckSlotMaps.Length; s++)
             deckSlotMaps[s].Clear();
+        cardProficiencyWins.Clear();
+        deckSlotDisplayNames = null;
 
         string path = GetPlayerDataPath();
 
@@ -167,6 +254,8 @@ public class PlayerData : MonoBehaviour
             playerCollection.Clear();
             for (int s = 0; s < deckSlotMaps.Length; s++)
                 deckSlotMaps[s].Clear();
+            cardProficiencyWins.Clear();
+            deckSlotDisplayNames = null;
 
             if (!TryApplyLoadedPlayerDataRows(dataRow)) continue;
 
@@ -292,6 +381,17 @@ public class PlayerData : MonoBehaviour
             if (rowArray.Length < 2) return;
             activePlayerSlotName = string.IsNullOrWhiteSpace(rowArray[1]) ? ("玩家" + activePlayerSlot) : rowArray[1].Trim();
         }
+        else if (rowArray[0] == "proficiency")
+        {
+            if (rowArray.Length < 5) return;
+            if (rowArray[1] != "m") return;
+            if (!int.TryParse(rowArray[2].Trim(), out int monsterId)) return;
+            if (!float.TryParse(rowArray[3].Trim(), System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out float progressAny))
+                return;
+            if (!int.TryParse(rowArray[4].Trim(), out int winsNormal)) return;
+            SetCardProficiencyWins(monsterId, progressAny, winsNormal);
+        }
     }
 
     /// <summary>Legacy 3-column rows used one int for monsters and spells. If a monster exists at <paramref name="legacyId"/>, keep it; otherwise map old spell ids to spell keys.</summary>
@@ -378,14 +478,24 @@ public class PlayerData : MonoBehaviour
 
     public void SavePlayerData()
     {
+        PlayerData canonical = ResolveCanonical();
+        if (canonical != null && canonical != this)
+        {
+            canonical.SavePlayerData();
+            return;
+        }
+
+        EnsureMinimumDeckSlotCount();
+        EnsureDeckSlotMaps();
+
         string dir = Application.persistentDataPath;
         string path = GetPlayerDataPath();
         Directory.CreateDirectory(dir);
 
-        // PlayerProfileCsvService syncs W/L/D/Q into playerdata as slot,N,profile_* rows.
+        // PlayerProfileCsvService syncs W/L/D/Q and per-match battle_record rows into playerdata.
         // Those rows are not represented in Player fields; without preserving them here,
-        // the next save would strip battle stats (and RefreshProfileFromRuntime could reset profile files).
-        var preservedActiveProfileRows = new List<string>(14);
+        // the next save would strip battle stats / difficulty breakdown.
+        var preservedActiveProfileRows = new List<string>(64);
         if (PlayerPersistSafeIO.TryReadPlayerDataLines(path, out string[] existingLines, out _))
         {
             for (int li = 0; li < existingLines.Length; li++)
@@ -396,7 +506,9 @@ public class PlayerData : MonoBehaviour
                 if (cols.Length < 4) continue;
                 if (!string.Equals(cols[0].Trim(), "slot", StringComparison.OrdinalIgnoreCase)) continue;
                 if (!int.TryParse(cols[1].Trim(), out int slotNum) || slotNum != activePlayerSlot) continue;
-                if (cols[2].Trim().StartsWith("profile_", StringComparison.OrdinalIgnoreCase))
+                string slotKey = cols[2].Trim();
+                if (slotKey.StartsWith("profile_", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(slotKey, "battle_record", StringComparison.OrdinalIgnoreCase))
                     preservedActiveProfileRows.Add(line);
             }
         }
@@ -452,13 +564,40 @@ public class PlayerData : MonoBehaviour
                 current.Add($"slot,{activePlayerSlot},deck,m,{kv.Key},{kv.Value}");
         }
 
+        foreach (var kv in cardProficiencyWins)
+        {
+            if (kv.Value.progressAny <= 0.001f && kv.Value.winsNormalDifficulty <= 0) continue;
+            string progressText = kv.Value.progressAny.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture);
+            current.Add($"slot,{activePlayerSlot},proficiency,m,{kv.Key},{progressText},{kv.Value.winsNormalDifficulty}");
+        }
+
         for (int i = 0; i < current.Count; i++) datas.Add(current[i]);
         EnsureAllSlotContainers(datas);
         for (int pi = 0; pi < preservedActiveProfileRows.Count; pi++)
             datas.Add(preservedActiveProfileRows[pi]);
 
         PlayerPersistSafeIO.WriteAllLinesWithAtomicRotateBackups(path, datas);
+        RebuildCachedOtherSlotRowsFromDisk(path);
         Debug.Log("Save path: " + path);
+    }
+
+    private void RebuildCachedOtherSlotRowsFromDisk(string path)
+    {
+        cachedOtherSlotRows.Clear();
+        if (!PlayerPersistSafeIO.TryReadPlayerDataLines(path, out string[] rows, out _))
+            return;
+
+        for (int i = 0; i < rows.Length; i++)
+        {
+            string row = rows[i];
+            if (string.IsNullOrWhiteSpace(row) || row.StartsWith("#", StringComparison.Ordinal)) continue;
+            string[] cols = row.Split(',');
+            if (cols.Length < 4) continue;
+            if (!string.Equals(cols[0].Trim(), "slot", StringComparison.OrdinalIgnoreCase)) continue;
+            if (!int.TryParse(cols[1].Trim(), out int slotIndex)) continue;
+            if (slotIndex == activePlayerSlot) continue;
+            cachedOtherSlotRows.Add(row);
+        }
     }
 
     private static int ReadActiveSlotFromRows(string[] rows)
@@ -872,6 +1011,7 @@ public class PlayerData : MonoBehaviour
 
     public void SetSelectedDeckSlot(int slot)
     {
+        EnsureMinimumDeckSlotCount();
         EnsureDeckSlotMaps();
         selectedDeckSlot = Mathf.Clamp(slot, 0, deckSlotCount - 1);
     }
@@ -903,6 +1043,14 @@ public class PlayerData : MonoBehaviour
 
     public void SetDeckSlotDisplayName(int slot, string name)
     {
+        PlayerData canonical = ResolveCanonical();
+        if (canonical != null && canonical != this)
+        {
+            canonical.SetDeckSlotDisplayName(slot, name);
+            return;
+        }
+
+        EnsureMinimumDeckSlotCount();
         EnsureDeckSlotMaps();
         EnsureDeckSlotNamesBuffer();
         slot = Mathf.Clamp(slot, 0, deckSlotCount - 1);
@@ -912,7 +1060,7 @@ public class PlayerData : MonoBehaviour
     private static string SanitizeDeckSlotName(string name)
     {
         if (string.IsNullOrWhiteSpace(name)) return string.Empty;
-        string n = name.Trim().Replace("\n", " ").Replace("\r", " ");
+        string n = name.Trim().Replace("\n", " ").Replace("\r", " ").Replace(",", " ");
         if (n.Length > 24) n = n.Substring(0, 24);
         return n;
     }

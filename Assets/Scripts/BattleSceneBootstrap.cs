@@ -27,5 +27,13 @@ public static class BattleSceneBootstrap
             cam.rect = new Rect(0f, 0f, 1f, 1f);
             cam.orthographic = true;
         }
+
+        BattleSimulationManager manager = Object.FindFirstObjectByType<BattleSimulationManager>();
+        if (manager != null)
+        {
+            manager.ApplyLaunchContextDifficulty();
+            manager.TryApplyLaunchDifficultyFromContext();
+            manager.CaptureBattleDifficultyForRecords();
+        }
     }
 }

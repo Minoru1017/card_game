@@ -96,19 +96,6 @@ public class HallSceneFeatureBinder : MonoBehaviour
         }
     }
 
-    private static PlayerData ResolvePlayerData()
-    {
-        PlayerData pd = Object.FindFirstObjectByType<PlayerData>();
-        if (pd != null) return pd;
-
-        PlayerData[] all = Resources.FindObjectsOfTypeAll<PlayerData>();
-        for (int i = 0; i < all.Length; i++)
-        {
-            if (all[i] == null || all[i].gameObject == null) continue;
-            if (!all[i].gameObject.scene.IsValid()) continue;
-            return all[i];
-        }
-        return null;
-    }
+    private static PlayerData ResolvePlayerData() => PlayerData.ResolveCanonical();
 
 }

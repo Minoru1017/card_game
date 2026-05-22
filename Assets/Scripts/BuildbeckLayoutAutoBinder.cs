@@ -153,6 +153,7 @@ public static class BuildbeckLayoutAutoBinder
 
         deckManager.libraryPanel = null;
         deckManager.deckPanel = null;
+        deckManager.NotifyBuildbeckUiRewireStarting();
         if (clearOptionalSlotButtons)
         {
             deckManager.deckSlotButton1 = null;
@@ -181,11 +182,11 @@ public static class BuildbeckLayoutAutoBinder
             if (deckPanel != null) deckManager.deckPanel = deckPanel;
         }
 
-        if (deckManager.deckSlotButton1 == null) deckManager.deckSlotButton1 = FindFirstButtonByNames(buildbeckScene, DeckSlot1Names);
-        if (deckManager.deckSlotButton2 == null) deckManager.deckSlotButton2 = FindFirstButtonByNames(buildbeckScene, DeckSlot2Names);
-        if (deckManager.deckSlotButton3 == null) deckManager.deckSlotButton3 = FindFirstButtonByNames(buildbeckScene, DeckSlot3Names);
-        if (deckManager.deckSlotButton4 == null) deckManager.deckSlotButton4 = FindFirstButtonByNames(buildbeckScene, DeckSlot4Names);
-        if (deckManager.deckSlotButton5 == null) deckManager.deckSlotButton5 = FindFirstButtonByNames(buildbeckScene, DeckSlot5Names);
+        deckManager.deckSlotButton1 = ResolveSceneButton(buildbeckScene, deckManager.deckSlotButton1, DeckSlot1Names);
+        deckManager.deckSlotButton2 = ResolveSceneButton(buildbeckScene, deckManager.deckSlotButton2, DeckSlot2Names);
+        deckManager.deckSlotButton3 = ResolveSceneButton(buildbeckScene, deckManager.deckSlotButton3, DeckSlot3Names);
+        deckManager.deckSlotButton4 = ResolveSceneButton(buildbeckScene, deckManager.deckSlotButton4, DeckSlot4Names);
+        deckManager.deckSlotButton5 = ResolveSceneButton(buildbeckScene, deckManager.deckSlotButton5, DeckSlot5Names);
 
         TryWireBackButtonToPersistent(buildbeckScene);
         TryWireReadyBattleButton();
@@ -335,15 +336,20 @@ public static class BuildbeckLayoutAutoBinder
     public static void TryBindCurrentDeckNameDisplay(DeckManager deckManager)
     {
         if (deckManager == null) return;
-        if (deckManager.currentDeckDisplayNameText != null || deckManager.currentDeckDisplayNameLegacyText != null)
+
+        Scene active = SceneManager.GetActiveScene();
+        if (!active.IsValid() || !active.name.Equals(SceneName, System.StringComparison.OrdinalIgnoreCase))
+            return;
+
+        if (IsButtonInScene(deckManager.currentDeckDisplayNameText, active) ||
+            IsLegacyTextInScene(deckManager.currentDeckDisplayNameLegacyText, active))
         {
             deckManager.RefreshCurrentDeckDisplayName();
             return;
         }
 
-        Scene active = SceneManager.GetActiveScene();
-        if (!active.IsValid() || !active.name.Equals(SceneName, System.StringComparison.OrdinalIgnoreCase))
-            return;
+        deckManager.currentDeckDisplayNameText = null;
+        deckManager.currentDeckDisplayNameLegacyText = null;
 
         for (int i = 0; i < CurrentDeckDisplayNameObjectNames.Length; i++)
         {
@@ -367,6 +373,27 @@ public static class BuildbeckLayoutAutoBinder
                 return;
             }
         }
+    }
+
+    private static Button ResolveSceneButton(Scene buildbeckScene, Button current, string[] names)
+    {
+        if (IsButtonInScene(current, buildbeckScene)) return current;
+        return FindFirstButtonByNames(buildbeckScene, names);
+    }
+
+    private static bool IsButtonInScene(Button button, Scene scene)
+    {
+        return button != null && button.gameObject != null && button.gameObject.scene == scene;
+    }
+
+    private static bool IsButtonInScene(TMP_Text text, Scene scene)
+    {
+        return text != null && text.gameObject != null && text.gameObject.scene == scene;
+    }
+
+    private static bool IsLegacyTextInScene(Text text, Scene scene)
+    {
+        return text != null && text.gameObject != null && text.gameObject.scene == scene;
     }
 
     private static Transform FindFirstTransformByNames(Scene buildbeckScene, string[] names)

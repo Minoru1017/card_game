@@ -39,7 +39,7 @@ public class BattleHandHoverPreview : MonoBehaviour, IPointerEnterHandler, IPoin
         RectTransform overlay,
         float scale,
         float holdSeconds,
-        string message,
+        string hoverTooltipMessage,
         System.Action<RectTransform, string> showTooltip,
         System.Action hideTooltip)
     {
@@ -47,7 +47,7 @@ public class BattleHandHoverPreview : MonoBehaviour, IPointerEnterHandler, IPoin
         overlayRoot = overlay;
         previewScale = Mathf.Max(1f, scale);
         tooltipHoldSeconds = Mathf.Max(0.1f, holdSeconds);
-        tooltipMessage = message;
+        tooltipMessage = hoverTooltipMessage;
         onShowTooltip = showTooltip;
         onHideTooltip = hideTooltip;
     }

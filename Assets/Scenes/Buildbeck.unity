@@ -2800,16 +2800,16 @@ MonoBehaviour:
     minSpellsBias: 2
     fixedDeckOverride: 
   - tier: 4
-    labelZh: "\u9B54\u738B(\u6E2C\u8A66\u4E2D)"
-    locked: 1
-    deckStrengthIndex: 85
-    spellRatioIndex: 80
-    overLimitToleranceIndex: 90
+    labelZh: "\u9B54\u738B"
+    locked: 0
+    deckStrengthIndex: 92
+    spellRatioIndex: 85
+    overLimitToleranceIndex: 96
     useFixedDeck: 1
-    revealRatio: 0.35
-    scoreMultiplier: 1.28
-    overLimitBias: 0
-    minSpellsBias: 0
+    revealRatio: 0.28
+    scoreMultiplier: 1.38
+    overLimitBias: 2
+    minSpellsBias: 2
     fixedDeckOverride: 
 --- !u!1001 &2079373303055005195
 PrefabInstance:

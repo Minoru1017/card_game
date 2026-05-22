@@ -178,7 +178,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         enemyDiscardToastRoot.sizeDelta = new Vector2(700f, 460f);
 
         Image bg = root.GetComponent<Image>();
-        bg.color = new Color(0.93f, 0.89f, 0.82f, 0.96f);
+        bg.color = BattleUiColors.PanelCream96;
         enemyDiscardToastCg = root.GetComponent<CanvasGroup>();
 
         GameObject titleObj = new GameObject("Title", typeof(RectTransform), typeof(TextMeshProUGUI));
@@ -193,7 +193,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         if (sharedUIFont != null) enemyDiscardToastTitle.font = sharedUIFont;
         enemyDiscardToastTitle.fontSize = 40f;
         enemyDiscardToastTitle.alignment = TextAlignmentOptions.Center;
-        enemyDiscardToastTitle.color = new Color(0.31f, 0.24f, 0.18f, 1f);
+        enemyDiscardToastTitle.color = BattleUiColors.Ink;
 
         GameObject cardMountObj = new GameObject("CardMount", typeof(RectTransform));
         cardMountObj.transform.SetParent(root.transform, false);
@@ -216,7 +216,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         if (sharedUIFont != null) enemyDiscardToastMeta.font = sharedUIFont;
         enemyDiscardToastMeta.fontSize = 28f;
         enemyDiscardToastMeta.alignment = TextAlignmentOptions.TopLeft;
-        enemyDiscardToastMeta.color = new Color(0.22f, 0.18f, 0.14f, 1f);
+        enemyDiscardToastMeta.color = BattleUiColors.InkSoft;
 
         GameObject skillObj = new GameObject("Skill", typeof(RectTransform), typeof(TextMeshProUGUI));
         skillObj.transform.SetParent(root.transform, false);
@@ -230,7 +230,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         enemyDiscardToastSkill.fontSize = 24f;
         enemyDiscardToastSkill.alignment = TextAlignmentOptions.TopLeft;
         enemyDiscardToastSkill.enableWordWrapping = true;
-        enemyDiscardToastSkill.color = new Color(0.24f, 0.2f, 0.16f, 1f);
+        enemyDiscardToastSkill.color = BattleUiColors.InkSoft;
 
         root.SetActive(false);
     }
@@ -286,7 +286,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         playerDiscardToastRoot.sizeDelta = new Vector2(700f, 460f);
 
         Image bg = root.GetComponent<Image>();
-        bg.color = new Color(0.93f, 0.89f, 0.82f, 0.96f);
+        bg.color = BattleUiColors.PanelCream96;
         playerDiscardToastCg = root.GetComponent<CanvasGroup>();
 
         GameObject titleObj = new GameObject("Title", typeof(RectTransform), typeof(TextMeshProUGUI));
@@ -301,7 +301,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         if (sharedUIFont != null) playerDiscardToastTitle.font = sharedUIFont;
         playerDiscardToastTitle.fontSize = 40f;
         playerDiscardToastTitle.alignment = TextAlignmentOptions.Center;
-        playerDiscardToastTitle.color = new Color(0.31f, 0.24f, 0.18f, 1f);
+        playerDiscardToastTitle.color = BattleUiColors.Ink;
 
         GameObject cardMountObj = new GameObject("CardMount", typeof(RectTransform));
         cardMountObj.transform.SetParent(root.transform, false);
@@ -324,7 +324,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         if (sharedUIFont != null) playerDiscardToastMeta.font = sharedUIFont;
         playerDiscardToastMeta.fontSize = 28f;
         playerDiscardToastMeta.alignment = TextAlignmentOptions.TopLeft;
-        playerDiscardToastMeta.color = new Color(0.22f, 0.18f, 0.14f, 1f);
+        playerDiscardToastMeta.color = BattleUiColors.InkSoft;
 
         GameObject skillObj = new GameObject("Skill", typeof(RectTransform), typeof(TextMeshProUGUI));
         skillObj.transform.SetParent(root.transform, false);
@@ -338,7 +338,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         playerDiscardToastSkill.fontSize = 24f;
         playerDiscardToastSkill.alignment = TextAlignmentOptions.TopLeft;
         playerDiscardToastSkill.enableWordWrapping = true;
-        playerDiscardToastSkill.color = new Color(0.24f, 0.2f, 0.16f, 1f);
+        playerDiscardToastSkill.color = BattleUiColors.InkSoft;
 
         root.SetActive(false);
     }

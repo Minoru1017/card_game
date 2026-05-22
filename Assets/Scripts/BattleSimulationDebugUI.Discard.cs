@@ -27,7 +27,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         zoneImg.sprite = null;
         zoneImg.type = Image.Type.Simple;
         zoneImg.preserveAspect = false;
-        zoneImg.color = new Color(0.52f, 0.43f, 0.34f, 1f);
+        zoneImg.color = BattleUiColors.WithAlpha(BattleUiColors.BtnPrimaryP, 0.9f);
         zoneImg.raycastTarget = true;
 
         GameObject zoneLabelObj = new GameObject("Label", typeof(RectTransform), typeof(TextMeshProUGUI));
@@ -41,7 +41,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         if (sharedUIFont != null) discardDropZoneText.font = sharedUIFont;
         discardDropZoneText.alignment = TextAlignmentOptions.Center;
         discardDropZoneText.fontSize = 26f;
-        discardDropZoneText.color = new Color(0.98f, 0.94f, 0.86f, 1f);
+        discardDropZoneText.color = BattleUiColors.BtnPrimaryText;
         discardDropZoneText.enableWordWrapping = true;
         discardDropZoneText.text = "棄牌區";
         discardDropZoneText.raycastTarget = false;
@@ -54,7 +54,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         discardPromptPanelRt.anchorMax = new Vector2(0.5f, 0.83f);
         discardPromptPanelRt.pivot = new Vector2(0.5f, 0.5f);
         discardPromptPanelRt.sizeDelta = new Vector2(920f, 170f);
-        promptObj.GetComponent<Image>().color = new Color(0.93f, 0.89f, 0.82f, 0.96f);
+        promptObj.GetComponent<Image>().color = BattleUiColors.PanelCream96;
 
         GameObject promptTextObj = new GameObject("Text", typeof(RectTransform), typeof(TextMeshProUGUI));
         promptTextObj.transform.SetParent(promptObj.transform, false);
@@ -67,7 +67,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         if (sharedUIFont != null) discardPromptText.font = sharedUIFont;
         discardPromptText.fontSize = 42f;
         discardPromptText.alignment = TextAlignmentOptions.Center;
-        discardPromptText.color = new Color(0.29f, 0.23f, 0.17f, 1f);
+        discardPromptText.color = BattleUiColors.Ink;
         discardPromptText.enableWordWrapping = true;
         discardPromptText.richText = true;
         discardPromptText.raycastTarget = false;
@@ -128,8 +128,8 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         if (discardDropZoneImage != null)
         {
             discardDropZoneImage.color = hovering
-                ? new Color(0.96f, 0.86f, 0.52f, 1f)
-                : new Color(0.52f, 0.43f, 0.34f, 1f);
+                ? BattleUiColors.BtnPrimaryH
+                : BattleUiColors.WithAlpha(BattleUiColors.BtnPrimaryP, 0.9f);
         }
         if (discardDropZoneRt != null)
         {
@@ -138,8 +138,8 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         if (discardDropZoneText != null)
         {
             discardDropZoneText.color = hovering
-                ? new Color(0.22f, 0.17f, 0.12f, 1f)
-                : new Color(0.98f, 0.94f, 0.86f, 1f);
+                ? BattleUiColors.Ink
+                : BattleUiColors.BtnPrimaryText;
         }
     }
 }

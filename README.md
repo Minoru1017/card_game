@@ -67,6 +67,22 @@
 
 ---
 
+## 系統總架構圖
+
+- 請見：**[ARCHITECTURE_OVERVIEW.md](./ARCHITECTURE_OVERVIEW.md)**  
+  （DataManager / PlayerData / scene flow — English overview diagram）
+
+## 對戰難易度與敵方 AI（報告用）
+
+- 請見：**[DIFFICULTY_AND_AI_DESIGN.md](./DIFFICULTY_AND_AI_DESIGN.md)**  
+  （難易度五檔分界、設計指數映射、回合制 AI 決策流程與口試摘要）
+- 外部文獻／網路資源：**[BALANCE_AND_AI_BIBLIOGRAPHY.md](./BALANCE_AND_AI_BIBLIOGRAPHY.md)**  
+  （數值平衡、難度曲線、敵 AI、DDA、卡牌平衡之可查證連結）
+
+## 文獻與市場參考
+
+- 市場作品來源：**[MARKET_ANALYSIS_SOURCES.md](./MARKET_ANALYSIS_SOURCES.md)**
+
 ## 卡牌設定與對戰規則（詳細）
 
 - 請見：**[GAMEPLAY_AND_RULES.md](./GAMEPLAY_AND_RULES.md)**  

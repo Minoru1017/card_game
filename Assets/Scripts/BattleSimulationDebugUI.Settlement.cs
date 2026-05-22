@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using TMPro;
 using UnityEngine;
@@ -8,6 +9,24 @@ using UnityEngine.UI;
 
 public partial class BattleSimulationDebugUI : MonoBehaviour
 {
+    private sealed class SettlementProficiencyRowUi
+    {
+        public RectTransform fillRt;
+        public Text statusText;
+        public float fillFrom;
+        public float fillTo;
+    }
+
+    private const int EndBattlePanelLayoutVersion = 4;
+    private const float EndBattleHeaderHeightPx = 128f;
+    private const float EndBattleProficiencyBannerHeightPx = 58f;
+    private const float EndBattleFooterHeightPx = 108f;
+    private const float EndBattlePanelWidthMarginPx = 28f;
+    private const float EndBattlePanelMinWidthPx = 720f;
+    private const float EndBattlePanelHeightRatio = 0.82f;
+    private const float EndBattlePanelMinHeightPx = 640f;
+    private const float EndBattleProficiencyBarAnimDuration = 0.85f;
+    private const float EndBattleProficiencyBarStagger = 0.1f;
     private RectTransform battleHistoryContentRt;
     private void CreateBattleResultText(Transform parent, bool useDebugPanelLayout = false)
     {
@@ -132,6 +151,12 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
             if (endBattlePanel == null || !endBattlePanel.activeSelf)
                 endBattlePanelShown = false;
         }
+        if (endBattleProficiencyAnimRoutine != null)
+        {
+            StopCoroutine(endBattleProficiencyAnimRoutine);
+            endBattleProficiencyAnimRoutine = null;
+        }
+        ClearEndBattleProficiencyRows();
         RestoreSettlementBattleUiIfNeeded();
         if (endBattlePanel != null && endBattlePanelGroup != null)
         {
@@ -187,7 +212,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         Image dimImg = dimGo.GetComponent<Image>();
         dimImg.sprite = GetUnitWhiteSprite();
         dimImg.type = Image.Type.Simple;
-        dimImg.color = new Color(0.12f, 0.08f, 0.06f, 0.66f);
+        dimImg.color = BattleUiColors.DimHeavy;
         dimImg.raycastTarget = true;
 
         settlementFreezeRoot.SetActive(false);
@@ -230,12 +255,8 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
     {
         endBattlePanelShown = true;
         int result = battleManager != null ? battleManager.GetBattleResult() : 0;
-        if (endBattleTitleText != null && battleManager != null)
-        {
-            if (result == 1) endBattleTitleText.text = "Victory";
-            else if (result == -1) endBattleTitleText.text = "Defeat";
-            else endBattleTitleText.text = "Draw";
-        }
+        if (battleManager != null)
+            ApplyEndBattleResultHeader(result);
 
         if (endBattlePanel != null)
             endBattlePanel.SetActive(false);
@@ -327,6 +348,16 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
                 if (endBattlePanelGroup != null) endBattlePanelGroup.alpha = 1f;
                 if (endPanelRt != null) endPanelRt.localScale = Vector3.one;
             }
+
+            PopulateEndBattleProficiencyRows();
+            UpdateEndBattleProficiencyUpdateBanner();
+            if (endBattleProficiencyAnimRoutine != null)
+            {
+                StopCoroutine(endBattleProficiencyAnimRoutine);
+                endBattleProficiencyAnimRoutine = null;
+            }
+            if (endBattleProficiencyRows.Count > 0)
+                endBattleProficiencyAnimRoutine = StartCoroutine(CoAnimateEndBattleProficiencyBars());
         }
 
         settlementFreezeRoutine = null;
@@ -351,7 +382,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         float t = 0f;
         float pulseDur = Mathf.Max(0.4f, heavyHitDur * 0.9f);
         Color baseColor = playerHeroHpText != null ? playerHeroHpText.color : Color.white;
-        Color hurtColor = new Color(1f, 0.26f, 0.26f, 1f);
+        Color hurtColor = BattleFxColors.HurtFlash;
         while (t < pulseDur)
         {
             t += Time.unscaledDeltaTime;
@@ -377,45 +408,70 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         if (playerHeroHpText != null) playerHeroHpText.color = baseColor;
     }
 
+    private static void ResolveEndBattlePanelSize(out float panelW, out float panelH)
+    {
+        panelW = Mathf.Max(EndBattlePanelMinWidthPx, Screen.width - EndBattlePanelWidthMarginPx);
+        panelH = Mathf.Min(
+            Mathf.Max(EndBattlePanelMinHeightPx, Screen.height * EndBattlePanelHeightRatio),
+            Screen.height - EndBattlePanelWidthMarginPx);
+    }
+
+    private void DestroyEndBattlePanelUi()
+    {
+        if (endBattlePanel == null) return;
+        Destroy(endBattlePanel);
+        endBattlePanel = null;
+        endBattleTitleText = null;
+        endBattleSubtitleText = null;
+        endBattleHeaderStripImage = null;
+        endBattleProficiencyUpdateBanner = null;
+        endBattleFooterBar = null;
+        endBattlePanelGroup = null;
+        endBattleProficiencySection = null;
+        endBattleProficiencyContentRt = null;
+        endBattleProficiencyScroll = null;
+        ClearEndBattleProficiencyRows();
+    }
+
     private void EnsureEndBattlePanel()
     {
+        if (endBattlePanel != null &&
+            (endBattleProficiencySection == null || endBattlePanelLayoutBuilt != EndBattlePanelLayoutVersion))
+            DestroyEndBattlePanelUi();
         if (endBattlePanel != null || uiRoot == null) return;
 
-        endBattlePanel = new GameObject("EndBattlePanel", typeof(RectTransform), typeof(Image));
+        endBattlePanel = new GameObject("EndBattlePanel", typeof(RectTransform), typeof(Image), typeof(Outline));
         endBattlePanel.transform.SetParent(uiRoot, false);
         RectTransform panelRect = endBattlePanel.GetComponent<RectTransform>();
         panelRect.anchorMin = new Vector2(0.5f, 0.5f);
         panelRect.anchorMax = new Vector2(0.5f, 0.5f);
         panelRect.pivot = new Vector2(0.5f, 0.5f);
         panelRect.anchoredPosition = Vector2.zero;
-        panelRect.sizeDelta = new Vector2(Screen.width * 0.5f, Screen.height * 0.5f);
+        ResolveEndBattlePanelSize(out float panelW, out float panelH);
+        panelRect.sizeDelta = new Vector2(panelW, panelH);
         panelRect.localScale = Vector3.one;
         Image bg = endBattlePanel.GetComponent<Image>();
-        bg.color = new Color(0.93f, 0.89f, 0.82f, 0.96f);
+        bg.sprite = GetUnitWhiteSprite();
+        bg.type = Image.Type.Simple;
+        bg.color = BattleUiColors.PanelCream96;
+        Outline panelOutline = endBattlePanel.GetComponent<Outline>();
+        panelOutline.effectColor = BattleUiColors.PanelEdge35;
+        panelOutline.effectDistance = new Vector2(3f, -3f);
 
-        GameObject titleObj = new GameObject("EndBattleTitle", typeof(RectTransform), typeof(Text));
-        titleObj.transform.SetParent(endBattlePanel.transform, false);
-        RectTransform titleRect = titleObj.GetComponent<RectTransform>();
-        titleRect.anchorMin = new Vector2(0.5f, 0.5f);
-        titleRect.anchorMax = new Vector2(0.5f, 0.5f);
-        titleRect.pivot = new Vector2(0.5f, 0.5f);
-        titleRect.anchoredPosition = new Vector2(0f, 128f);
-        titleRect.sizeDelta = new Vector2(680f, 120f);
-        endBattleTitleText = titleObj.GetComponent<Text>();
-        endBattleTitleText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-        endBattleTitleText.fontSize = 76;
-        endBattleTitleText.alignment = TextAnchor.MiddleCenter;
-        endBattleTitleText.color = new Color(0.29f, 0.23f, 0.17f, 1f);
-        endBattleTitleText.text = "Victory";
-
-        CreateEndBattleButton(endBattlePanel.transform, "BattleHistoryButton", "對戰歷史", new Vector2(-300f, -138f), OnClickBattleHistory);
-        CreateEndBattleButton(endBattlePanel.transform, "RestartBattleButton", "Rematch", new Vector2(0f, -138f), OnClickRestartBattle);
-        CreateEndBattleButton(endBattlePanel.transform, "ReturnBuildbeckButton", "Deck builder", new Vector2(300f, -138f), OnClickReturnBuildbeck);
+        CreateEndBattleHeaderStrip(endBattlePanel.transform, panelW);
+        CreateEndBattleProficiencyUpdateBanner(endBattlePanel.transform, panelW);
+        BuildEndBattleProficiencySection(endBattlePanel.transform);
+        endBattleFooterBar = CreateEndBattleFooterBar(endBattlePanel.transform, panelW);
+        CreateEndBattleFooterButton(endBattleFooterBar.transform, "BattleHistoryButton", "對戰歷史", OnClickBattleHistory, false);
+        CreateEndBattleFooterButton(endBattleFooterBar.transform, "RestartBattleButton", "再戰一局", OnClickRestartBattle, true);
+        CreateEndBattleFooterButton(endBattleFooterBar.transform, "ReturnBuildbeckButton", "牌組編輯", OnClickReturnBuildbeck, false);
+        ConfigureEndBattleProficiencySectionLayout(showBanner: false);
         endBattlePanelGroup = endBattlePanel.AddComponent<CanvasGroup>();
         endBattlePanelGroup.blocksRaycasts = true;
         endBattlePanelGroup.interactable = true;
         endBattlePanelGroup.alpha = 1f;
         endBattlePanel.SetActive(false);
+        endBattlePanelLayoutBuilt = EndBattlePanelLayoutVersion;
     }
 
     private void OnClickBattleHistory()
@@ -473,7 +529,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
             bgRt.offsetMax = Vector2.zero;
             Image rowBg = bgObj.GetComponent<Image>();
             // Project palette match: warm brown tone (same family as battle buttons/panels).
-            rowBg.color = isWeatherLine ? new Color(0.443f, 0.282f, 0.247f, 0.28f) : new Color(0f, 0f, 0f, 0f);
+            rowBg.color = isWeatherLine ? BattleUiColors.HallWine28 : new Color(0f, 0f, 0f, 0f);
             rowBg.raycastTarget = false;
 
             GameObject txtObj = new GameObject("Text", typeof(RectTransform), typeof(TextMeshProUGUI));
@@ -487,7 +543,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
             if (sharedUIFont != null) tmp.font = sharedUIFont;
             tmp.fontSize = 22f * s;
             tmp.alignment = TextAlignmentOptions.TopLeft;
-            tmp.color = new Color(0.2f, 0.16f, 0.12f, 1f);
+            tmp.color = BattleUiColors.InkSoft;
             tmp.enableWordWrapping = true;
             tmp.richText = true;
             tmp.text = richLine;
@@ -597,7 +653,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         rootRt.offsetMin = Vector2.zero;
         rootRt.offsetMax = Vector2.zero;
         Image rootDim = root.GetComponent<Image>();
-        rootDim.color = new Color(0.12f, 0.08f, 0.06f, 0.68f);
+        rootDim.color = BattleUiColors.DimHeavy;
         rootDim.raycastTarget = true;
 
         GameObject dlg = new GameObject("BattleHistoryDialog", typeof(RectTransform), typeof(Image));
@@ -611,7 +667,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
             Mathf.Min(1020f, Screen.width - 32f) * s,
             Mathf.Min(780f, Screen.height - 48f) * s);
         Image dlgBg = dlg.GetComponent<Image>();
-        dlgBg.color = new Color(0.94f, 0.9f, 0.84f, 1f);
+        dlgBg.color = BattleUiColors.PanelMilk;
         dlgBg.raycastTarget = true;
 
         GameObject titleGo = new GameObject("BattleHistoryTitle", typeof(RectTransform), typeof(TextMeshProUGUI));
@@ -626,7 +682,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         if (sharedUIFont != null) titleTmp.font = sharedUIFont;
         titleTmp.fontSize = 34f * s;
         titleTmp.alignment = TextAlignmentOptions.Center;
-        titleTmp.color = new Color(0.25f, 0.2f, 0.15f, 1f);
+        titleTmp.color = BattleUiColors.Ink;
         titleTmp.text = "本局對戰歷史紀錄";
         titleTmp.raycastTarget = false;
 
@@ -638,9 +694,9 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         closeRt.pivot = new Vector2(1f, 1f);
         closeRt.anchoredPosition = new Vector2(-12f * s, -8f * s);
         closeRt.sizeDelta = new Vector2(118f * s, 44f * s);
-        closeBtnObj.GetComponent<Image>().color = new Color(0.4431373f, 0.28235295f, 0.24705884f, 0.96f);
         Button closeBtn = closeBtnObj.GetComponent<Button>();
         closeBtn.onClick.AddListener(HideBattleHistoryOverlay);
+        BattleUiColors.ApplyHallWineButton(closeBtn);
         GameObject closeLbl = new GameObject("Label", typeof(RectTransform), typeof(Text));
         closeLbl.transform.SetParent(closeBtnObj.transform, false);
         RectTransform closeLblRt = closeLbl.GetComponent<RectTransform>();
@@ -653,7 +709,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         closeTxt.text = "關閉";
         closeTxt.fontSize = Mathf.RoundToInt(22f * s);
         closeTxt.alignment = TextAnchor.MiddleCenter;
-        closeTxt.color = Color.white;
+        closeTxt.color = BattleUiColors.BtnPrimaryText;
 
         GameObject scrollGo = new GameObject("BattleHistoryScroll", typeof(RectTransform), typeof(Image), typeof(ScrollRect));
         scrollGo.transform.SetParent(dlg.transform, false);
@@ -662,7 +718,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         scrollRt.anchorMax = new Vector2(1f, 1f);
         scrollRt.offsetMin = new Vector2(14f * s, 16f * s);
         scrollRt.offsetMax = new Vector2(-14f * s, -58f * s);
-        scrollGo.GetComponent<Image>().color = new Color(0.88f, 0.83f, 0.76f, 1f);
+        scrollGo.GetComponent<Image>().color = BattleUiColors.PanelScroll;
         ScrollRect sr = scrollGo.GetComponent<ScrollRect>();
         sr.horizontal = false;
         sr.vertical = true;
@@ -708,21 +764,548 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         root.SetActive(false);
     }
 
-    private void CreateEndBattleButton(Transform parent, string name, string label, Vector2 pos, UnityEngine.Events.UnityAction action)
+    private void BuildEndBattleProficiencySection(Transform panel)
     {
-        GameObject buttonObj = new GameObject(name, typeof(RectTransform), typeof(Image), typeof(Button));
-        buttonObj.transform.SetParent(parent, false);
-        RectTransform rect = buttonObj.GetComponent<RectTransform>();
-        rect.anchorMin = new Vector2(0.5f, 0.5f);
-        rect.anchorMax = new Vector2(0.5f, 0.5f);
-        rect.pivot = new Vector2(0.5f, 0.5f);
-        rect.anchoredPosition = pos;
-        rect.sizeDelta = new Vector2(280f, 84f);
+        endBattleProficiencySection = new GameObject("ProficiencySection", typeof(RectTransform));
+        endBattleProficiencySection.transform.SetParent(panel, false);
+        ConfigureEndBattleProficiencySectionLayout(showBanner: false);
 
-        Image img = buttonObj.GetComponent<Image>();
-        img.color = new Color(0.4431373f, 0.28235295f, 0.24705884f, 0.96f);
+        GameObject scrollGo = new GameObject("ProficiencyScroll", typeof(RectTransform), typeof(Image), typeof(ScrollRect));
+        scrollGo.transform.SetParent(endBattleProficiencySection.transform, false);
+        RectTransform scrollRt = scrollGo.GetComponent<RectTransform>();
+        scrollRt.anchorMin = Vector2.zero;
+        scrollRt.anchorMax = Vector2.one;
+        scrollRt.offsetMin = Vector2.zero;
+        scrollRt.offsetMax = Vector2.zero;
+        Image scrollBg = scrollGo.GetComponent<Image>();
+        scrollBg.sprite = GetUnitWhiteSprite();
+        scrollBg.type = Image.Type.Simple;
+        scrollBg.color = BattleUiColors.PanelScroll;
+
+        GameObject viewport = new GameObject("Viewport", typeof(RectTransform), typeof(Image), typeof(RectMask2D));
+        viewport.transform.SetParent(scrollGo.transform, false);
+        RectTransform vpRt = viewport.GetComponent<RectTransform>();
+        vpRt.anchorMin = Vector2.zero;
+        vpRt.anchorMax = Vector2.one;
+        vpRt.offsetMin = new Vector2(10f, 10f);
+        vpRt.offsetMax = new Vector2(-10f, -10f);
+        viewport.GetComponent<Image>().color = BattleUiColors.PanelMilk985;
+
+        GameObject content = new GameObject("Content", typeof(RectTransform), typeof(GridLayoutGroup), typeof(ContentSizeFitter));
+        content.transform.SetParent(viewport.transform, false);
+        endBattleProficiencyContentRt = content.GetComponent<RectTransform>();
+        endBattleProficiencyContentRt.anchorMin = new Vector2(0f, 1f);
+        endBattleProficiencyContentRt.anchorMax = new Vector2(1f, 1f);
+        endBattleProficiencyContentRt.pivot = new Vector2(0.5f, 1f);
+        endBattleProficiencyContentRt.anchoredPosition = Vector2.zero;
+        endBattleProficiencyContentRt.sizeDelta = new Vector2(0f, 400f);
+        GridLayoutGroup glg = content.GetComponent<GridLayoutGroup>();
+        glg.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
+        glg.constraintCount = 2;
+        glg.spacing = new Vector2(16f, 14f);
+        glg.padding = new RectOffset(12, 12, 12, 12);
+        glg.childAlignment = TextAnchor.UpperCenter;
+        ContentSizeFitter csf = content.GetComponent<ContentSizeFitter>();
+        csf.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
+        csf.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+
+        endBattleProficiencyScroll = scrollGo.GetComponent<ScrollRect>();
+        endBattleProficiencyScroll.horizontal = false;
+        endBattleProficiencyScroll.vertical = true;
+        endBattleProficiencyScroll.movementType = ScrollRect.MovementType.Clamped;
+        endBattleProficiencyScroll.content = endBattleProficiencyContentRt;
+        endBattleProficiencyScroll.viewport = vpRt;
+    }
+
+    private void ResolveEndBattleProficiencyRowMetrics(
+        out float rowWidth,
+        out float rowHeight,
+        out float cardScaleMul,
+        out float nameBottomY,
+        out float barBottomY,
+        out int nameFontSize,
+        out int statusFontSize,
+        out float barHeight)
+    {
+        float viewportH = 260f;
+        if (endBattleProficiencyScroll != null && endBattleProficiencyScroll.viewport != null)
+        {
+            Canvas.ForceUpdateCanvases();
+            RectTransform vpRt = endBattleProficiencyScroll.viewport;
+            LayoutRebuilder.ForceRebuildLayoutImmediate(vpRt);
+            float h = vpRt.rect.height;
+            if (h > 48f) viewportH = h;
+        }
+        else if (endBattlePanel != null)
+        {
+            ResolveEndBattlePanelSize(out _, out float panelH);
+            viewportH = Mathf.Max(200f, panelH - 230f);
+        }
+
+        const float footerBlock = 96f;
+        float targetCardH = Mathf.Max(120f, (viewportH - footerBlock - 12f) * 0.9f);
+        float handH = GetBattleHandDisplayedHeight(1f);
+        if (handH < 1f) handH = 210f;
+        cardScaleMul = Mathf.Clamp(targetCardH / handH, 0.78f, 1.38f);
+        float scaleT = Mathf.InverseLerp(0.78f, 1.38f, cardScaleMul);
+
+        Vector2 cardSize = GetBattleHandDisplayedSize(cardScaleMul);
+        rowWidth = Mathf.Ceil(cardSize.x + 36f);
+        rowHeight = Mathf.Ceil(cardSize.y + footerBlock);
+
+        barHeight = Mathf.Round(Mathf.Lerp(28f, 38f, scaleT));
+        nameBottomY = cardSize.y + 10f;
+        barBottomY = Mathf.Round(Mathf.Lerp(38f, 48f, scaleT));
+        nameFontSize = Mathf.RoundToInt(Mathf.Lerp(28f, 38f, scaleT));
+        statusFontSize = Mathf.RoundToInt(Mathf.Lerp(22f, 30f, scaleT));
+    }
+
+    private void ApplySettlementProficiencyCardVisualTuning(CardDisplay display, float cardScaleMul)
+    {
+        ApplyPrefabVisualTuning(display);
+        float scaleT = Mathf.InverseLerp(0.78f, 1.38f, cardScaleMul);
+        float textBoost = Mathf.Lerp(1.28f, 1.55f, scaleT);
+        TextMeshProUGUI[] texts = display.GetComponentsInChildren<TextMeshProUGUI>(true);
+        for (int i = 0; i < texts.Length; i++)
+        {
+            TextMeshProUGUI t = texts[i];
+            if (t == null) continue;
+            t.rectTransform.localScale *= textBoost;
+        }
+
+        if (display.backgroundImage != null)
+            display.backgroundImage.rectTransform.localScale *= Mathf.Lerp(1.06f, 1.14f, scaleT);
+    }
+
+    private void PopulateEndBattleProficiencyRows()
+    {
+        ClearEndBattleProficiencyRows();
+        if (endBattleProficiencyContentRt == null) return;
+
+        IReadOnlyList<BattleProficiencySettlementEntry> entries = CardSkillProficiencyService.LastSettlementEntries;
+        bool hasRows = entries != null && entries.Count > 0;
+        if (endBattleProficiencySection != null)
+            endBattleProficiencySection.SetActive(hasRows);
+        if (!hasRows) return;
+
+        ResolveEndBattleProficiencyRowMetrics(
+            out float rowWidth,
+            out float rowHeight,
+            out float cardScaleMul,
+            out float nameBottomY,
+            out float barBottomY,
+            out int nameFontSize,
+            out int statusFontSize,
+            out float barHeight);
+
+        GridLayoutGroup grid = endBattleProficiencyContentRt != null
+            ? endBattleProficiencyContentRt.GetComponent<GridLayoutGroup>()
+            : null;
+        if (grid != null)
+            grid.cellSize = new Vector2(rowWidth, rowHeight);
+
+        PlayerData pd = battleManager != null ? battleManager.playerData : null;
+        if (pd == null) pd = UnityEngine.Object.FindFirstObjectByType<PlayerData>();
+        GameObject cardPrefab = ResolveCardPrefab();
+        Vector2 cardDisplaySize = GetBattleHandDisplayedSize(cardScaleMul);
+
+        for (int i = 0; i < entries.Count; i++)
+        {
+            BattleProficiencySettlementEntry entry = entries[i];
+            GameObject row = new GameObject("ProfRow_" + entry.monsterId, typeof(RectTransform), typeof(Image));
+            row.transform.SetParent(endBattleProficiencyContentRt, false);
+            RectTransform rowRt = row.GetComponent<RectTransform>();
+            rowRt.sizeDelta = new Vector2(rowWidth, rowHeight);
+            Image rowBg = row.GetComponent<Image>();
+            rowBg.sprite = GetUnitWhiteSprite();
+            rowBg.type = Image.Type.Simple;
+            rowBg.color = BattleUiColors.PanelMilk985;
+
+            GameObject cardSlot = new GameObject("CardSlot", typeof(RectTransform));
+            cardSlot.transform.SetParent(row.transform, false);
+            RectTransform cardSlotRt = cardSlot.GetComponent<RectTransform>();
+            cardSlotRt.anchorMin = new Vector2(0.5f, 1f);
+            cardSlotRt.anchorMax = new Vector2(0.5f, 1f);
+            cardSlotRt.pivot = new Vector2(0.5f, 1f);
+            cardSlotRt.anchoredPosition = Vector2.zero;
+            cardSlotRt.sizeDelta = cardDisplaySize;
+
+            if (cardPrefab != null && pd != null && pd.CardStore != null)
+            {
+                Card card = pd.CardStore.GetCardById(entry.monsterId);
+                if (card != null)
+                {
+                    GameObject cardObj = Instantiate(cardPrefab, cardSlot.transform);
+                    RectTransform cardRt = cardObj.GetComponent<RectTransform>();
+                    if (cardRt != null)
+                    {
+                        cardRt.anchorMin = cardRt.anchorMax = new Vector2(0.5f, 0.5f);
+                        cardRt.pivot = new Vector2(0.5f, 0.5f);
+                        cardRt.anchoredPosition = Vector2.zero;
+                        ApplyBattleHandCardRectLayout(cardRt, cardScaleMul);
+                    }
+                    CardDisplay display = cardObj.GetComponentInChildren<CardDisplay>();
+                    if (display != null)
+                    {
+                        display.SetCard(card);
+                        ApplySettlementProficiencyCardVisualTuning(display, cardScaleMul);
+                    }
+                    Button b = cardObj.GetComponent<Button>();
+                    if (b != null) b.interactable = false;
+                }
+            }
+
+            GameObject nameObj = new GameObject("Name", typeof(RectTransform), typeof(Text));
+            nameObj.transform.SetParent(row.transform, false);
+            RectTransform nameRt = nameObj.GetComponent<RectTransform>();
+            nameRt.anchorMin = new Vector2(0f, 0f);
+            nameRt.anchorMax = new Vector2(1f, 0f);
+            nameRt.pivot = new Vector2(0.5f, 0f);
+            nameRt.anchoredPosition = new Vector2(0f, nameBottomY);
+            nameRt.sizeDelta = new Vector2(0f, Mathf.Round(nameFontSize * 1.15f));
+            Text nameTxt = nameObj.GetComponent<Text>();
+            nameTxt.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            nameTxt.fontSize = nameFontSize;
+            nameTxt.alignment = TextAnchor.MiddleCenter;
+            nameTxt.color = BattleUiColors.Ink;
+            nameTxt.text = entry.cardName;
+            nameTxt.horizontalOverflow = HorizontalWrapMode.Wrap;
+            nameTxt.verticalOverflow = VerticalWrapMode.Truncate;
+
+            GameObject trackObj = new GameObject("BarTrack", typeof(RectTransform), typeof(Image));
+            trackObj.transform.SetParent(row.transform, false);
+            RectTransform trackRt = trackObj.GetComponent<RectTransform>();
+            trackRt.anchorMin = new Vector2(0f, 0f);
+            trackRt.anchorMax = new Vector2(1f, 0f);
+            trackRt.pivot = new Vector2(0.5f, 0f);
+            trackRt.anchoredPosition = new Vector2(0f, barBottomY);
+            trackRt.sizeDelta = new Vector2(-8f, barHeight);
+            Image trackImg = trackObj.GetComponent<Image>();
+            trackImg.sprite = GetUnitWhiteSprite();
+            trackImg.type = Image.Type.Simple;
+            trackImg.color = new Color(0.22f, 0.2f, 0.18f, 0.35f);
+
+            GameObject fillObj = new GameObject("BarFill", typeof(RectTransform), typeof(Image));
+            fillObj.transform.SetParent(trackObj.transform, false);
+            RectTransform fillRt = fillObj.GetComponent<RectTransform>();
+            fillRt.anchorMin = Vector2.zero;
+            fillRt.anchorMax = new Vector2(0f, 1f);
+            fillRt.pivot = new Vector2(0f, 0.5f);
+            fillRt.offsetMin = new Vector2(2f, 2f);
+            fillRt.offsetMax = new Vector2(-2f, -2f);
+            float startFill = Mathf.Clamp01(entry.fillBefore01);
+            fillRt.anchorMax = new Vector2(startFill, 1f);
+            Image fillImg = fillObj.GetComponent<Image>();
+            fillImg.sprite = GetUnitWhiteSprite();
+            fillImg.type = Image.Type.Simple;
+            fillImg.color = BattleUiColors.AllyHp;
+
+            GameObject statusObj = new GameObject("Status", typeof(RectTransform), typeof(Text));
+            statusObj.transform.SetParent(row.transform, false);
+            RectTransform statusRt = statusObj.GetComponent<RectTransform>();
+            statusRt.anchorMin = new Vector2(0f, 0f);
+            statusRt.anchorMax = new Vector2(1f, 0f);
+            statusRt.pivot = new Vector2(0.5f, 0f);
+            statusRt.anchoredPosition = Vector2.zero;
+            statusRt.sizeDelta = new Vector2(0f, Mathf.Max(statusFontSize + 8f, barBottomY - 2f));
+            Text statusTxt = statusObj.GetComponent<Text>();
+            statusTxt.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            statusTxt.fontSize = statusFontSize;
+            statusTxt.alignment = TextAnchor.MiddleCenter;
+            statusTxt.color = BattleUiColors.InkSoft;
+            CardProficiencyWins wins = pd != null ? pd.GetCardProficiencyWins(entry.monsterId) : default;
+            string deltaSuffix = CardSkillProficiencyService.FormatProgressDelta(entry.progressDelta);
+            if (entry.stageAfter != entry.stageBefore)
+            {
+                statusTxt.text = "已解鎖 " + CardSkillProficiencyService.GetStageShortLabel(entry.stageAfter);
+                statusTxt.color = BattleUiColors.AllyHp;
+            }
+            else
+            {
+                statusTxt.text = CardSkillProficiencyService.GetStageShortLabel(entry.stageAfter) + "  " +
+                                   CardSkillProficiencyService.FormatProgressTowardB(wins.progressAny) +
+                                   (string.IsNullOrEmpty(deltaSuffix) ? "" : "  " + deltaSuffix);
+                statusTxt.color = string.IsNullOrEmpty(deltaSuffix)
+                    ? BattleUiColors.InkSoft
+                    : BattleUiColors.AllyHp;
+            }
+
+            endBattleProficiencyRows.Add(new SettlementProficiencyRowUi
+            {
+                fillRt = fillRt,
+                statusText = statusTxt,
+                fillFrom = startFill,
+                fillTo = Mathf.Clamp01(entry.fillAfter01)
+            });
+        }
+
+        Canvas.ForceUpdateCanvases();
+        if (endBattleProficiencyContentRt != null)
+            LayoutRebuilder.ForceRebuildLayoutImmediate(endBattleProficiencyContentRt);
+        if (endBattleProficiencyScroll != null)
+            endBattleProficiencyScroll.verticalNormalizedPosition = 1f;
+    }
+
+    private void ClearEndBattleProficiencyRows()
+    {
+        endBattleProficiencyRows.Clear();
+        if (endBattleProficiencyContentRt == null) return;
+        for (int i = endBattleProficiencyContentRt.childCount - 1; i >= 0; i--)
+            Destroy(endBattleProficiencyContentRt.GetChild(i).gameObject);
+    }
+
+    private IEnumerator CoAnimateEndBattleProficiencyBars()
+    {
+        if (endBattleProficiencyRows.Count == 0) yield break;
+
+        for (int i = 0; i < endBattleProficiencyRows.Count; i++)
+        {
+            SettlementProficiencyRowUi row = endBattleProficiencyRows[i];
+            if (row.fillRt != null)
+                row.fillRt.anchorMax = new Vector2(row.fillFrom, 1f);
+        }
+
+        float maxEnd = 0f;
+        for (int i = 0; i < endBattleProficiencyRows.Count; i++)
+        {
+            SettlementProficiencyRowUi row = endBattleProficiencyRows[i];
+            float startDelay = i * EndBattleProficiencyBarStagger;
+            float endTime = startDelay + EndBattleProficiencyBarAnimDuration;
+            if (endTime > maxEnd) maxEnd = endTime;
+        }
+
+        float elapsed = 0f;
+        while (elapsed < maxEnd)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            for (int i = 0; i < endBattleProficiencyRows.Count; i++)
+            {
+                SettlementProficiencyRowUi row = endBattleProficiencyRows[i];
+                if (row.fillRt == null) continue;
+                float localT = elapsed - i * EndBattleProficiencyBarStagger;
+                float p = localT <= 0f ? 0f : Mathf.Clamp01(localT / EndBattleProficiencyBarAnimDuration);
+                float eased = p * p * (3f - 2f * p);
+                float fill = Mathf.Lerp(row.fillFrom, row.fillTo, eased);
+                row.fillRt.anchorMax = new Vector2(fill, 1f);
+            }
+            yield return null;
+        }
+
+        for (int i = 0; i < endBattleProficiencyRows.Count; i++)
+        {
+            SettlementProficiencyRowUi row = endBattleProficiencyRows[i];
+            if (row.fillRt != null)
+                row.fillRt.anchorMax = new Vector2(row.fillTo, 1f);
+        }
+
+        endBattleProficiencyAnimRoutine = null;
+    }
+
+    private void ApplyEndBattleResultHeader(int result)
+    {
+        if (endBattleTitleText == null) return;
+
+        if (result == 1)
+        {
+            endBattleTitleText.text = "勝利";
+            if (endBattleSubtitleText != null) endBattleSubtitleText.text = "熟練度與戰績已記錄";
+            if (endBattleHeaderStripImage != null)
+                endBattleHeaderStripImage.color = BattleUiColors.WithAlpha(BattleUiColors.AllyHp, 0.38f);
+            endBattleTitleText.color = BattleUiColors.Ink;
+        }
+        else if (result == -1)
+        {
+            endBattleTitleText.text = "戰敗";
+            if (endBattleSubtitleText != null) endBattleSubtitleText.text = "仍可累積部分熟練度進度";
+            if (endBattleHeaderStripImage != null)
+                endBattleHeaderStripImage.color = BattleUiColors.WithAlpha(BattleUiColors.FoeHp, 0.42f);
+            endBattleTitleText.color = BattleUiColors.Ink;
+        }
+        else
+        {
+            endBattleTitleText.text = "平手";
+            if (endBattleSubtitleText != null) endBattleSubtitleText.text = "本局戰績已記錄";
+            if (endBattleHeaderStripImage != null)
+                endBattleHeaderStripImage.color = BattleUiColors.WithAlpha(BattleUiColors.PanelScroll, 0.95f);
+            endBattleTitleText.color = BattleUiColors.InkSoft;
+        }
+    }
+
+    private void UpdateEndBattleProficiencyUpdateBanner()
+    {
+        bool showBanner = false;
+        IReadOnlyList<BattleProficiencySettlementEntry> entries = CardSkillProficiencyService.LastSettlementEntries;
+        if (entries != null)
+        {
+            for (int i = 0; i < entries.Count; i++)
+            {
+                if (entries[i].HadProgressChange)
+                {
+                    showBanner = true;
+                    break;
+                }
+            }
+        }
+
+        if (endBattleProficiencyUpdateBanner != null)
+            endBattleProficiencyUpdateBanner.SetActive(showBanner);
+        ConfigureEndBattleProficiencySectionLayout(showBanner);
+    }
+
+    private void ConfigureEndBattleProficiencySectionLayout(bool showBanner)
+    {
+        if (endBattleProficiencySection == null) return;
+        RectTransform sectionRt = endBattleProficiencySection.GetComponent<RectTransform>();
+        float topInset = EndBattleHeaderHeightPx + (showBanner ? EndBattleProficiencyBannerHeightPx + 10f : 8f);
+        sectionRt.offsetMin = new Vector2(24f, EndBattleFooterHeightPx + 14f);
+        sectionRt.offsetMax = new Vector2(-24f, -topInset);
+    }
+
+    private void CreateEndBattleHeaderStrip(Transform panel, float panelW)
+    {
+        GameObject strip = new GameObject("HeaderStrip", typeof(RectTransform), typeof(Image));
+        strip.transform.SetParent(panel, false);
+        RectTransform stripRt = strip.GetComponent<RectTransform>();
+        stripRt.anchorMin = new Vector2(0f, 1f);
+        stripRt.anchorMax = new Vector2(1f, 1f);
+        stripRt.pivot = new Vector2(0.5f, 1f);
+        stripRt.anchoredPosition = Vector2.zero;
+        stripRt.sizeDelta = new Vector2(0f, EndBattleHeaderHeightPx);
+        endBattleHeaderStripImage = strip.GetComponent<Image>();
+        endBattleHeaderStripImage.sprite = GetUnitWhiteSprite();
+        endBattleHeaderStripImage.type = Image.Type.Simple;
+        endBattleHeaderStripImage.color = BattleUiColors.WithAlpha(BattleUiColors.AllyHp, 0.38f);
+
+        GameObject titleObj = new GameObject("EndBattleTitle", typeof(RectTransform), typeof(Text));
+        titleObj.transform.SetParent(strip.transform, false);
+        RectTransform titleRect = titleObj.GetComponent<RectTransform>();
+        titleRect.anchorMin = new Vector2(0f, 0.35f);
+        titleRect.anchorMax = new Vector2(1f, 1f);
+        titleRect.offsetMin = new Vector2(24f, 0f);
+        titleRect.offsetMax = new Vector2(-24f, -8f);
+        endBattleTitleText = titleObj.GetComponent<Text>();
+        endBattleTitleText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        endBattleTitleText.fontSize = 64;
+        endBattleTitleText.fontStyle = FontStyle.Bold;
+        endBattleTitleText.alignment = TextAnchor.MiddleCenter;
+        endBattleTitleText.color = BattleUiColors.Ink;
+        endBattleTitleText.text = "勝利";
+
+        GameObject subObj = new GameObject("EndBattleSubtitle", typeof(RectTransform), typeof(Text));
+        subObj.transform.SetParent(strip.transform, false);
+        RectTransform subRect = subObj.GetComponent<RectTransform>();
+        subRect.anchorMin = new Vector2(0f, 0f);
+        subRect.anchorMax = new Vector2(1f, 0.38f);
+        subRect.offsetMin = new Vector2(24f, 10f);
+        subRect.offsetMax = new Vector2(-24f, 0f);
+        endBattleSubtitleText = subObj.GetComponent<Text>();
+        endBattleSubtitleText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        endBattleSubtitleText.fontSize = 26;
+        endBattleSubtitleText.alignment = TextAnchor.MiddleCenter;
+        endBattleSubtitleText.color = BattleUiColors.InkSoft;
+        endBattleSubtitleText.text = "熟練度與戰績已記錄";
+    }
+
+    private void CreateEndBattleProficiencyUpdateBanner(Transform panel, float panelW)
+    {
+        float y = -(EndBattleHeaderHeightPx + 4f);
+        endBattleProficiencyUpdateBanner = new GameObject("ProficiencyUpdatedBanner", typeof(RectTransform), typeof(Image));
+        endBattleProficiencyUpdateBanner.transform.SetParent(panel, false);
+        RectTransform bannerRt = endBattleProficiencyUpdateBanner.GetComponent<RectTransform>();
+        bannerRt.anchorMin = new Vector2(0f, 1f);
+        bannerRt.anchorMax = new Vector2(1f, 1f);
+        bannerRt.pivot = new Vector2(0.5f, 1f);
+        bannerRt.anchoredPosition = new Vector2(0f, y);
+        bannerRt.sizeDelta = new Vector2(-48f, EndBattleProficiencyBannerHeightPx);
+        Image bannerBg = endBattleProficiencyUpdateBanner.GetComponent<Image>();
+        bannerBg.sprite = GetUnitWhiteSprite();
+        bannerBg.type = Image.Type.Simple;
+        bannerBg.color = BattleUiColors.PanelMilk985;
+
+        GameObject accent = new GameObject("Accent", typeof(RectTransform), typeof(Image));
+        accent.transform.SetParent(endBattleProficiencyUpdateBanner.transform, false);
+        RectTransform accentRt = accent.GetComponent<RectTransform>();
+        accentRt.anchorMin = new Vector2(0f, 0f);
+        accentRt.anchorMax = new Vector2(0f, 1f);
+        accentRt.pivot = new Vector2(0f, 0.5f);
+        accentRt.sizeDelta = new Vector2(6f, 0f);
+        accentRt.offsetMin = new Vector2(0f, 6f);
+        accentRt.offsetMax = new Vector2(6f, -6f);
+        accent.GetComponent<Image>().sprite = GetUnitWhiteSprite();
+        accent.GetComponent<Image>().color = BattleUiColors.AllyHp;
+
+        GameObject titleObj = new GameObject("BannerTitle", typeof(RectTransform), typeof(Text));
+        titleObj.transform.SetParent(endBattleProficiencyUpdateBanner.transform, false);
+        RectTransform titleRt = titleObj.GetComponent<RectTransform>();
+        titleRt.anchorMin = new Vector2(0f, 0.5f);
+        titleRt.anchorMax = new Vector2(1f, 1f);
+        titleRt.offsetMin = new Vector2(18f, 0f);
+        titleRt.offsetMax = new Vector2(-12f, -4f);
+        Text titleTxt = titleObj.GetComponent<Text>();
+        titleTxt.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        titleTxt.fontSize = 30;
+        titleTxt.fontStyle = FontStyle.Bold;
+        titleTxt.alignment = TextAnchor.MiddleLeft;
+        titleTxt.color = BattleUiColors.Ink;
+        titleTxt.text = "卡牌熟練度已更新";
+
+        GameObject hintObj = new GameObject("BannerHint", typeof(RectTransform), typeof(Text));
+        hintObj.transform.SetParent(endBattleProficiencyUpdateBanner.transform, false);
+        RectTransform hintRt = hintObj.GetComponent<RectTransform>();
+        hintRt.anchorMin = new Vector2(0f, 0f);
+        hintRt.anchorMax = new Vector2(1f, 0.5f);
+        hintRt.offsetMin = new Vector2(18f, 4f);
+        hintRt.offsetMax = new Vector2(-12f, 0f);
+        Text hintTxt = hintObj.GetComponent<Text>();
+        hintTxt.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        hintTxt.fontSize = 22;
+        hintTxt.alignment = TextAnchor.MiddleLeft;
+        hintTxt.color = BattleUiColors.InkSoft;
+        hintTxt.text = "牌組內怪物進度已同步至存檔";
+
+        endBattleProficiencyUpdateBanner.SetActive(false);
+    }
+
+    private GameObject CreateEndBattleFooterBar(Transform panel, float panelW)
+    {
+        GameObject footer = new GameObject("FooterBar", typeof(RectTransform), typeof(HorizontalLayoutGroup));
+        footer.transform.SetParent(panel, false);
+        RectTransform footerRt = footer.GetComponent<RectTransform>();
+        footerRt.anchorMin = new Vector2(0f, 0f);
+        footerRt.anchorMax = new Vector2(1f, 0f);
+        footerRt.pivot = new Vector2(0.5f, 0f);
+        footerRt.anchoredPosition = new Vector2(0f, 14f);
+        footerRt.sizeDelta = new Vector2(-48f, EndBattleFooterHeightPx);
+        HorizontalLayoutGroup hlg = footer.GetComponent<HorizontalLayoutGroup>();
+        hlg.spacing = 14f;
+        hlg.padding = new RectOffset(4, 4, 4, 4);
+        hlg.childAlignment = TextAnchor.MiddleCenter;
+        hlg.childControlWidth = true;
+        hlg.childControlHeight = true;
+        hlg.childForceExpandWidth = true;
+        hlg.childForceExpandHeight = true;
+        return footer;
+    }
+
+    private void CreateEndBattleFooterButton(
+        Transform parent,
+        string name,
+        string label,
+        UnityEngine.Events.UnityAction action,
+        bool primary)
+    {
+        GameObject buttonObj = new GameObject(name, typeof(RectTransform), typeof(Image), typeof(Button), typeof(LayoutElement));
+        buttonObj.transform.SetParent(parent, false);
+        LayoutElement le = buttonObj.GetComponent<LayoutElement>();
+        le.minHeight = 76f;
+        le.preferredHeight = 76f;
+
         Button btn = buttonObj.GetComponent<Button>();
         btn.onClick.AddListener(action);
+        if (primary)
+            BattleUiColors.ApplyButtonStyle(btn, "EndTurnButton");
+        else
+            BattleUiColors.ApplyHallWineButton(btn);
 
         GameObject textObj = new GameObject("Label", typeof(RectTransform), typeof(Text));
         textObj.transform.SetParent(buttonObj.transform, false);
@@ -735,8 +1318,8 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         t.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
         t.text = label;
         t.alignment = TextAnchor.MiddleCenter;
-        t.fontSize = 34;
-        t.color = Color.white;
+        t.fontSize = 30;
+        t.color = primary ? BattleUiColors.BtnPrimaryText : BattleUiColors.BtnPrimaryText;
     }
 
     private void OnClickRestartBattle()

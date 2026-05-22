@@ -108,7 +108,19 @@ public class CardDisplay : MonoBehaviour
                     healthText.text = monster.healthPoint.ToString();
                 }
             }
-            if (effectText != null) effectText.gameObject.SetActive(false);
+            if (effectText != null)
+            {
+                if (MonsterSkillRegistry.TryGetSkillLineB(monster.id, out string skillLine))
+                {
+                    effectText.gameObject.SetActive(true);
+                    effectText.richText = true;
+                    effectText.text = skillLine;
+                }
+                else
+                {
+                    effectText.gameObject.SetActive(false);
+                }
+            }
         }
         else if (card is SpellCard spell)
         {

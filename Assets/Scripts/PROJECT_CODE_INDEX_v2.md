@@ -29,6 +29,7 @@
 | 模組 | 功能描述 | 主要類別/函式 | 典型輸入 | 典型輸出 |
 | --- | --- | --- | --- | --- |
 | 使用者介面（UI） | 戰鬥HUD、手牌區、場面區、結算/暫停等畫面 | `BattleSimulationDebugUI`（含 partial）/ `CreateDebugPanel()` / `RebuildHandButtons()` / `RefreshFieldCards()` / `EnsureEndBattlePanel()` | 戰鬥狀態事件 | UI元件顯示與動畫 |
+| 場地牌狀態 | 場上怪獸徽章、傷害浮字、凝視護盾等狀態對照 | `FIELD_CARD_STATUS_INDEX.md` / `FieldCardStatusIndex` / `GetPlayerFieldMonsterStatusBadge()` | 規則旗標、回合數 | 中央徽章與瞬時 FX |
 | 使用者體驗（UX） | 縮放、懸浮、長按、拖曳、點擊回饋 | `ZoomUI` / `BattleHandHoverPreview` / `BattleHandLongPressTooltip` / `BattleHandDiscardDrag` / `ClickCard` | Pointer事件 | 視覺回饋、互動狀態 |
 | 卡牌顯示 | 將卡牌資料映射成畫面元素 | `CardDisplay` / `SetCard()` / `ShowCard()` / `CardCounter` | `Card` 物件、數值 | 卡面文字/圖像更新 |
 

@@ -86,7 +86,8 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         diceRt.anchoredPosition = anchoredPos;
         diceRt.sizeDelta = new Vector2(44f, 44f);
         Image bg = diceObj.GetComponent<Image>();
-        bg.color = new Color(0.96f, 0.96f, 0.96f, 1f);
+        bg.sprite = GetUnitWhiteSprite();
+        bg.color = BattleFxColors.DiceFace;
 
         Image[] pips = new Image[9];
         int idx = 0;
@@ -105,7 +106,8 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
                 float y = (1 - row) * 13f;
                 pipRt.anchoredPosition = new Vector2(x, y);
                 Image pip = pipObj.GetComponent<Image>();
-                pip.color = new Color(0.08f, 0.08f, 0.08f, 1f);
+                pip.sprite = GetUnitWhiteSprite();
+                pip.color = BattleFxColors.DicePipOn;
                 pip.enabled = false;
                 pips[idx] = pip;
                 idx++;
@@ -157,7 +159,9 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
     private void EnablePip(Image[] pips, int index)
     {
         if (index < 0 || index >= pips.Length) return;
-        if (pips[index] != null) pips[index].enabled = true;
+        if (pips[index] == null) return;
+        pips[index].enabled = true;
+        pips[index].color = BattleFxColors.DicePipOn;
     }
 
     private AudioClip CreateProceduralDiceRollClip()
