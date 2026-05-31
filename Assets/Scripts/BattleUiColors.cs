@@ -20,7 +20,12 @@ public static class BattleUiColors
     public static readonly Color BtnSecondary = Hex("#5A7A8F");
     public static readonly Color BtnSecondaryH = Hex("#6B8FA3");
     public static readonly Color BtnSecondaryP = Hex("#465F6F");
+    public static readonly Color BtnSecondaryLight = Hex("#7A95A8");
+    public static readonly Color BtnSecondaryLightH = Hex("#8FA9BA");
+    public static readonly Color BtnSecondaryLightP = Hex("#627985");
     public static readonly Color BtnSecondaryText = Hex("#E8F2F6");
+    /// <summary>Footer action buttons: high-contrast label on tinted backgrounds.</summary>
+    public static readonly Color BtnFooterLabelText = Hex("#FFFFFF");
     public static readonly Color BtnDisabledBg = WithAlpha(PanelCream, 0.5f);
     public static readonly Color BtnDisabledText = WithAlpha(Hex("#6B5F58"), 0.7f);
 
@@ -92,7 +97,8 @@ public static class BattleUiColors
         Color highlighted = WithAlpha(Hex("#8A5857"), 0.98f);
         Color pressed = WithAlpha(Hex("#5A3A39"), 0.96f);
 
-        img.color = normal;
+        // Graphic stays white; tint comes from ColorBlock (avoids double-multiply darkening).
+        img.color = Color.white;
         var cb = button.colors;
         cb.normalColor = normal;
         cb.highlightedColor = highlighted;
@@ -105,7 +111,11 @@ public static class BattleUiColors
         if (legacyLabel != null) legacyLabel.color = BtnPrimaryText;
 
         TMPro.TextMeshProUGUI tmpLabel = button.GetComponentInChildren<TMPro.TextMeshProUGUI>(true);
-        if (tmpLabel != null) tmpLabel.color = BtnPrimaryText;
+        if (tmpLabel != null)
+        {
+            tmpLabel.color = BtnFooterLabelText;
+            tmpLabel.faceColor = BtnFooterLabelText;
+        }
     }
 
     public static void ApplyButtonStyle(Button button, string objectName)

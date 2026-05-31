@@ -103,6 +103,9 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
                     "<size=38>長按卡牌拖至棄牌區</size>";
             }
         }
+
+        if (TutorialBattleCoachUi.IsActiveForCurrentBattle)
+            RefreshTutorialHandPlayHighlights();
     }
 
     public bool TryDropPlayerCardToDiscardByScreenPoint(Card card, Vector2 screenPoint, Camera eventCamera)

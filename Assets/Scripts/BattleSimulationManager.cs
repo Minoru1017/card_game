@@ -1,6 +1,8 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using UnityEngine;
 using UnityEngine.Serialization;
 
@@ -186,6 +188,9 @@ public class BattleSimulationManager : MonoBehaviour
     private EnemyAiPlayStyle runtimeEnemyAiPlayStyle = EnemyAiPlayStyle.Greedy;
     private string runtimeDifficultyLabelZh;
     private bool runtimeDifficultyLabelExplicit;
+    private bool lastBattleEndedBySurrender;
+
+    public bool LastBattleEndedBySurrender => lastBattleEndedBySurrender;
 
     public string CurrentBattleDifficultyLabelZh => GetBattleDifficultyLabelForRecord();
 
@@ -239,6 +244,18 @@ public class BattleSimulationManager : MonoBehaviour
     {
         if (runtimeDifficultyConfigPending)
             return;
+
+        if (BattleLaunchContext.IsIntroTutorialBattle)
+        {
+            SceneLoader.ApplyIntroTutorialRuntimeConfigToManager(this);
+            return;
+        }
+
+        if (BattleLaunchContext.IsHarborTrainingGroundBattle)
+        {
+            SceneLoader.ApplyHarborTrainingRuntimeConfigToManager(this);
+            return;
+        }
 
         string label = BattleLaunchContext.ResolveForBattleRecord();
         if (string.IsNullOrWhiteSpace(label))
@@ -308,6 +325,27 @@ public class BattleSimulationManager : MonoBehaviour
     private readonly List<BattleWeatherType> weatherRandomCycleBag = new List<BattleWeatherType>(4);
     private int weatherRandomCycleCursor;
 
+    /// <summary>入門級教學戰不啟用天氣（預報、持續效果、全屏演出）。</summary>
+    public bool IsWeatherSystemEnabledForBattle()
+    {
+        if (BattleLaunchContext.IsIntroTutorialBattle)
+            return false;
+
+        return runtimeEnemyAiPlayStyle != EnemyAiPlayStyle.IntroGreedy;
+    }
+
+    private void ResetWeatherStateToInactive()
+    {
+        currentWeather = BattleWeatherType.None;
+        forecastPreviewWeatherForUi = BattleWeatherType.None;
+        queuedWeatherForNextRound = BattleWeatherType.None;
+        weatherActiveRoundsRemaining = 0;
+        weatherCooldownRoundsRemaining = 0;
+        weatherRemainingRoundsForUi = 0;
+        playerFirstSpellBoostAvailable = false;
+        enemyFirstSpellBoostAvailable = false;
+    }
+
     /// <summary>Batch auto-play only: spell-before-monster chance when field is empty.</summary>
     public float AutoSimPlayerSpellFirstChance => autoSimPlayerSpellFirstChance;
 
@@ -350,6 +388,10 @@ public class BattleSimulationManager : MonoBehaviour
     public event System.Action PlayerPressedEndTurnForPromptUi;
     /// <summary>我方回合可操作視窗開始（開場骰子結束後先手，或敵方回合結束並抽牌後）；供「你的回合」閒置計時起點。</summary>
     public event System.Action PlayerTurnActionWindowOpenedForPromptUi;
+    /// <summary>對戰結束（勝利 1、戰敗 -1、平手 2）；供結算 UI 事件驅動更新。</summary>
+    public event System.Action<int> BattleEnded;
+    /// <summary>規則阻斷訊息變更（非空時結算區顯示提示而非結算面板）。</summary>
+    public event System.Action<string> BattleRuleMessageChanged;
 
     private bool deferEnemyFieldUiClearAfterPlayerFireballKill;
     private bool deferPlayerFieldUiClearAfterEnemyFireballKill;
@@ -443,7 +485,7 @@ public class BattleSimulationManager : MonoBehaviour
         if (exclude != BattleWeatherType.Gale) weatherRandomCycleBag.Add(BattleWeatherType.Gale);
         for (int i = weatherRandomCycleBag.Count - 1; i > 0; i--)
         {
-            int j = Random.Range(0, i + 1);
+            int j = UnityEngine.Random.Range(0, i + 1);
             BattleWeatherType t = weatherRandomCycleBag[i];
             weatherRandomCycleBag[i] = weatherRandomCycleBag[j];
             weatherRandomCycleBag[j] = t;
@@ -574,6 +616,13 @@ public class BattleSimulationManager : MonoBehaviour
     {
         weatherRemainingRoundsForUi = 0;
 
+        if (!IsWeatherSystemEnabledForBattle())
+        {
+            ResetWeatherStateToInactive();
+            PrepareWeatherEffectFlagsForCurrentRound();
+            return false;
+        }
+
         // 初始回合（無論先後手）不觸發天氣預報。
         if (currentRound <= 1)
         {
@@ -663,6 +712,7 @@ public class BattleSimulationManager : MonoBehaviour
 
     private int ApplyWeatherSpellPowerBonus(int baseValue, bool isPlayerCaster)
     {
+        if (!IsWeatherSystemEnabledForBattle()) return baseValue;
         int v = baseValue;
         if (currentWeather == BattleWeatherType.Gale)
         {
@@ -679,6 +729,7 @@ public class BattleSimulationManager : MonoBehaviour
 
     private int ApplyFogDirectDamageReductionIfNeeded(int directDamage)
     {
+        if (!IsWeatherSystemEnabledForBattle()) return directDamage;
         if (currentWeather != BattleWeatherType.Fog) return directDamage;
         return Mathf.Max(0, Mathf.CeilToInt(directDamage * 0.5f));
     }
@@ -764,12 +815,14 @@ public class BattleSimulationManager : MonoBehaviour
 
     private int ApplyHolyLightHealBonusIfNeeded(int baseHeal)
     {
+        if (!IsWeatherSystemEnabledForBattle()) return baseHeal;
         if (currentWeather != BattleWeatherType.HolyLight) return baseHeal;
         return baseHeal + 10;
     }
 
     private void ApplyFireRainEndTurnEffect()
     {
+        if (!IsWeatherSystemEnabledForBattle()) return;
         if (currentWeather != BattleWeatherType.FireRain) return;
         const int dot = 5;
         bool any = false;
@@ -806,25 +859,95 @@ public class BattleSimulationManager : MonoBehaviour
     }
 
     private readonly List<string> battleHistoryLines = new List<string>(128);
+    private readonly List<BattleHistoryEntry> battleHistoryEntries = new List<BattleHistoryEntry>(128);
+    private int battleHistorySequence;
     private readonly List<string> pendingDiscardHistoryLines = new List<string>(16);
     private Coroutine discardHistoryFlushRoutine;
     private const float DiscardHistoryFlushDelaySeconds = 0.14f;
     private bool playerHeroDeathLoggedThisBattle;
 
-    /// <summary>本局累積的對戰歷史（每行一則）；批次模擬不寫入。</summary>
+    /// <summary>新增一則歷史時通知 UI（即時戰報側欄等）。</summary>
+    public event Action BattleHistoryChanged;
+
+    public IReadOnlyList<BattleHistoryEntry> BattleHistoryEntries => battleHistoryEntries;
+
+    /// <summary>本局累積的對戰歷史（每行一則，時間序）；批次模擬不寫入。</summary>
     public string GetBattleHistoryFullText()
     {
-        if (battleHistoryLines.Count == 0)
+        if (battleHistoryEntries.Count == 0)
             return "（本局尚無對戰歷史紀錄）";
-        return string.Join("\n", battleHistoryLines);
+        var sb = new StringBuilder();
+        for (int i = 0; i < battleHistoryEntries.Count; i++)
+        {
+            if (i > 0) sb.Append('\n');
+            sb.Append(battleHistoryEntries[i].Text);
+        }
+        return sb.ToString();
+    }
+
+    /// <summary>由新到舊的歷史事件（供完整戰報 UI）。</summary>
+    public List<BattleHistoryEntry> GetBattleHistoryEntriesNewestFirst()
+    {
+        var list = new List<BattleHistoryEntry>(battleHistoryEntries.Count);
+        for (int i = battleHistoryEntries.Count - 1; i >= 0; i--)
+            list.Add(battleHistoryEntries[i]);
+        return list;
+    }
+
+    /// <summary>最近 N 則事件（由新到舊）。</summary>
+    public List<BattleHistoryEntry> GetRecentBattleHistoryEntries(int maxCount)
+    {
+        int take = Mathf.Clamp(maxCount, 1, 32);
+        var list = new List<BattleHistoryEntry>(take);
+        for (int i = battleHistoryEntries.Count - 1; i >= 0 && list.Count < take; i--)
+            list.Add(battleHistoryEntries[i]);
+        return list;
+    }
+
+    /// <summary>結算戰報摘要（3～5 行）。</summary>
+    public string GetBattleHistorySummaryText(int maxLines = 5)
+    {
+        return BattleHistoryReport.BuildSummary(
+            battleHistoryEntries,
+            battleResult,
+            currentRound,
+            maxLines);
     }
 
     /// <summary>對戰歷史：寫入清單並印 Console；批次勝率模擬時略過以免洗版。</summary>
     private void LogBattleHistory(string message)
     {
         if (BattleAutoSimPlugin.IsRunning) return;
-        battleHistoryLines.Add(message);
-        BattleVerbose(message);
+        if (string.IsNullOrEmpty(message)) return;
+
+        if (message.IndexOf('\n') >= 0)
+        {
+            string[] parts = message.Split(new[] { '\n' }, StringSplitOptions.None);
+            for (int i = 0; i < parts.Length; i++)
+                AddBattleHistoryEntry(parts[i]);
+            return;
+        }
+
+        AddBattleHistoryEntry(message);
+    }
+
+    private void AddBattleHistoryEntry(string message)
+    {
+        if (string.IsNullOrWhiteSpace(message)) return;
+        string line = message.Trim();
+        if (line.Length == 0) return;
+
+        battleHistorySequence++;
+        var entry = new BattleHistoryEntry(
+            battleHistorySequence,
+            currentRound,
+            BattleHistoryReport.InferKind(line),
+            line,
+            BattleHistoryReport.InferIsPlayerPerspective(line));
+        battleHistoryEntries.Add(entry);
+        battleHistoryLines.Add(line);
+        BattleVerbose(line);
+        BattleHistoryChanged?.Invoke();
     }
 
     private void QueueDiscardHistory(string message)
@@ -986,7 +1109,7 @@ public class BattleSimulationManager : MonoBehaviour
     private void BattleVerbose(string message)
     {
         if (!verboseBattleConsoleLog) return;
-        Debug.Log(message);
+        GameDevLog.Log(message);
     }
 
     void Awake()
@@ -1006,7 +1129,7 @@ public class BattleSimulationManager : MonoBehaviour
 
     private void EnsureSceneVisualsReady()
     {
-        Canvas[] canvases = Object.FindObjectsByType<Canvas>(FindObjectsSortMode.None);
+        Canvas[] canvases = UnityEngine.Object.FindObjectsByType<Canvas>(FindObjectsSortMode.None);
         Canvas canvas2 = null;
         for (int i = 0; i < canvases.Length; i++)
         {
@@ -1040,7 +1163,7 @@ public class BattleSimulationManager : MonoBehaviour
 
     private void EnsureBattleUIExists()
     {
-        BattleSimulationDebugUI ui = Object.FindFirstObjectByType<BattleSimulationDebugUI>();
+        BattleSimulationDebugUI ui = UnityEngine.Object.FindFirstObjectByType<BattleSimulationDebugUI>();
         if (ui != null) return;
 
         GameObject uiHost = new GameObject("BattleSimulationDebugUI");
@@ -1063,11 +1186,11 @@ public class BattleSimulationManager : MonoBehaviour
             if (cardStore == null) cardStore = dataManager.GetComponent<CardStore>();
         }
 
-        if (playerData == null) playerData = Object.FindFirstObjectByType<PlayerData>();
-        if (cardStore == null) cardStore = Object.FindFirstObjectByType<CardStore>();
+        if (playerData == null) playerData = PlayerData.ResolveCanonical();
+        if (cardStore == null) cardStore = UnityEngine.Object.FindFirstObjectByType<CardStore>();
         if (cardStore == null && playerData != null && playerData.CardStore != null)
             cardStore = playerData.CardStore;
-        if (enemyAI == null) enemyAI = Object.FindFirstObjectByType<EnemyAI>();
+        if (enemyAI == null) enemyAI = UnityEngine.Object.FindFirstObjectByType<EnemyAI>();
         if (enemyAI == null)
         {
             enemyAI = GetComponent<EnemyAI>();
@@ -1094,8 +1217,12 @@ public class BattleSimulationManager : MonoBehaviour
             return;
         }
         playerData.LoadPlayerData(); // ensure battle uses latest saved deck data
+        if (BattleLaunchContext.IsIntroTutorialBattle)
+            TutorialDeckApplicator.EnsureIntroTutorialDeckReady(playerData);
 
         battleHistoryLines.Clear();
+        battleHistoryEntries.Clear();
+        battleHistorySequence = 0;
         pendingDiscardHistoryLines.Clear();
         playerHeroDeathLoggedThisBattle = false;
         if (discardHistoryFlushRoutine != null)
@@ -1138,6 +1265,7 @@ public class BattleSimulationManager : MonoBehaviour
         deferPlayerFieldUiClearAfterEnemyFireballKill = false;
         battleOver = false;
         battleResult = 0;
+        lastBattleEndedBySurrender = false;
         battleRuleMessage = string.Empty;
         NotifyTurnBanner(BattleTurnBannerKind.Hidden);
         ClearPlayerLinGaze();
@@ -1175,13 +1303,20 @@ public class BattleSimulationManager : MonoBehaviour
         Shuffle(enemyDeck);
 
         playerHp = startHealth;
-        enemyHp = startHealth;
-        int playerDice = Random.Range(1, 7);
-        int enemyDice = Random.Range(1, 7);
+        if (BattleLaunchContext.IsIntroTutorialBattle)
+            enemyHp = IntroTutorialBattleRules.EnemyStartHealth;
+        else if (HarborTrainingEasyBattleRules.IsActiveEasyBattle())
+            enemyHp = HarborTrainingEasyBattleRules.EnemyStartHealth;
+        else if (HarborTrainingNormalBattleRules.IsActiveNormalBattle())
+            enemyHp = HarborTrainingNormalBattleRules.EnemyStartHealth;
+        else
+            enemyHp = startHealth;
+        int playerDice = UnityEngine.Random.Range(1, 7);
+        int enemyDice = UnityEngine.Random.Range(1, 7);
         while (playerDice == enemyDice)
         {
-            playerDice = Random.Range(1, 7);
-            enemyDice = Random.Range(1, 7);
+            playerDice = UnityEngine.Random.Range(1, 7);
+            enemyDice = UnityEngine.Random.Range(1, 7);
         }
         playerTurn = playerDice > enemyDice;
         openingPlayerDice = playerDice;
@@ -1201,6 +1336,10 @@ public class BattleSimulationManager : MonoBehaviour
             DrawCard(playerDeck, playerHand, "Player");
             DrawCard(enemyDeck, enemyHand, "Enemy");
         }
+
+        if (BattleLaunchContext.IsIntroTutorialBattle && playerHand.Count == 0)
+            Debug.LogError("Intro tutorial battle started with an empty player hand. Check deck save and CardStore ids.");
+
         EnsurePlayerHandDiscardRequirement();
         ResolveEnemyHandOverflowDiscards();
 
@@ -1480,7 +1619,7 @@ public class BattleSimulationManager : MonoBehaviour
         BattleVerbose("Enemy turn: begin");
         linGazeEnemyAttackNoticeSentThisEnemyTurn = false;
 
-        EnemyDrawCards(2);
+        EnemyDrawCards(GetEnemyDrawCountPerTurn());
         ResolveEnemyHandOverflowDiscards();
         yield return WaitForEnemyDiscardPopupLockRelease();
         if (!BattleAutoSimPlugin.IsRunning)
@@ -1586,7 +1725,8 @@ public class BattleSimulationManager : MonoBehaviour
         {
             int attackerDamage = enemyField.attack;
             string attackerName = enemyField.cardName;
-            int enemyAtkDmg = ModifyDamageToPlayerMonster(enemyField.attack);
+            int enemyAtkDmg = ScaleContextualEnemyDamage(
+                ModifyDamageToPlayerMonster(enemyField.attack));
             playerField.currentHp -= enemyAtkDmg;
             if (playerField.currentHp <= 0) playerField = null;
             LogBattleHistory("敵方場地上 怪物牌 " + attackerName + " 對我方造成" + enemyAtkDmg + " 點傷害");
@@ -1617,7 +1757,8 @@ public class BattleSimulationManager : MonoBehaviour
                 BattleVerbose("Enemy direct attack blocked: can attack only on next enemy turn after seeing empty player field.");
                 return;
             }
-            int directDmg = ModifyDirectDamageToPlayerHero(enemyField.attack);
+            int directDmg = ScaleContextualEnemyDamage(
+                ModifyDirectDamageToPlayerHero(enemyField.attack));
             int hpBefore = playerHp;
             playerHp -= directDmg;
             LogBattleHistory("敵方場地上 怪物牌 " + enemyField.cardName + " 對我方英雄造成" + directDmg + " 點傷害");
@@ -1653,6 +1794,20 @@ public class BattleSimulationManager : MonoBehaviour
         if (!playerPlacedCardThisRound || !enemyPlacedCardThisRound) return;
 
         currentRound++;
+        if (BattleLaunchContext.IsIntroTutorialBattle &&
+            currentRound > IntroTutorialBattleRules.MaxRoundsInclusive)
+        {
+            ForceIntroTutorialRoundCapVictory();
+            return;
+        }
+
+        if (HarborTrainingEasyBattleRules.IsActiveEasyBattle() &&
+            currentRound > HarborTrainingEasyBattleRules.MaxRoundsInclusive)
+        {
+            ForceHarborEasyRoundCapVictory();
+            return;
+        }
+
         TickPlayerLinGazeEndOfRound();
         TickEnemyLinGazeEndOfRound();
         playerPlacedCardThisRound = false;
@@ -1925,7 +2080,7 @@ public class BattleSimulationManager : MonoBehaviour
 
     private void ApplyEnemySpellFireball(SpellCard spell)
     {
-        int dmg = ApplyWeatherSpellPowerBonus(20, false);
+        int dmg = ScaleContextualEnemyDamage(ApplyWeatherSpellPowerBonus(20, false));
         int deal;
         if (playerField != null)
         {
@@ -1971,6 +2126,26 @@ public class BattleSimulationManager : MonoBehaviour
 
     private void BuildPlayerDeck()
     {
+        PopulatePlayerDeckFromSave();
+
+        if (playerDeck.Count == 0 && BattleLaunchContext.IsIntroTutorialBattle)
+        {
+            if (TutorialDeckApplicator.EnsureIntroTutorialDeckReady(playerData))
+            {
+                playerData.LoadPlayerData();
+                PopulatePlayerDeckFromSave();
+            }
+        }
+
+        if (playerDeck.Count == 0)
+            Debug.LogWarning("Player deck is empty.");
+        else if (BattleLaunchContext.IsIntroTutorialBattle && playerDeck.Count < 5)
+            Debug.LogWarning("Intro tutorial player deck has fewer than 5 cards: " + playerDeck.Count);
+    }
+
+    private void PopulatePlayerDeckFromSave()
+    {
+        playerDeck.Clear();
         var saved = playerData.GetDeckMap(playerData.selectedDeckSlot);
         foreach (var kv in saved)
         {
@@ -1979,13 +2154,14 @@ public class BattleSimulationManager : MonoBehaviour
             if (count <= 0) continue;
 
             Card card = cardStore.GetCardById(id);
-            if (card == null) continue;
-            for (int i = 0; i < count; i++) playerDeck.Add(card);
-        }
+            if (card == null)
+            {
+                Debug.LogWarning("BuildPlayerDeck: card id " + id + " not found in CardStore.");
+                continue;
+            }
 
-        if (playerDeck.Count == 0)
-        {
-            Debug.LogWarning("Player deck is empty.");
+            for (int i = 0; i < count; i++)
+                playerDeck.Add(card);
         }
     }
 
@@ -2041,7 +2217,7 @@ public class BattleSimulationManager : MonoBehaviour
         for (int i = 0; i < guaranteedMonsters; i++)
         {
             if (monsters.Count == 0) break;
-            enemyDeck.Add(monsters[Random.Range(0, monsters.Count)]);
+            enemyDeck.Add(monsters[UnityEngine.Random.Range(0, monsters.Count)]);
         }
 
         while (enemyDeck.Count < targetEnemyDeckSize)
@@ -2064,7 +2240,7 @@ public class BattleSimulationManager : MonoBehaviour
         if (!hasMonster && monsters.Count > 0)
         {
             if (enemyDeck.Count == 0) enemyDeck.Add(monsters[0]);
-            else enemyDeck[0] = monsters[Random.Range(0, monsters.Count)];
+            else enemyDeck[0] = monsters[UnityEngine.Random.Range(0, monsters.Count)];
         }
 
         while (enemyDeck.Count < targetEnemyDeckSize)
@@ -2136,8 +2312,8 @@ public class BattleSimulationManager : MonoBehaviour
                 if (enemyDeck[i] is MonsterCard) monsterIdx.Add(i);
             }
             if (monsterIdx.Count == 0) break;
-            int ri = monsterIdx[Random.Range(0, monsterIdx.Count)];
-            enemyDeck[ri] = spells[Random.Range(0, spells.Count)];
+            int ri = monsterIdx[UnityEngine.Random.Range(0, monsterIdx.Count)];
+            enemyDeck[ri] = spells[UnityEngine.Random.Range(0, spells.Count)];
         }
     }
 
@@ -2203,7 +2379,7 @@ public class BattleSimulationManager : MonoBehaviour
 
             if (legalMonsters.Count > 0)
             {
-                enemyDeck[i] = legalMonsters[Random.Range(0, legalMonsters.Count)];
+                enemyDeck[i] = legalMonsters[UnityEngine.Random.Range(0, legalMonsters.Count)];
             }
         }
     }
@@ -2245,7 +2421,7 @@ public class BattleSimulationManager : MonoBehaviour
             MonsterCard m = enemyDeck[i] as MonsterCard;
             if (m == null) continue;
             if (m.attack == 0 || m.healthPointMax == 0) continue;
-            enemyDeck[i] = zeroStatPool[Random.Range(0, zeroStatPool.Count)];
+            enemyDeck[i] = zeroStatPool[UnityEngine.Random.Range(0, zeroStatPool.Count)];
             needed--;
         }
     }
@@ -2254,7 +2430,7 @@ public class BattleSimulationManager : MonoBehaviour
     {
         for (int i = list.Count - 1; i > 0; i--)
         {
-            int j = Random.Range(0, i + 1);
+            int j = UnityEngine.Random.Range(0, i + 1);
             Card temp = list[i];
             list[i] = list[j];
             list[j] = temp;
@@ -2313,7 +2489,7 @@ public class BattleSimulationManager : MonoBehaviour
     private IEnumerator WaitForBattleAttackFxIfAny()
     {
         if (BattleAutoSimPlugin.IsRunning) yield break;
-        BattleSimulationDebugUI ui = Object.FindFirstObjectByType<BattleSimulationDebugUI>();
+        BattleSimulationDebugUI ui = UnityEngine.Object.FindFirstObjectByType<BattleSimulationDebugUI>();
         if (ui == null) yield break;
         yield return ui.WaitForAttackFxRoutine();
     }
@@ -2377,7 +2553,7 @@ public class BattleSimulationManager : MonoBehaviour
         if (card == null) return int.MinValue;
         int rarityBonus = GetEnemyPlayRarityBonus(card.rarity);
         if (card is MonsterCard m)
-            return m.attack * 2 + m.healthPointMax + rarityBonus;
+            return ApplyIntroEasyPriorityTweak(m.attack * 2 + m.healthPointMax + rarityBonus, card);
         if (card is SpellCard sp)
         {
             int spellValue;
@@ -2386,12 +2562,106 @@ public class BattleSimulationManager : MonoBehaviour
             else if (sp.SpellOrdinal == 2) spellValue = CanEnemyCastLinGazeNow() ? 62 : 10;
             else spellValue = 20;
             if (sp.SpellOrdinal == 0 && IsOpeningRoundFireballBlocked()) spellValue = int.MinValue / 4;
-            return spellValue + rarityBonus;
+            return ApplyIntroEasyPriorityTweak(spellValue + rarityBonus, card);
         }
-        return rarityBonus;
+        return ApplyIntroEasyPriorityTweak(rarityBonus, card);
     }
 
-    private bool UsesSchemingEnemyAi => runtimeEnemyAiPlayStyle != EnemyAiPlayStyle.Greedy;
+    private int ApplyIntroEasyPriorityTweak(int basePriority, Card card)
+    {
+        if (card == null) return basePriority;
+        if (runtimeEnemyAiPlayStyle == EnemyAiPlayStyle.IntroGreedy)
+        {
+            if (card is SpellCard)
+                return basePriority - 26;
+            if (card is MonsterCard)
+                return basePriority - 12;
+        }
+
+        if (runtimeEnemyAiPlayStyle == EnemyAiPlayStyle.FastAttack)
+        {
+            if (card is SpellCard sp)
+            {
+                int spellTweak = sp.SpellOrdinal == 1 ? -12 : -30;
+                if (HarborTrainingEasyBattleRules.IsActiveEasyBattle() && currentRound <= HarborTrainingEasyBattleRules.SoftPressureRoundsInclusive)
+                    spellTweak = sp.SpellOrdinal == 1 ? -18 : -36;
+                else if (HarborTrainingNormalBattleRules.IsActiveNormalBattle() &&
+                         currentRound <= HarborTrainingNormalBattleRules.SoftPressureRoundsInclusive)
+                    spellTweak = sp.SpellOrdinal == 1 ? -16 : -34;
+                return basePriority + spellTweak;
+            }
+
+            if (card is MonsterCard)
+            {
+                int monBonus = 16;
+                if (HarborTrainingEasyBattleRules.IsActiveEasyBattle())
+                    monBonus = HarborTrainingEasyBattleRules.GetFastAttackMonsterPriorityBonus(currentRound);
+                else if (HarborTrainingNormalBattleRules.IsActiveNormalBattle())
+                    monBonus = HarborTrainingNormalBattleRules.GetFastAttackMonsterPriorityBonus(currentRound);
+                return basePriority + monBonus;
+            }
+        }
+
+        if (runtimeEnemyAiPlayStyle == EnemyAiPlayStyle.EasySpellLean && card is SpellCard)
+            return basePriority + 12;
+        return basePriority;
+    }
+
+    private int GetEnemyDrawCountPerTurn()
+    {
+        if (BattleLaunchContext.IsIntroTutorialBattle)
+            return IntroTutorialBattleRules.EnemyDrawPerTurn;
+        if (HarborTrainingEasyBattleRules.IsActiveEasyBattle())
+            return HarborTrainingEasyBattleRules.GetEnemyDrawPerTurn(currentRound);
+        if (HarborTrainingNormalBattleRules.IsActiveNormalBattle())
+            return HarborTrainingNormalBattleRules.GetEnemyDrawPerTurn(currentRound);
+        return 2;
+    }
+
+    private static int ScaleContextualEnemyDamage(int rawDamage)
+    {
+        if (rawDamage <= 0)
+            return rawDamage;
+        if (BattleLaunchContext.IsIntroTutorialBattle)
+        {
+            return Mathf.Max(
+                1,
+                Mathf.RoundToInt(rawDamage * IntroTutorialBattleRules.EnemyDamageMultiplier));
+        }
+
+        if (HarborTrainingEasyBattleRules.IsActiveEasyBattle())
+            return HarborTrainingEasyBattleRules.ScaleEnemyDamage(rawDamage);
+        if (HarborTrainingNormalBattleRules.IsActiveNormalBattle())
+            return HarborTrainingNormalBattleRules.ScaleEnemyDamage(rawDamage);
+        return rawDamage;
+    }
+
+    private void ForceIntroTutorialRoundCapVictory()
+    {
+        if (battleOver) return;
+
+        ShowBattleToast(
+            "教學戰第 " + IntroTutorialBattleRules.MaxRoundsInclusive + " 回合結束，判定獲勝",
+            3.2f);
+        LogBattleHistory(
+            "教學戰限時：第 " + IntroTutorialBattleRules.MaxRoundsInclusive + " 回合結束，判定我方獲勝。");
+        CompleteBattle(1, "教學戰限時：第 " + IntroTutorialBattleRules.MaxRoundsInclusive + " 回合結束，判定我方獲勝。");
+    }
+
+    private void ForceHarborEasyRoundCapVictory()
+    {
+        if (battleOver) return;
+
+        string msg = "港灣訓練（簡單）第 " + HarborTrainingEasyBattleRules.MaxRoundsInclusive +
+                       " 回合結束，判定獲勝";
+        ShowBattleToast(msg, 3.2f);
+        LogBattleHistory(msg + "。");
+        CompleteBattle(1, msg + "。");
+    }
+
+    private bool UsesSchemingEnemyAi =>
+        runtimeEnemyAiPlayStyle == EnemyAiPlayStyle.SchemingHard ||
+        runtimeEnemyAiPlayStyle == EnemyAiPlayStyle.SchemingBoss;
 
     private int GetEnemyPlayRarityBonus(CardRarity rarity)
     {
@@ -2496,6 +2766,9 @@ public class BattleSimulationManager : MonoBehaviour
 
     private int TryPickLethalMonsterIndex()
     {
+        if (BattleLaunchContext.IsIntroTutorialBattle)
+            return -1;
+
         MonsterCard playerMonster = GetPlayerFieldCard() as MonsterCard;
         if (enemyField != null || playerMonster == null) return -1;
         int glassCannonHp = playerMonster.healthPoint;
@@ -2697,27 +2970,29 @@ public class BattleSimulationManager : MonoBehaviour
     {
         if (battleOver) return;
 
+        if (BattleLaunchContext.IsIntroTutorialBattle &&
+            currentRound > IntroTutorialBattleRules.MaxRoundsInclusive)
+        {
+            ForceIntroTutorialRoundCapVictory();
+            return;
+        }
+
+        if (HarborTrainingEasyBattleRules.IsActiveEasyBattle() &&
+            currentRound > HarborTrainingEasyBattleRules.MaxRoundsInclusive)
+        {
+            ForceHarborEasyRoundCapVictory();
+            return;
+        }
+
         // 平手：①雙方英雄 HP≥1 且皆無牌可打 ②雙方英雄於同一次結算中皆 HP≤0
         if (playerHp >= 1 && enemyHp >= 1 && PlayerHasNoCardsToPlay() && EnemyHasNoCardsToPlay())
         {
-            battleOver = true;
-            battleResult = 2;
-            BattleVerbose("平手：雙方英雄 HP≥1，且皆無牌可打（手牌、牌庫與場上皆無可用牌）。");
-            RecordBattleOutcomeHistory();
-            RecordCardProficiencyAfterBattle(GetBattleDifficultyLabelForRecord());
-            PlayerProfileCsvService.RecordBattleResult(battleResult, GetBattleDifficultyLabelForRecord());
-            NotifyTurnBanner(BattleTurnBannerKind.Hidden);
+            CompleteBattle(2, "平手：雙方英雄 HP≥1，且皆無牌可打（手牌、牌庫與場上皆無可用牌）。");
             return;
         }
         if (playerHp <= 0 && enemyHp <= 0)
         {
-            battleOver = true;
-            battleResult = 2;
-            BattleVerbose("平手：雙方英雄於同一次結算中生命皆≤0。");
-            RecordBattleOutcomeHistory();
-            RecordCardProficiencyAfterBattle(GetBattleDifficultyLabelForRecord());
-            PlayerProfileCsvService.RecordBattleResult(battleResult, GetBattleDifficultyLabelForRecord());
-            NotifyTurnBanner(BattleTurnBannerKind.Hidden);
+            CompleteBattle(2, "平手：雙方英雄於同一次結算中生命皆≤0。");
             return;
         }
 
@@ -2727,50 +3002,101 @@ public class BattleSimulationManager : MonoBehaviour
 
         if (playerDefeated && enemyDefeated)
         {
-            battleOver = true;
-            battleResult = 2;
-            BattleVerbose("平手：雙方皆符合戰敗條件（英雄 HP≤0 或手牌＋場上無牌）。");
-            RecordBattleOutcomeHistory();
-            RecordCardProficiencyAfterBattle(GetBattleDifficultyLabelForRecord());
-            PlayerProfileCsvService.RecordBattleResult(battleResult, GetBattleDifficultyLabelForRecord());
-            NotifyTurnBanner(BattleTurnBannerKind.Hidden);
+            CompleteBattle(2, "平手：雙方皆符合戰敗條件（英雄 HP≤0 或手牌＋場上無牌）。");
             return;
         }
         if (playerDefeated)
         {
-            battleOver = true;
-            battleResult = -1;
-            if (playerHp <= 0 && !playerHeroDeathLoggedThisBattle)
-            {
-                playerHeroDeathLoggedThisBattle = true;
-                LogBattleHistory("我方英雄死亡");
-            }
-            BattleVerbose("我方戰敗：英雄 HP≤0，或手牌與場上無牌。");
-            RecordBattleOutcomeHistory();
-            RecordCardProficiencyAfterBattle(GetBattleDifficultyLabelForRecord());
-            PlayerProfileCsvService.RecordBattleResult(battleResult, GetBattleDifficultyLabelForRecord());
-            NotifyTurnBanner(BattleTurnBannerKind.Hidden);
+            CompleteBattle(-1, "我方戰敗：英雄 HP≤0，或手牌與場上無牌。", logPlayerHeroDeath: true);
             return;
         }
         if (enemyDefeated)
         {
-            battleOver = true;
-            battleResult = 1;
-            BattleVerbose("我方勝利：敵方符合戰敗條件（英雄 HP≤0 或手牌＋場上無牌）。");
-            RecordBattleOutcomeHistory();
-            string difficultyLabel = GetBattleDifficultyLabelForRecord();
-            RecordCardProficiencyAfterBattle(difficultyLabel);
-            PlayerProfileCsvService.RecordBattleResult(battleResult, difficultyLabel);
-            NotifyTurnBanner(BattleTurnBannerKind.Hidden);
+            CompleteBattle(1, "我方勝利：敵方符合戰敗條件（英雄 HP≤0 或手牌＋場上無牌）。");
         }
+    }
+
+    /// <summary>暫停選單「放棄對戰」：結束本局並記為戰敗（非中離）。</summary>
+    public void ForcePlayerSurrender()
+    {
+        if (battleOver) return;
+        lastBattleEndedBySurrender = true;
+        CompleteBattle(-1, "我方戰敗：玩家放棄對戰。");
+    }
+
+    private void CompleteBattle(int result, string verboseMessage, bool logPlayerHeroDeath = false)
+    {
+        if (battleOver) return;
+        battleOver = true;
+        battleResult = result;
+        if (logPlayerHeroDeath && playerHp <= 0 && !playerHeroDeathLoggedThisBattle)
+        {
+            playerHeroDeathLoggedThisBattle = true;
+            LogBattleHistory("我方英雄死亡");
+        }
+        if (!string.IsNullOrEmpty(verboseMessage))
+            BattleVerbose(verboseMessage);
+        RecordBattleOutcomeHistory();
+        string difficultyLabel = GetBattleDifficultyLabelForRecord();
+        RecordCardProficiencyAfterBattle(difficultyLabel);
+        PlayerProfileCsvService.RecordBattleResult(battleResult, difficultyLabel);
+        NotifyTurnBanner(BattleTurnBannerKind.Hidden);
+        BattleEnded?.Invoke(battleResult);
+    }
+
+    private void SetBattleRuleMessage(string message)
+    {
+        string next = message ?? string.Empty;
+        if (battleRuleMessage == next) return;
+        battleRuleMessage = next;
+        BattleRuleMessageChanged?.Invoke(battleRuleMessage);
     }
 
     private void RecordCardProficiencyAfterBattle(string difficultyLabelZh)
     {
         if (playerData == null) return;
-        IReadOnlyDictionary<int, int> deck = playerData.GetDeckMap(playerData.selectedDeckSlot);
+        IReadOnlyDictionary<int, int> deck = GetMonsterDeckMapForProficiencyRecord();
         CardSkillProficiencyService.RecordBattleOutcome(playerData, deck, battleResult, difficultyLabelZh);
         playerData.SavePlayerData();
+    }
+
+    /// <summary>結算熟練度：優先使用已存牌組；若槽位為空則從本局實際牌堆彙總怪物 id。</summary>
+    public IReadOnlyDictionary<int, int> GetMonsterDeckMapForProficiencyRecord()
+    {
+        IReadOnlyDictionary<int, int> saved = playerData.GetDeckMap(playerData.selectedDeckSlot);
+        if (saved != null && saved.Count > 0)
+            return saved;
+        return BuildRuntimeMonsterDeckMapForProficiency();
+    }
+
+    private Dictionary<int, int> BuildRuntimeMonsterDeckMapForProficiency()
+    {
+        var map = new Dictionary<int, int>();
+        AccumulateMonsterIds(map, playerDeck);
+        AccumulateMonsterIds(map, playerHand);
+        AccumulateMonsterIds(map, playerDiscardPile);
+        if (playerField != null)
+            AddMonsterId(map, playerField.id);
+        return map;
+    }
+
+    private static void AccumulateMonsterIds(Dictionary<int, int> map, List<Card> pile)
+    {
+        if (pile == null) return;
+        for (int i = 0; i < pile.Count; i++)
+        {
+            if (pile[i] is MonsterCard monster)
+                AddMonsterId(map, monster.id);
+        }
+    }
+
+    private static void AddMonsterId(Dictionary<int, int> map, int monsterId)
+    {
+        if (monsterId <= 0) return;
+        if (map.TryGetValue(monsterId, out int count))
+            map[monsterId] = count + 1;
+        else
+            map[monsterId] = 1;
     }
 
     public void PrintBattleState()
@@ -2893,6 +3219,9 @@ public class BattleSimulationManager : MonoBehaviour
         DiscardOneFromPlayerHand(index);
         return true;
     }
+
+    /// <summary>下一張建議棄掉的手牌索引（與 <see cref="AutoDiscardOneForPlayer"/> 相同邏輯）。</summary>
+    public int GetRecommendedPlayerDiscardHandIndex() => ChoosePlayerDiscardIndex();
     public Card GetPlayerHandCard(int index)
     {
         if (index < 0 || index >= playerHand.Count) return null;
@@ -2933,6 +3262,8 @@ public class BattleSimulationManager : MonoBehaviour
     public bool DidEnemyPassTurnThisTurn() { return enemyPassedTurnThisTurn; }
 
     /// <summary>與 <see cref="PlayerAttack"/> 成功發動條件一致；為 false 時目前無法以場上怪物攻擊（開局、已攻擊、無場怪、敵方凝視、敵場空且尚未解鎖直擊、或非可操作視窗等）。</summary>
+    public bool HasPlayerAttackedThisTurn() => playerHasAttackedThisTurn;
+
     public bool CanPlayerMonsterAttackNow()
     {
         if (!CanPlayerAct()) return false;
@@ -2972,7 +3303,33 @@ public class BattleSimulationManager : MonoBehaviour
     }
     public int GetCurrentRound() { return currentRound; }
 
+    /// <summary>
+    /// 本回合誰先結算「結束回合」後的場上怪獸攻擊（甲案：依現行回合順序推導，不改規則）。
+    /// 第 1 回合若開場敵方先手則敵方先攻擊；其餘回合為我方先攻擊。
+    /// </summary>
+    public bool DoesPlayerStrikeFirstThisRound() => currentRound > 1 || openingPlayerFirst;
+
+    public bool DoesEnemyStrikeFirstThisRound() => !DoesPlayerStrikeFirstThisRound();
+
     public int GetPlayerHeroHp() { return playerHp; }
+
+    #region Harbor combat coach (read-only damage estimates)
+
+    public bool PeekPendingEnemyDirectAttackUnlockForCoach() => pendingEnemyDirectAttackUnlock;
+
+    public int EstimateHarborCoachEnemyFireballRawDamage() =>
+        ScaleContextualEnemyDamage(ApplyWeatherSpellPowerBonus(20, false));
+
+    public int EstimateHarborCoachDamageToPlayerMonsterFromRaw(int rawDamage) =>
+        Mathf.Max(0, ModifyDamageToPlayerMonster(rawDamage));
+
+    public int EstimateHarborCoachDirectDamageToPlayerHeroFromRaw(int rawDamage) =>
+        Mathf.Max(0, ModifyDirectDamageToPlayerHero(rawDamage));
+
+    public int EstimateHarborCoachScaledEnemyAttackToPlayerHero(int attack) =>
+        Mathf.Max(0, ScaleContextualEnemyDamage(ModifyDirectDamageToPlayerHero(attack)));
+
+    #endregion
 
     public int GetEnemyHeroHp() { return enemyHp; }
 

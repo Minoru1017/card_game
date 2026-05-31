@@ -85,6 +85,7 @@ public class BattleHandDiscardDrag : MonoBehaviour, IPointerDownHandler, IPointe
         SetHoldProgressActive(true);
         SetHoldProgress(0f);
         SetGlowActive(false);
+        PromoteCardToTopLayer();
     }
 
     public void OnDrag(PointerEventData eventData)
@@ -220,6 +221,9 @@ public class BattleHandDiscardDrag : MonoBehaviour, IPointerDownHandler, IPointe
 
     private void Update()
     {
+        if ((pressing || dragging) && cardRect != null)
+            PromoteCardToTopLayer();
+
         if (pressing && !dragging && holdProgressFill != null)
         {
             float p = holdSeconds > 0f ? Mathf.Clamp01((Time.unscaledTime - downTimeUnscaled) / holdSeconds) : 1f;

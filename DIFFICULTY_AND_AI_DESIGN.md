@@ -2,7 +2,7 @@
 
 > **文件用途**：畢業專題報告書「系統設計／對戰模組」章節之技術說明。  
 > **程式對照**：`SceneLoader.cs` · `BattleSimulationManager.cs` · `EnemyAI.cs` · `EnemyAiPlayStyle.cs`  
-> **延伸文件**：[ENEMY_AI_DECISION_TREE.md](./ENEMY_AI_DECISION_TREE.md)（出牌決策樹細節）· [ARCHITECTURE_OVERVIEW.md](./ARCHITECTURE_OVERVIEW.md) · [BALANCE_AND_AI_BIBLIOGRAPHY.md](./BALANCE_AND_AI_BIBLIOGRAPHY.md)（外部文獻與網路資源）
+> **延伸文件**：[PLANNING_DOCS_INDEX.md](./PLANNING_DOCS_INDEX.md) · [LEVEL_DESIGN_GDD.md](./LEVEL_DESIGN_GDD.md) · [ENEMY_AI_DECISION_TREE.md](./ENEMY_AI_DECISION_TREE.md)（出牌決策樹細節）· [ARCHITECTURE_OVERVIEW.md](./ARCHITECTURE_OVERVIEW.md) · [BALANCE_AND_AI_BIBLIOGRAPHY.md](./BALANCE_AND_AI_BIBLIOGRAPHY.md)（外部文獻與網路資源）
 
 ---
 
@@ -77,7 +77,9 @@
 
 | UI 難度 | `EnemyAiPlayStyle` | 行為摘要 |
 |---------|-------------------|----------|
-| 入門、簡單、普通 | `Greedy` | 每回合在可出牌中選**評分最高**者立即打出 |
+| 入門 | `IntroGreedy` | Greedy 基礎，**略偏先出怪**（法術評分 −14） |
+| 簡單 | `EasySpellLean` | Greedy 基礎，**略偏法術**（法術評分 +12） |
+| 普通 | `Greedy` | 每回合在可出牌中選**評分最高**者立即打出 |
 | 困難 | `SchemingHard` | 在 Greedy 基礎上，**SR 以上**高稀有卡可暫緩出牌，等待時機 |
 | 魔王 | `SchemingBoss` | 囤牌門檻更高（**R 以上**即可能暫緩），連續囤牌上限 4 回合，出手條件更嚴 |
 

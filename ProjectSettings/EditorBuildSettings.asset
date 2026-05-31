@@ -24,6 +24,12 @@ EditorBuildSettings:
     path: Assets/Scenes/login.unity
     guid: 5de78c4425c8feb4b9b8b62ff2bc536c
   - enabled: 1
+    path: Assets/Scenes/Story progress.unity
+    guid: 8663106721710934788d3ac78fc7da09
+  - enabled: 1
+    path: Assets/Scenes/Main Plot.unity
+    guid: 5029ba66425d69b478f56ad364636d21
+  - enabled: 1
     path: Assets/Scenes/CardStore.unity
     guid: e677c91191cce0c4888b020d0f90dca3
   - enabled: 1

@@ -46,7 +46,7 @@ public class OpenPackge : MonoBehaviour
     void Start()
     {
         if (cardStore == null) cardStore = Object.FindFirstObjectByType<CardStore>();
-        if (playerData == null) playerData = Object.FindFirstObjectByType<PlayerData>();
+        if (playerData == null) playerData = PlayerData.ResolveCanonical();
         EnsureInspectHost();
     }
 

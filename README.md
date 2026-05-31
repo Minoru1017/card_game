@@ -67,6 +67,14 @@
 
 ---
 
+## 企劃與設計文件
+
+- **企劃入口（索引）**：[PLANNING_DOCS_INDEX.md](./PLANNING_DOCS_INDEX.md)
+- **企劃總表**：[PLANNING_MASTER_TABLE.md](./PLANNING_MASTER_TABLE.md)
+- **待定與未定義項**：[PLANNING_OPEN_ITEMS.md](./PLANNING_OPEN_ITEMS.md)
+
+主線 1-1 建議順序：世界觀 → [LEVEL_DESIGN_GDD.md](./LEVEL_DESIGN_GDD.md) → [TUTORIAL_PLOT_SCRIPT.md](./TUTORIAL_PLOT_SCRIPT.md)。
+
 ## 系統總架構圖
 
 - 請見：**[ARCHITECTURE_OVERVIEW.md](./ARCHITECTURE_OVERVIEW.md)**  

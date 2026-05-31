@@ -1,0 +1,356 @@
+{
+  "mapId": "world_map_v1",
+  "displayName": "Northern Academy Frontier",
+  "nodes": [
+    {
+      "nodeId": "M-1-1",
+      "stageCode": "1-1",
+      "title": "Harbor Training Yard",
+      "chapter": "Chapter 1",
+      "nodeType": "tutorial",
+      "region": "southwest_port",
+      "isTutorial": true,
+      "isBoss": false,
+      "x": 0.11,
+      "y": 0.16,
+      "unlockRequiresAllOf": [],
+      "unlockRequiresAnyOf": []
+    },
+    {
+      "nodeId": "M-1-2",
+      "stageCode": "1-2",
+      "title": "Seawall Patrol",
+      "chapter": "Chapter 1",
+      "nodeType": "normal",
+      "region": "southwest_coast",
+      "isTutorial": false,
+      "isBoss": false,
+      "x": 0.19,
+      "y": 0.23,
+      "unlockRequiresAllOf": [
+        "M-1-1"
+      ],
+      "unlockRequiresAnyOf": []
+    },
+    {
+      "nodeId": "M-1-3",
+      "stageCode": "1-3",
+      "title": "River Fork Crossroads",
+      "chapter": "Chapter 1",
+      "nodeType": "normal",
+      "region": "lower_riverlands",
+      "isTutorial": false,
+      "isBoss": false,
+      "x": 0.27,
+      "y": 0.31,
+      "unlockRequiresAllOf": [
+        "M-1-2"
+      ],
+      "unlockRequiresAnyOf": []
+    },
+    {
+      "nodeId": "M-1-4",
+      "stageCode": "1-4",
+      "title": "Outer Ring Approach",
+      "chapter": "Chapter 1",
+      "nodeType": "normal",
+      "region": "capital_outskirts",
+      "isTutorial": false,
+      "isBoss": false,
+      "x": 0.35,
+      "y": 0.40,
+      "unlockRequiresAllOf": [
+        "M-1-3"
+      ],
+      "unlockRequiresAnyOf": []
+    },
+    {
+      "nodeId": "M-2-1",
+      "stageCode": "2-1",
+      "title": "Lower Capital District",
+      "chapter": "Chapter 2",
+      "nodeType": "normal",
+      "region": "central_capital",
+      "isTutorial": false,
+      "isBoss": false,
+      "x": 0.44,
+      "y": 0.48,
+      "unlockRequiresAllOf": [
+        "M-1-4"
+      ],
+      "unlockRequiresAnyOf": []
+    },
+    {
+      "nodeId": "M-2-2",
+      "stageCode": "2-2",
+      "title": "Broken Bridge Ruins",
+      "chapter": "Chapter 2",
+      "nodeType": "normal",
+      "region": "central_river",
+      "isTutorial": false,
+      "isBoss": false,
+      "x": 0.53,
+      "y": 0.55,
+      "unlockRequiresAllOf": [
+        "M-2-1"
+      ],
+      "unlockRequiresAnyOf": [
+        "S-A-4"
+      ]
+    },
+    {
+      "nodeId": "M-2-3",
+      "stageCode": "2-3",
+      "title": "Foothill Watchpoint",
+      "chapter": "Chapter 2",
+      "nodeType": "normal",
+      "region": "north_central_foothills",
+      "isTutorial": false,
+      "isBoss": false,
+      "x": 0.61,
+      "y": 0.62,
+      "unlockRequiresAllOf": [
+        "M-2-2"
+      ],
+      "unlockRequiresAnyOf": []
+    },
+    {
+      "nodeId": "M-2-4",
+      "stageCode": "2-4",
+      "title": "North Pass Gate",
+      "chapter": "Chapter 2",
+      "nodeType": "elite",
+      "region": "northeast_pass",
+      "isTutorial": false,
+      "isBoss": false,
+      "x": 0.69,
+      "y": 0.64,
+      "unlockRequiresAllOf": [
+        "M-2-3"
+      ],
+      "unlockRequiresAnyOf": [
+        "S-B-4"
+      ]
+    },
+    {
+      "nodeId": "M-3-1",
+      "stageCode": "3-1",
+      "title": "Scorched Frontline",
+      "chapter": "Chapter 3",
+      "nodeType": "elite",
+      "region": "ashlands_west",
+      "isTutorial": false,
+      "isBoss": false,
+      "x": 0.77,
+      "y": 0.67,
+      "unlockRequiresAllOf": [
+        "M-2-4"
+      ],
+      "unlockRequiresAnyOf": []
+    },
+    {
+      "nodeId": "M-3-2",
+      "stageCode": "3-2",
+      "title": "Magma Rift Trail",
+      "chapter": "Chapter 3",
+      "nodeType": "elite",
+      "region": "ashlands_core",
+      "isTutorial": false,
+      "isBoss": false,
+      "x": 0.84,
+      "y": 0.73,
+      "unlockRequiresAllOf": [
+        "M-3-1"
+      ],
+      "unlockRequiresAnyOf": []
+    },
+    {
+      "nodeId": "M-3-3",
+      "stageCode": "3-3",
+      "title": "Obsidian Gate",
+      "chapter": "Chapter 3",
+      "nodeType": "elite",
+      "region": "obsidian_gate",
+      "isTutorial": false,
+      "isBoss": false,
+      "x": 0.90,
+      "y": 0.81,
+      "unlockRequiresAllOf": [
+        "M-3-2"
+      ],
+      "unlockRequiresAnyOf": []
+    },
+    {
+      "nodeId": "M-3-4",
+      "stageCode": "3-4",
+      "title": "Ashen Throne",
+      "chapter": "Chapter 3",
+      "nodeType": "boss",
+      "region": "volcanic_citadel",
+      "isTutorial": false,
+      "isBoss": true,
+      "x": 0.95,
+      "y": 0.88,
+      "unlockRequiresAllOf": [
+        "M-3-3"
+      ],
+      "unlockRequiresAnyOf": [
+        "S-A-4",
+        "S-B-4"
+      ]
+    },
+    {
+      "nodeId": "S-A-1",
+      "stageCode": "A-1",
+      "title": "Fishmarket Request",
+      "chapter": "Side A",
+      "nodeType": "side",
+      "region": "southwest_port",
+      "isTutorial": false,
+      "isBoss": false,
+      "x": 0.14,
+      "y": 0.27,
+      "unlockRequiresAllOf": [
+        "M-1-2"
+      ],
+      "unlockRequiresAnyOf": []
+    },
+    {
+      "nodeId": "S-A-2",
+      "stageCode": "A-2",
+      "title": "Reef Cavern",
+      "chapter": "Side A",
+      "nodeType": "side",
+      "region": "west_coast",
+      "isTutorial": false,
+      "isBoss": false,
+      "x": 0.10,
+      "y": 0.35,
+      "unlockRequiresAllOf": [
+        "S-A-1"
+      ],
+      "unlockRequiresAnyOf": []
+    },
+    {
+      "nodeId": "S-A-3",
+      "stageCode": "A-3",
+      "title": "Lighthouse Ruins",
+      "chapter": "Side A",
+      "nodeType": "side",
+      "region": "west_coast",
+      "isTutorial": false,
+      "isBoss": false,
+      "x": 0.16,
+      "y": 0.45,
+      "unlockRequiresAllOf": [
+        "S-A-2"
+      ],
+      "unlockRequiresAnyOf": []
+    },
+    {
+      "nodeId": "S-A-4",
+      "stageCode": "A-4",
+      "title": "Sea Mist Shrine",
+      "chapter": "Side A",
+      "nodeType": "side_boss",
+      "region": "west_shrine",
+      "isTutorial": false,
+      "isBoss": false,
+      "x": 0.24,
+      "y": 0.52,
+      "unlockRequiresAllOf": [
+        "S-A-3"
+      ],
+      "unlockRequiresAnyOf": []
+    },
+    {
+      "nodeId": "S-B-1",
+      "stageCode": "B-1",
+      "title": "Old Road Steles",
+      "chapter": "Side B",
+      "nodeType": "side",
+      "region": "south_central_ruins",
+      "isTutorial": false,
+      "isBoss": false,
+      "x": 0.38,
+      "y": 0.33,
+      "unlockRequiresAllOf": [
+        "M-1-4"
+      ],
+      "unlockRequiresAnyOf": []
+    },
+    {
+      "nodeId": "S-B-2",
+      "stageCode": "B-2",
+      "title": "Broken Arcade",
+      "chapter": "Side B",
+      "nodeType": "side",
+      "region": "south_central_ruins",
+      "isTutorial": false,
+      "isBoss": false,
+      "x": 0.46,
+      "y": 0.29,
+      "unlockRequiresAllOf": [
+        "S-B-1"
+      ],
+      "unlockRequiresAnyOf": []
+    },
+    {
+      "nodeId": "S-B-3",
+      "stageCode": "B-3",
+      "title": "Sunken Archive",
+      "chapter": "Side B",
+      "nodeType": "side",
+      "region": "southern_catacombs",
+      "isTutorial": false,
+      "isBoss": false,
+      "x": 0.56,
+      "y": 0.23,
+      "unlockRequiresAllOf": [
+        "S-B-2"
+      ],
+      "unlockRequiresAnyOf": []
+    },
+    {
+      "nodeId": "S-B-4",
+      "stageCode": "B-4",
+      "title": "Dynasty Catacomb",
+      "chapter": "Side B",
+      "nodeType": "side_boss",
+      "region": "southern_catacombs",
+      "isTutorial": false,
+      "isBoss": false,
+      "x": 0.67,
+      "y": 0.21,
+      "unlockRequiresAllOf": [
+        "S-B-3"
+      ],
+      "unlockRequiresAnyOf": []
+    }
+  ],
+  "edges": [
+    { "fromNodeId": "M-1-1", "toNodeId": "M-1-2", "pathType": "main" },
+    { "fromNodeId": "M-1-2", "toNodeId": "M-1-3", "pathType": "main" },
+    { "fromNodeId": "M-1-3", "toNodeId": "M-1-4", "pathType": "main" },
+    { "fromNodeId": "M-1-4", "toNodeId": "M-2-1", "pathType": "main" },
+    { "fromNodeId": "M-2-1", "toNodeId": "M-2-2", "pathType": "main" },
+    { "fromNodeId": "M-2-2", "toNodeId": "M-2-3", "pathType": "main" },
+    { "fromNodeId": "M-2-3", "toNodeId": "M-2-4", "pathType": "main" },
+    { "fromNodeId": "M-2-4", "toNodeId": "M-3-1", "pathType": "main" },
+    { "fromNodeId": "M-3-1", "toNodeId": "M-3-2", "pathType": "main" },
+    { "fromNodeId": "M-3-2", "toNodeId": "M-3-3", "pathType": "main" },
+    { "fromNodeId": "M-3-3", "toNodeId": "M-3-4", "pathType": "main" },
+
+    { "fromNodeId": "M-1-2", "toNodeId": "S-A-1", "pathType": "side_a" },
+    { "fromNodeId": "S-A-1", "toNodeId": "S-A-2", "pathType": "side_a" },
+    { "fromNodeId": "S-A-2", "toNodeId": "S-A-3", "pathType": "side_a" },
+    { "fromNodeId": "S-A-3", "toNodeId": "S-A-4", "pathType": "side_a" },
+    { "fromNodeId": "S-A-4", "toNodeId": "M-2-2", "pathType": "side_return" },
+
+    { "fromNodeId": "M-1-4", "toNodeId": "S-B-1", "pathType": "side_b" },
+    { "fromNodeId": "S-B-1", "toNodeId": "S-B-2", "pathType": "side_b" },
+    { "fromNodeId": "S-B-2", "toNodeId": "S-B-3", "pathType": "side_b" },
+    { "fromNodeId": "S-B-3", "toNodeId": "S-B-4", "pathType": "side_b" },
+    { "fromNodeId": "S-B-4", "toNodeId": "M-2-4", "pathType": "side_return" }
+  ]
+}

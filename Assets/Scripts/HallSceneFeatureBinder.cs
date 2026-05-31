@@ -35,6 +35,7 @@ public class HallSceneFeatureBinder : MonoBehaviour
         // Existing feature closest to backpack flow: return to Persistent hub.
         TryBindSceneButton("背包", "Persistent");
         TryBindSceneButton("商店", "CardStore");
+        TryBindSceneButton("遊戲進度", StoryProgressSession.StoryProgressSceneName);
 
         TryBindSceneButton("遊戲設定", "Settings");
         TryBindSceneButton("SettingsButton", "Settings");

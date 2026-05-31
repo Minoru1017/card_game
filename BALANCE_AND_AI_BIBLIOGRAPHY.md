@@ -131,6 +131,9 @@
 
 | 文件 | 說明 |
 |------|------|
+| [PLANNING_DOCS_INDEX.md](./PLANNING_DOCS_INDEX.md) | 企劃文件索引 |
+| [PLANNING_MASTER_TABLE.md](./PLANNING_MASTER_TABLE.md) | 企劃總表 |
+| [PLANNING_OPEN_ITEMS.md](./PLANNING_OPEN_ITEMS.md) | 待定與未定義項 |
 | [MARKET_ANALYSIS_SOURCES.md](./MARKET_ANALYSIS_SOURCES.md) | 商業化獨立卡牌遊戲作品來源 |
 | [MARKET_ANALYSIS_FIVE_GAMES.md](./MARKET_ANALYSIS_FIVE_GAMES.md) | 五款遊戲分析（若有） |
 | [CARD_PROFICIENCY_GDD.md](./CARD_PROFICIENCY_GDD.md) | 熟練度／技能揭露 GDD |

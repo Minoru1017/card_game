@@ -49,3 +49,8 @@ Thumbs.db
 
 # Local bake / tool logs
 bake_log.txt
+debug-*.log
+
+# Local playtest snapshots (do not commit personal save data)
+Assets/PlayerDataSnapshots/*.csv
+!Assets/PlayerDataSnapshots/README.md

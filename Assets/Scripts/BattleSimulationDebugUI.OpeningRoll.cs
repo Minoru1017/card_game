@@ -9,6 +9,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
     private void TryPlayOpeningRollPresentation()
     {
         if (BattleAutoSimPlugin.IsRunning) return;
+        if (TutorialPlotBattleTransition.IsPlaying) return;
         if (battleManager == null || openingRollPanel == null) return;
         int version = battleManager.GetOpeningRollVersion();
         if (version <= 0 || version == lastOpeningRollVersion) return;

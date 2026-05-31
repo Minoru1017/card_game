@@ -9,6 +9,7 @@ using UnityEngine.UI;
 using UnityEngine.EventSystems;
 using UnityEngine.SceneManagement;
 
+/// <summary>Buildbeck 牌組／館藏 UI 與槽位操作。場景存檔鉤子見 <see cref="DeckManager.ScenePersistence"/>。</summary>
 public partial class DeckManager : MonoBehaviour, ICardInspectPanelHost
 {
     public int maxDeckCards = 30;
@@ -400,7 +401,7 @@ public partial class DeckManager : MonoBehaviour, ICardInspectPanelHost
         EnsureCoreRefs();
         if (DataManager == null)
         {
-            PlayerData pdRoot = Object.FindFirstObjectByType<PlayerData>();
+            PlayerData pdRoot = PlayerData.ResolveCanonical();
             if (pdRoot != null)
                 DataManager = pdRoot.gameObject;
             else
@@ -492,38 +493,6 @@ public partial class DeckManager : MonoBehaviour, ICardInspectPanelHost
         return primary == null || primary == this;
     }
 
-    private void OnDestroy()
-    {
-        if (IsCanonicalDeckManagerInstance())
-        {
-            SceneManager.sceneLoaded -= OnSceneLoadedEnsureBuildbeckDeckUi;
-            SceneManager.sceneUnloaded -= OnSceneUnloadedFlushBuildbeckSave;
-        }
-
-        UnwireDeckScrollEdgeFeel(_libraryPanelScrollRect, OnLibraryPanelScrollFeel);
-        UnwireDeckScrollEdgeFeel(_deckPanelScrollRect, OnDeckPanelScrollFeel);
-        if (_libraryScrollEdgePulseCo != null) StopCoroutine(_libraryScrollEdgePulseCo);
-        if (_deckScrollEdgePulseCo != null) StopCoroutine(_deckScrollEdgePulseCo);
-        _libraryScrollEdgePulseCo = null;
-        _deckScrollEdgePulseCo = null;
-    }
-
-    private void OnEnable()
-    {
-        if (!IsCanonicalDeckManagerInstance()) return;
-        SceneManager.sceneLoaded -= OnSceneLoadedEnsureBuildbeckDeckUi;
-        SceneManager.sceneLoaded += OnSceneLoadedEnsureBuildbeckDeckUi;
-        SceneManager.sceneUnloaded -= OnSceneUnloadedFlushBuildbeckSave;
-        SceneManager.sceneUnloaded += OnSceneUnloadedFlushBuildbeckSave;
-    }
-
-    private void OnDisable()
-    {
-        if (!IsCanonicalDeckManagerInstance()) return;
-        SceneManager.sceneLoaded -= OnSceneLoadedEnsureBuildbeckDeckUi;
-        SceneManager.sceneUnloaded -= OnSceneUnloadedFlushBuildbeckSave;
-    }
-
     /// <summary>玩家資訊等流程更新存檔後，若仍在 Buildbeck 則刷新牌組分頁／名稱顯示。</summary>
     public void RefreshBuildbeckDeckNameLabelsIfActive()
     {
@@ -532,19 +501,6 @@ public partial class DeckManager : MonoBehaviour, ICardInspectPanelHost
         BuildbeckLayoutAutoBinder.InvalidateAndRewire(this);
         BindExternalSlotButtonsIfNeeded();
         RefreshDeckSlotTabVisual();
-    }
-
-    private static void OnSceneUnloadedFlushBuildbeckSave(Scene scene)
-    {
-        if (!scene.IsValid() || !scene.name.Equals("Buildbeck", System.StringComparison.OrdinalIgnoreCase))
-            return;
-        PlayerData pd = PlayerData.ResolveCanonical();
-        if (pd != null) pd.SavePlayerData();
-    }
-
-    private void OnSceneLoadedEnsureBuildbeckDeckUi(Scene scene, LoadSceneMode mode)
-    {
-        RequestBuildbeckUiReload();
     }
 
     public void TriggerBuildbeckUiReload()
@@ -612,6 +568,7 @@ public partial class DeckManager : MonoBehaviour, ICardInspectPanelHost
             UpdateLibrary();
             if (showDeck) UpdateDeck();
             DestroyBackpackProficiencyHelpFloatingButton();
+            EnsureBuildbeckProficiencyDebugUi();
             RefreshScrollablePanels();
             ForcePanelsScrollToTop();
             ForceRebuildPanelsLayout();
@@ -637,6 +594,17 @@ public partial class DeckManager : MonoBehaviour, ICardInspectPanelHost
     {
         Scene s = SceneManager.GetActiveScene();
         return s.IsValid() && s.name.Equals("Buildbeck", System.StringComparison.OrdinalIgnoreCase);
+    }
+
+    private void EnsureBuildbeckProficiencyDebugUi()
+    {
+        if (!IsBuildbeckSceneActive() || !Application.isPlaying) return;
+        if (!IsCanonicalDeckManagerInstance()) return;
+
+        BuildbeckProficiencyDebugUi debugUi = GetComponent<BuildbeckProficiencyDebugUi>();
+        if (debugUi == null)
+            debugUi = gameObject.AddComponent<BuildbeckProficiencyDebugUi>();
+        debugUi.TryEnsureUi();
     }
 
     private Canvas ResolveDeckUiCanvas()
@@ -752,7 +720,7 @@ public partial class DeckManager : MonoBehaviour, ICardInspectPanelHost
             " | libChildren=" + (libraryPanel != null ? libraryPanel.childCount : -1) +
             " deckChildren=" + (deckPanel != null ? deckPanel.childCount : -1);
 
-        Debug.Log(msg);
+        GameDevLog.Log(msg);
     }
 
     private static void UnwireDeckScrollEdgeFeel(ScrollRect sr, UnityAction<Vector2> handler)

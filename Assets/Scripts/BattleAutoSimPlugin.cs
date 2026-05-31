@@ -50,6 +50,9 @@ public static class BattleAutoSimPlugin
     /// <summary>True while a batch win-rate run is in progress. Battle UI should skip card/field animations and rely on progress UI only.</summary>
     public static bool IsRunning { get; private set; }
 
+    /// <summary>港灣勝率批次等無 UI 宿主時，強制標記批次模擬中（開場不等待 Realtime）。</summary>
+    public static void ForceBatchRunning(bool on) => IsRunning = on;
+
     /// <summary>
     /// When assigned (e.g. a slot inside the battle debug floating window), batch progress UI is built under this
     /// transform instead of a separate full-screen overlay canvas.

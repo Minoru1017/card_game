@@ -703,13 +703,26 @@ public class LoginSceneController : MonoBehaviour
     {
         PlayerData.SelectActivePlayerSlot(slot);
         PlayerProfileCsvService.RefreshProfileFromRuntime();
-        SceneManager.LoadScene(HomeSceneName);
+        LoadHomeOrTutorialStoryProgress(slot);
     }
 
     private static void OnCreateNewPlayer(int slot)
     {
         PlayerData.SelectActivePlayerSlot(slot);
+        TutorialProgressState.ResetTutorialForSlot(slot);
         PlayerProfileCsvService.CreateNewPlayerDefaults(100, "一般玩家");
+        LoadHomeOrTutorialStoryProgress(slot);
+    }
+
+    private static void LoadHomeOrTutorialStoryProgress(int slot)
+    {
+        if (TutorialProgressState.NeedsTutorialFlow(slot) &&
+            Application.CanStreamedLevelBeLoaded(StoryProgressSession.StoryProgressSceneName))
+        {
+            SceneManager.LoadScene(StoryProgressSession.StoryProgressSceneName);
+            return;
+        }
+
         SceneManager.LoadScene(HomeSceneName);
     }
 

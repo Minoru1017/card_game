@@ -39,7 +39,10 @@ public class GlobalNavRuntime : MonoBehaviour
     private TextMeshProUGUI playerInfoDeckSummaryText;
     private TextMeshProUGUI playerInfoHeroSummaryText;
     private TextMeshProUGUI playerInfoLastResultText;
+    private TextMeshProUGUI playerInfoProgressText;
     private TextMeshProUGUI playerInfoRecordTotalText;
+    private const int PlayerInfoOverlayLayoutVersion = 2;
+    private int builtPlayerInfoLayoutVersion;
     private int playerInfoActiveRecordFilter = 1;
     private readonly Button[] playerInfoRecordFilterButtons = new Button[4];
     private readonly Image[] playerInfoRecordFilterButtonBgs = new Image[4];
@@ -411,9 +414,26 @@ public class GlobalNavRuntime : MonoBehaviour
         return go;
     }
 
+    private static void ApplyPlayerInfoFont(TextMeshProUGUI tmp)
+    {
+        if (tmp == null) return;
+        EnsureNavLabelFont();
+        if (navLabelFont != null)
+            tmp.font = navLabelFont;
+        SettingsUiFonts.ApplyTo(tmp);
+    }
+
     private static void EnsureNavLabelFont()
     {
         if (navLabelFont != null && FontSupportsRequiredGlyphs(navLabelFont)) return;
+
+        TMP_FontAsset settingsFont = SettingsUiFonts.ResolveParameterDetailsFont();
+        if (settingsFont != null && FontSupportsRequiredGlyphs(settingsFont))
+        {
+            navLabelFont = settingsFont;
+            return;
+        }
+
         TMP_FontAsset buildbeck = BuildbeckUiFonts.ResolveBuildbeckButtonFont();
         if (buildbeck != null && FontSupportsRequiredGlyphs(buildbeck))
         {
@@ -449,18 +469,8 @@ public class GlobalNavRuntime : MonoBehaviour
         navLabelFont = TMP_Settings.defaultFontAsset;
     }
 
-    private static bool FontSupportsRequiredGlyphs(TMP_FontAsset font)
-    {
-        if (font == null) return false;
-        const string required = "玩家資訊回首頁遊戲設定登入頁面重置資料儲存名稱";
-        for (int i = 0; i < required.Length; i++)
-        {
-            char ch = required[i];
-            if (char.IsWhiteSpace(ch)) continue;
-            if (!font.HasCharacter(ch, true)) return false;
-        }
-        return true;
-    }
+    private static bool FontSupportsRequiredGlyphs(TMP_FontAsset font) =>
+        BuildbeckUiFonts.FontSupportsText(font, PlayerInfoProgressCopy.FontGlyphProbe);
 
     private static bool FontNameLikelySupportsCjk(string fontAssetName)
     {
@@ -681,7 +691,12 @@ public class GlobalNavRuntime : MonoBehaviour
         if (playerInfoUuidText != null)
             playerInfoUuidText.text = uuidShort;
         if (playerInfoRoleText != null)
-            playerInfoRoleText.text = (string.IsNullOrWhiteSpace(p.role) ? "-" : p.role) + "（槽位 " + slot + "）";
+            playerInfoRoleText.text = PlayerInfoProgressCopy.FormatRoleWithSlot(p.role, slot);
+        if (playerInfoProgressText != null)
+        {
+            playerInfoProgressText.text = PlayerInfoProgressCopy.BuildSummary(slot);
+            FitProfileValueTextHeight(playerInfoProgressText, 26f, 28f);
+        }
         if (playerInfoStartDateText != null)
             playerInfoStartDateText.text = string.IsNullOrWhiteSpace(p.startDate) ? "-" : p.startDate;
         if (playerInfoCoinsText != null)
@@ -701,7 +716,11 @@ public class GlobalNavRuntime : MonoBehaviour
 
     private void EnsurePlayerInfoOverlay()
     {
-        if (playerInfoOverlayRoot != null || view == null || view.rootCanvas == null) return;
+        if (playerInfoOverlayRoot != null && builtPlayerInfoLayoutVersion == PlayerInfoOverlayLayoutVersion)
+            return;
+
+        DestroyPlayerInfoOverlayIfAny();
+        if (view == null || view.rootCanvas == null) return;
 
         GameObject root = new GameObject("GlobalPlayerInfoOverlay", typeof(RectTransform), typeof(Image));
         root.transform.SetParent(view.rootCanvas.transform, false);
@@ -748,7 +767,7 @@ public class GlobalNavRuntime : MonoBehaviour
         titleRt.anchoredPosition = new Vector2(32f, -18f);
         titleRt.sizeDelta = new Vector2(420f, 48f);
         TextMeshProUGUI titleTmp = titleObj.GetComponent<TextMeshProUGUI>();
-        if (navLabelFont != null) titleTmp.font = navLabelFont;
+        ApplyPlayerInfoFont(titleTmp);
         titleTmp.fontSize = 40f;
         titleTmp.alignment = TextAlignmentOptions.Left;
         titleTmp.color = new Color(0.25f, 0.2f, 0.15f, 1f);
@@ -815,8 +834,23 @@ public class GlobalNavRuntime : MonoBehaviour
         playerInfoRoleText = PlaceProfileField(basicBody, "玩家身份", "RoleText", ref rowY, profileTwoLineRowH, 19f);
         playerInfoStartDateText = PlaceProfileField(basicBody, "開始遊玩", "StartDateText", ref rowY, profileTwoLineRowH, 19f);
 
+        const int progressLineCount = 7;
+        const float progressLineHeight = 28f;
+        float progressBlockRowH = 22f + 4f + progressLineCount * progressLineHeight;
+        Transform progressBody = CreatePlayerInfoSection(scrollContent, PlayerInfoProgressCopy.SectionTitle, 52f + progressBlockRowH + 16f);
+        rowY = -14f;
+        playerInfoProgressText = PlaceProfileField(
+            progressBody,
+            "主線章節",
+            "StoryProgressText",
+            ref rowY,
+            progressBlockRowH,
+            19f,
+            wrapValue: true,
+            valueLineSpacing: 4f);
+
         int deckLineCount = 5;
-        PlayerData layoutPlayerData = UnityEngine.Object.FindFirstObjectByType<PlayerData>();
+        PlayerData layoutPlayerData = PlayerData.ResolveCanonical();
         if (layoutPlayerData != null && layoutPlayerData.deckSlotCount > 0)
             deckLineCount = layoutPlayerData.deckSlotCount;
         const float profileDeckLineHeight = 30f;
@@ -839,6 +873,28 @@ public class GlobalNavRuntime : MonoBehaviour
 
         playerInfoOverlayRoot = root;
         playerInfoOverlayRoot.SetActive(false);
+        builtPlayerInfoLayoutVersion = PlayerInfoOverlayLayoutVersion;
+    }
+
+    private void DestroyPlayerInfoOverlayIfAny()
+    {
+        if (playerInfoOverlayRoot != null)
+            Destroy(playerInfoOverlayRoot);
+
+        playerInfoOverlayRoot = null;
+        playerInfoUuidText = null;
+        playerInfoRoleText = null;
+        playerInfoStartDateText = null;
+        playerInfoCoinsText = null;
+        playerInfoDeckSummaryText = null;
+        playerInfoHeroSummaryText = null;
+        playerInfoLastResultText = null;
+        playerInfoProgressText = null;
+        playerInfoRecordTotalText = null;
+        playerInfoScrollContentRt = null;
+        playerSlotNameInput = null;
+        playerInfoRecordColumns = null;
+        builtPlayerInfoLayoutVersion = 0;
     }
 
     private static string FormatDeckSummaryForDisplay(string decks)
@@ -929,7 +985,7 @@ public class GlobalNavRuntime : MonoBehaviour
         titleRt.anchoredPosition = new Vector2(16f, -10f);
         titleRt.sizeDelta = new Vector2(sectionWidth - 32f, 30f);
         TextMeshProUGUI titleTmp = titleObj.GetComponent<TextMeshProUGUI>();
-        if (navLabelFont != null) titleTmp.font = navLabelFont;
+        ApplyPlayerInfoFont(titleTmp);
         titleTmp.text = title;
         titleTmp.fontSize = 22f;
         titleTmp.fontStyle = FontStyles.Bold;
@@ -999,7 +1055,7 @@ public class GlobalNavRuntime : MonoBehaviour
         rt.sizeDelta = new Vector2(0f, lineHeight);
 
         TextMeshProUGUI tmp = go.GetComponent<TextMeshProUGUI>();
-        if (navLabelFont != null) tmp.font = navLabelFont;
+        ApplyPlayerInfoFont(tmp);
         tmp.fontSize = fontSize;
         tmp.color = color;
         tmp.alignment = TextAlignmentOptions.TopLeft;
@@ -1034,7 +1090,7 @@ public class GlobalNavRuntime : MonoBehaviour
         slotNameLabelRt.anchoredPosition = Vector2.zero;
         slotNameLabelRt.sizeDelta = new Vector2(88f, rowHeight);
         TextMeshProUGUI slotNameLabelTmp = slotNameLabel.GetComponent<TextMeshProUGUI>();
-        if (navLabelFont != null) slotNameLabelTmp.font = navLabelFont;
+        ApplyPlayerInfoFont(slotNameLabelTmp);
         slotNameLabelTmp.fontSize = 17f;
         slotNameLabelTmp.alignment = TextAlignmentOptions.Left;
         slotNameLabelTmp.color = PlayerInfoTextMuted;
@@ -1067,7 +1123,7 @@ public class GlobalNavRuntime : MonoBehaviour
         phRt.offsetMin = Vector2.zero;
         phRt.offsetMax = Vector2.zero;
         TextMeshProUGUI placeholder = placeholderObj.GetComponent<TextMeshProUGUI>();
-        if (navLabelFont != null) placeholder.font = navLabelFont;
+        ApplyPlayerInfoFont(placeholder);
         placeholder.fontSize = 20f;
         placeholder.color = new Color(0.55f, 0.5f, 0.45f, 0.8f);
         placeholder.alignment = TextAlignmentOptions.Left;
@@ -1082,7 +1138,7 @@ public class GlobalNavRuntime : MonoBehaviour
         inputTextRt.offsetMin = Vector2.zero;
         inputTextRt.offsetMax = Vector2.zero;
         TextMeshProUGUI inputText = inputTextObj.GetComponent<TextMeshProUGUI>();
-        if (navLabelFont != null) inputText.font = navLabelFont;
+        ApplyPlayerInfoFont(inputText);
         inputText.fontSize = 20f;
         inputText.color = PlayerInfoTextPrimary;
         inputText.alignment = TextAlignmentOptions.Left;

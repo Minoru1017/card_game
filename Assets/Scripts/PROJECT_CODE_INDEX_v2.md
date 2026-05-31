@@ -1,15 +1,17 @@
 # 專案程式索引（v2）
 
-> 整合舊版索引（v1）與 2026-04-15 新增之「天氣機制／天氣視覺特效」索引。
+> 整合舊版索引（v1）與 2026-04-15 新增之「天氣機制／天氣視覺特效」索引。  
+> **企劃文件**：[PLANNING_DOCS_INDEX.md](../../PLANNING_DOCS_INDEX.md) · [PLANNING_MASTER_TABLE.md](../../PLANNING_MASTER_TABLE.md) · [PLANNING_OPEN_ITEMS.md](../../PLANNING_OPEN_ITEMS.md)
 
 ## A. 核心玩法系統
 
 | 模組 | 功能描述 | 主要類別/函式 | 典型輸入 | 典型輸出 |
 | --- | --- | --- | --- | --- |
-| 關卡戰鬥系統 | 回合制核心流程（出牌、攻擊、法術、回合推進、勝負） | `BattleSimulationManager` / `StartBattle()` / `PlayerPlayCardFromHand()` / `PlayerAttack()` / `EndPlayerTurn()` / `RunEnemyTurn()` | 玩家操作、手牌/牌組/場面狀態 | 戰鬥狀態變更、事件通知、勝敗結果 |
+| 關卡戰鬥系統 | 回合制核心流程（出牌、攻擊、法術、回合推進、勝負）；結束時 `BattleEnded` 事件 | `BattleSimulationManager` / `CompleteBattle()` / `ChooseEnemyHandCardToPlayIndex()` | 玩家操作、手牌/牌組/場面狀態 | 戰鬥狀態變更、事件通知、勝敗結果 |
 | 關卡 AI 系統 | 敵方自動決策與執行行動 | `EnemyAI` / `ExecutePlay()` / `ExecuteAttack()`（及 `BattleSimulationManager` 內敵方流程） | 當前戰場、敵方手牌 | 敵方出牌/攻擊行為 |
 | 抽卡系統 | 開包、播放流程、抽卡結果落盤 | `OpenPackge` / `PackVideoController` / `OnClickOpen()` / `OnVideoFinished()` / `SaveCardData()` | 開包事件、卡池資料 | 抽卡結果、玩家收藏更新 |
-| 背包系統 | 牌庫與牌組編輯、卡片檢視、重置流程 | `DeckManager` / `UpdateLibrary()` / `UpdateDeck()` / `CreateCard()` / `ShowBackpackCardInspect()` | 收藏數量、UI操作 | 牌組資料變更、畫面更新 |
+| 背包系統 | 牌庫與牌組編輯、卡片檢視、重置流程 | `DeckManager`（partial）/ `DeckManager.ScenePersistence` / `UpdateLibrary()` / `ShowBackpackCardInspect()` | 收藏數量、UI操作 | 牌組資料變更、畫面更新 |
+| 卡牌熟練度 | 對戰累積、A/B/C 階段、背包進度條 | `CardSkillProficiencyService` / `BackpackInspectMasteryLayout` | 勝敗、難度標籤 | 階段與進度條 |
 
 ---
 
@@ -28,10 +30,28 @@
 
 | 模組 | 功能描述 | 主要類別/函式 | 典型輸入 | 典型輸出 |
 | --- | --- | --- | --- | --- |
-| 使用者介面（UI） | 戰鬥HUD、手牌區、場面區、結算/暫停等畫面 | `BattleSimulationDebugUI`（含 partial）/ `CreateDebugPanel()` / `RebuildHandButtons()` / `RefreshFieldCards()` / `EnsureEndBattlePanel()` | 戰鬥狀態事件 | UI元件顯示與動畫 |
+| 使用者介面（UI） | 戰鬥HUD、手牌區、場面區、結算/暫停；除錯半屏預設關閉 | `BattleSimulationDebugUI`（partial：Settlement、WeatherRuntime、FieldCards…）/ `BattleEnded` 訂閱結算 | 戰鬥狀態事件 | UI元件顯示與動畫 |
 | 場地牌狀態 | 場上怪獸徽章、傷害浮字、凝視護盾等狀態對照 | `FIELD_CARD_STATUS_INDEX.md` / `FieldCardStatusIndex` / `GetPlayerFieldMonsterStatusBadge()` | 規則旗標、回合數 | 中央徽章與瞬時 FX |
+| 戰前預覽謎題 | 訓練場魔王解謎（PZ01）、難度拱門與解鎖序 | `BATTLE_PREVIEW_PUZZLE_INDEX.md` / `BattlePreviewPuzzleIndex` / `SceneLoader.BattlePreview` | 難度點選、預覽開關 | 魔王級揭示、開戰難度 |
 | 使用者體驗（UX） | 縮放、懸浮、長按、拖曳、點擊回饋 | `ZoomUI` / `BattleHandHoverPreview` / `BattleHandLongPressTooltip` / `BattleHandDiscardDrag` / `ClickCard` | Pointer事件 | 視覺回饋、互動狀態 |
 | 卡牌顯示 | 將卡牌資料映射成畫面元素 | `CardDisplay` / `SetCard()` / `ShowCard()` / `CardCounter` | `Card` 物件、數值 | 卡面文字/圖像更新 |
+
+---
+
+## G. 港灣實戰戰術教練（Harbor Combat Coach）
+
+> 企劃：[HARBOR_COMBAT_COACH_GDD.md](../../HARBOR_COMBAT_COACH_GDD.md) · 實作：[HARBOR_COMBAT_COACH_IMPLEMENTATION.md](HARBOR_COMBAT_COACH_IMPLEMENTATION.md)
+
+| 模組 | 功能描述 | 主要類別/函式 | 典型輸入 | 典型輸出 |
+| --- | --- | --- | --- | --- |
+| 教練 UI | 林可姐戰術面板；未讀脈動、點擊展開、棄牌階段右側 | `HarborCombatCoachUi` / `EnsureHarborCombatCoach()` / `ShouldAllowHandHighlight()` | 港灣開戰、`HarborCombatCoachHint` | 面板、立繪、打字機文案 |
+| 觸發評估 | P0/P1 提示、冷卻、難度分流 | `HarborCombatCoachAdvisor.TryEvaluate()` / `HarborCombatCoachAdvisorSession` | `BattleSimulationManager` 盤面 | 單則 `HarborCombatCoachHint` |
+| 致死預警 | 下回合敵方傷害上界（含火球意圖） | `HarborCombatLethalThreatEstimator.Evaluate()` / `BattleSimulationManager.EstimateHarborCoach*` | 難度檔、手牌/場面 | `ShouldWarn`、傷害值 |
+| 立繪表情 | hintKey → 四表情 Sprite | `HarborCombatCoachExpressionCatalog.ApplyToPortrait()` | `hintKey` | `Image.sprite` |
+| 手牌高亮 | 戰術建議牌索引（困難關閉） | `HarborCombatHandHighlightAdvisor` / `RequestHarborHandPlayHighlights()` | hintKey、手牌 | 高亮 `HandCard_*` |
+| 玩家設定 | 戰術提示／高亮開關 | `HarborCombatCoachPrefs` | PlayerPrefs | bool |
+
+**啟用**：`BattleLaunchContext.IsHarborTrainingGroundBattle`（與 `TutorialBattleCoachUi` 互斥）。
 
 ---
 
@@ -39,7 +59,9 @@
 
 | 模組 | 功能描述 | 主要類別/函式 | 典型輸入 | 典型輸出 |
 | --- | --- | --- | --- | --- |
-| 場景流程/導航 | 場景切換與前置條件檢查 | `SceneLoader` / `BattleSceneBootstrap` / `EnterBattle()` | 切換請求、組牌狀態 | 場景載入、提示顯示 |
+| 場景流程/導航 | 場景切換與前置條件檢查 | `SceneLoader` / `SceneLoader.BattlePreview` / `BattleSceneBootstrap` / `EnterBattle()` | 切換請求、組牌狀態 | 場景載入、戰前預覽 |
+| 開發日誌 | Editor 保留、Release 不洗版 | `GameDevLog` | 訊息字串 | Console 輸出 |
+| EditMode 測試 | 熟練度／牌組名稱煙霧測試 | `Assets/Editor/CardGameEditModeTests.cs` | NUnit | 斷言通過 |
 | 存檔重置/維運 | 由全域玩家資訊面板執行重置流程 | `GlobalNavRuntime` / `TryOpenPlayerInfoOverlay()` | 玩家資訊面板互動 | 玩家資料重置與刷新 |
 | 自動模擬/測試 | 批次自動對戰與勝率統計 | `BattleAutoSimPlugin` / `Run()` / `EnsureProgressUi()` / `TryAutoPlayOneCard()` | 模擬參數、回合數 | 勝率統計、進度與結果 |
 
@@ -60,7 +82,7 @@
 
 | 模組 | 功能描述 | 主要類別/函式 | 典型輸入 | 典型輸出 |
 | --- | --- | --- | --- | --- |
-| 天氣特效總調度 | 依當前天氣開關與更新特效層 | `BattleSimulationDebugUI` / `UpdateWeatherScreenEffects()` | 天氣名稱、剩餘回合 | 對應特效顯示/隱藏與更新 |
+| 天氣特效總調度 | 依當前天氣開關與更新特效層 | `BattleSimulationDebugUI.WeatherRuntime` / `UpdateWeatherScreenEffects()` | 天氣名稱、剩餘回合 | 對應特效顯示/隱藏與更新 |
 | 天氣動畫迴圈 | 各天氣專屬動畫邏輯 | `AnimateFireRainFx()` / `AnimateHolyLightFx()` / `AnimateFogFx()`（海嘯視覺）/ `AnimateGaleFx()` | `deltaTime`、天氣狀態 | 粒子/遮罩/風場動畫 |
 | 天氣預報與面板 | 全屏預報、場地效果面板與說明刷新 | `OnWeatherForecastStarted()` / `CoShowWeatherForecastOverlay()` / `RefreshActiveWeatherEffectPanelText()` | 預報事件、天氣文本 | UI 顯示更新、資訊排版 |
 | 特效層建構 | 建立天氣覆蓋層與子元件 | `CreateWeatherScreenFx()` / `CreateWeatherFxLayer()` / `CreateHolyLightEdge()` / `AddHolyLightEdgeLayer()` / `AddFogEdgeLayer()` / `AddGaleNightLayer()` | 畫布/父節點 | 可動態更新的特效層級 |

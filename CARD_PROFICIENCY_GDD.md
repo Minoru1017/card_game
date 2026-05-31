@@ -4,7 +4,7 @@
 |------|------|
 | **文件類型** | 企劃提案／遊戲設計文件（GDD） |
 | **狀態** | 門檻已定案；**勝場累計與 A/B/C 判定已實作**（`CardSkillProficiencyService`／`PlayerData`） |
-| **關聯文件** | [`GAMEPLAY_AND_RULES.md`](GAMEPLAY_AND_RULES.md) · [`卡牌技能階段式揭露.md`](卡牌技能階段式揭露.md)（單卡 A/B/C 文案與範例）· [`MARKET_ANALYSIS_SOURCES.md`](MARKET_ANALYSIS_SOURCES.md) · [`MARKET_ANALYSIS_FIVE_GAMES.md`](MARKET_ANALYSIS_FIVE_GAMES.md) |
+| **關聯文件** | [`PLANNING_DOCS_INDEX.md`](PLANNING_DOCS_INDEX.md) · [`PLANNING_OPEN_ITEMS.md`](PLANNING_OPEN_ITEMS.md) §PROF · [`GAMEPLAY_AND_RULES.md`](GAMEPLAY_AND_RULES.md) · [`卡牌技能階段式揭露.md`](卡牌技能階段式揭露.md)（單卡 A/B/C 文案與範例）· [`MARKET_ANALYSIS_SOURCES.md`](MARKET_ANALYSIS_SOURCES.md) · [`MARKET_ANALYSIS_FIVE_GAMES.md`](MARKET_ANALYSIS_FIVE_GAMES.md) |
 | **最後更新** | 2026-05-16 |
 
 ---
@@ -66,7 +66,7 @@
 | 門檻 | 階段轉換 | 條件（程式） |
 |------|----------|----------------|
 | **基礎解鎖** | A → B | 該怪物牌在**目前牌組**中，累計 toward-B 進度 **2.0**（**不限難度**）；每場依結局累加（見下表）。 |
-| **進階解鎖** | B → C | 同上牌，累計 **10 場「普通」難度勝利**（僅**勝利**時 +1）；每場每種怪物 id 最多 +1。 |
+| **進階解鎖** | B → C | 同上牌，累計 **10 場「普通以上」難度勝利**（普通／困難／魔王；僅**勝利**時 +1）；每場每種怪物 id 最多 +1。 |
 | **單局進度** | 結算播報 | **勝** +1/2；**平** +1/2×2/3；**敗** +1/2×1/3（御三家不累加；約 **10 場勝**到 B，試玩向）。 |
 | **御三家** | 預設 C | **國王（13）／王后（12）／民兵（4）** 無需累計，詳情與戰技視為 **C · 完整**。 |
 | **熟練度條** | 全怪物牌 | 背包詳情中**所有怪物牌**顯示勝場進度條（尚無戰技表者仍累計勝場，戰技文案待擴充）。 |
@@ -81,7 +81,7 @@
 | 累計打出次數 | 從手牌成功置場或依規則計入 |
 | 累計造成／承受傷害 | 可選；用於「坦克型」「輸出型」分流 |
 | `wins_any` | toward-B 進度（滿 **2.0** → B；存檔欄位 `progressAny`） |
-| `wins_normal` | 「普通」難度勝場數（達 10 → C） |
+| `wins_normal` | 「普通以上」難度勝場數（達 10 → C） |
 | 當前階段 | 由勝場推算 `A` / `B` / `C`（御三家固定 C） |
 
 ### 4.3 解鎖條件類型（範例，數值 TBD）
@@ -162,6 +162,8 @@ flowchart TB
 ---
 
 ## 7. 企劃待決事項（TBD）
+
+> 彙總索引與優先級見 [`PLANNING_OPEN_ITEMS.md`](PLANNING_OPEN_ITEMS.md) §PROF；全專案待定見同文件。
 
 實作前建議逐條定案並寫入本節：
 

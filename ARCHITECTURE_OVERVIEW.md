@@ -122,5 +122,9 @@ flowchart TB
 
 ## Related docs
 
+- [PLANNING_DOCS_INDEX.md](./PLANNING_DOCS_INDEX.md) — planning / GDD index (Chinese)
+- [PLANNING_MASTER_TABLE.md](./PLANNING_MASTER_TABLE.md) — planning overview by domain
+- [PLANNING_OPEN_ITEMS.md](./PLANNING_OPEN_ITEMS.md) — open design questions
+- [LEVEL_DESIGN_GDD.md](./LEVEL_DESIGN_GDD.md) — level design (chapter 1-1)
 - [DIFFICULTY_AND_AI_DESIGN.md](./DIFFICULTY_AND_AI_DESIGN.md) — battle difficulty tiers and enemy AI (report chapter)
 - [ENEMY_AI_DECISION_TREE.md](./ENEMY_AI_DECISION_TREE.md) — detailed play decision tree

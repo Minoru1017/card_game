@@ -32,7 +32,7 @@ public static class BuildbeckUiPrefabBaker
                 "BakedGrid",
                 Vector2.zero,
                 Vector2.one,
-                new Color(1f, 1f, 1f, 0.03f),
+                new Color(1f, 1f, 1f, 0.01f),
                 4);
             SavePrefab(scrollVp, UiFolder + "/BuildbeckScrollGrid.prefab");
 

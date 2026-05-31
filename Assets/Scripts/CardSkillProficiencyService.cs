@@ -33,6 +33,8 @@ public static class CardSkillProficiencyService
     public const int WinsRequiredForStageB = 2;
     public const int WinsRequiredForStageC = 10;
     public const string NormalDifficultyLabelZh = "普通";
+    /// <summary>B→C 進度條與說明用：普通、困難、魔王難度勝利均計入。</summary>
+    public const string StageCDifficultyRequirementLabelZh = "普通以上";
 
     public static IReadOnlyList<BattleProficiencySettlementEntry> LastSettlementEntries { get; private set; }
 
@@ -80,13 +82,15 @@ public static class CardSkillProficiencyService
         monsterId == MonsterSkillIds.Queen ||
         monsterId == MonsterSkillIds.Militia;
 
-    public static bool IsNormalDifficultyLabel(string difficultyLabelZh)
+    /// <summary>「普通」難度及以上（普通、困難、魔王）之勝利計入 toward-C；入門、簡單不算。</summary>
+    public static bool CountsTowardStageCWin(string difficultyLabelZh)
     {
-        if (string.IsNullOrWhiteSpace(difficultyLabelZh)) return false;
-        string trimmed = difficultyLabelZh.Trim();
-        return trimmed == NormalDifficultyLabelZh ||
-               trimmed.StartsWith(NormalDifficultyLabelZh, System.StringComparison.Ordinal);
+        int idx = PlayerProfileCsvService.GetStandardDifficultyIndex(difficultyLabelZh);
+        int normalIdx = System.Array.IndexOf(PlayerProfileCsvService.StandardDifficultyLabelsZh, NormalDifficultyLabelZh);
+        return normalIdx >= 0 && idx >= normalIdx;
     }
+
+    public static bool IsNormalDifficultyLabel(string difficultyLabelZh) => CountsTowardStageCWin(difficultyLabelZh);
 
     /// <summary>對戰結束：依勝／平／敗累加進度，並產生結算播報快照。</summary>
     public static void RecordBattleOutcome(
@@ -101,7 +105,7 @@ public static class CardSkillProficiencyService
         if (playerData == null || deckMap == null) return;
 
         float delta = GetOutcomeProgressDelta(battleResult);
-        bool addNormalWin = battleResult == 1 && IsNormalDifficultyLabel(difficultyLabelZh);
+        bool addNormalWin = battleResult == 1 && CountsTowardStageCWin(difficultyLabelZh);
         var credited = new HashSet<int>();
 
         foreach (var kv in deckMap)
@@ -186,16 +190,12 @@ public static class CardSkillProficiencyService
 
         if (unlocked == CardSkillRevealStage.BasicB)
         {
-            float t = WinsRequiredForStageC > 0
-                ? Mathf.Clamp01((float)wins.winsNormalDifficulty / WinsRequiredForStageC)
-                : 1f;
-            return 0.55f + 0.45f * t;
+            if (WinsRequiredForStageC <= 0) return 1f;
+            return Mathf.Clamp01((float)wins.winsNormalDifficulty / WinsRequiredForStageC);
         }
 
-        float towardB = WinsRequiredForStageB > 0
-            ? Mathf.Clamp01(wins.progressAny / WinsRequiredForStageB)
-            : 0f;
-        return 0.2f + 0.35f * towardB;
+        if (WinsRequiredForStageB <= 0) return 0f;
+        return Mathf.Clamp01(wins.progressAny / WinsRequiredForStageB);
     }
 
     public static string BuildProficiencyStepperRich(CardSkillRevealStage unlocked)
@@ -225,9 +225,16 @@ public static class CardSkillProficiencyService
             return GetStageShortLabel(unlocked);
 
         if (unlocked == CardSkillRevealStage.BasicB)
-            return GetStageShortLabel(unlocked) + "  " + wins.winsNormalDifficulty + "/" + WinsRequiredForStageC + " 普通勝";
+            return GetStageShortLabel(unlocked) + "  " + FormatProgressTowardC(wins.winsNormalDifficulty);
 
         return FormatProgressTowardB(wins.progressAny);
+    }
+
+    /// <summary>B 階段 toward-C：累計「普通以上」難度勝場（入門、簡單不計入此數字）。</summary>
+    public static string FormatProgressTowardC(int winsNormalDifficulty)
+    {
+        int shown = Mathf.Clamp(winsNormalDifficulty, 0, WinsRequiredForStageC);
+        return shown + "/" + WinsRequiredForStageC + " " + StageCDifficultyRequirementLabelZh;
     }
 
     public static string FormatProgressTowardB(float progressAny)
@@ -255,6 +262,15 @@ public static class CardSkillProficiencyService
         return cardId > 0;
     }
 
-    private static PlayerData ResolvePlayerData() =>
-        Object.FindFirstObjectByType<PlayerData>();
+    /// <summary>測試用：清除所有非御三家怪物牌的熟練度進度（記憶體＋可選存檔）。</summary>
+    public static int ResetAllProficiencyForTesting(PlayerData playerData, bool saveAfter = true)
+    {
+        if (playerData == null) return 0;
+        CardStore store = playerData.CardStore;
+        if (saveAfter)
+            return CardProficiencyDebugReset.PerformFullReset(playerData, store, reloadAfterSave: true);
+        return CardProficiencyDebugReset.ClearRuntimeProficiency(playerData, store);
+    }
+
+    private static PlayerData ResolvePlayerData() => PlayerData.ResolveCanonical();
 }

@@ -35,7 +35,7 @@ public class CardInspectPanelHost : MonoBehaviour, ICardInspectPanelHost
 
     public void EnsureCoreRefsForInspect()
     {
-        if (playerData == null) playerData = Object.FindFirstObjectByType<PlayerData>();
+        if (playerData == null) playerData = PlayerData.ResolveCanonical();
         if (cardStore == null) cardStore = Object.FindFirstObjectByType<CardStore>();
         if (cardStore == null && playerData != null) cardStore = playerData.CardStore;
     }

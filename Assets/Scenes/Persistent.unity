@@ -168,20 +168,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 09ba26e004cc32c4481106327729a381, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  battleSceneName: BattleSimulation
-  persistentSceneName: Persistent
-  playerData: {fileID: 0}
-  cardStore: {fileID: 0}
-  enterBattleButton: {fileID: 0}
-  noDeckHintLegacyText: {fileID: 0}
-  noDeckHintTMPText: {fileID: 0}
   previewUseFixedEnemyDeck: 1
   previewFixedEnemyDeckCardIds: 0100000002000000030000000400000005000000060000000700000008000000090000000a0000000b0000000c0000000e00000010000000120000001300000016000000fffffffffefffffffdffffff
   previewEnemyOverLimitAllowance: 6
   previewMinEnemySpellsInDeck: 2
+  battlePreviewPanelSprite: {fileID: 0}
   runtimeRoundedUiSprite: {fileID: 0}
   selectedDifficultyTier: 2
-  difficultyButtonsExpanded: 1
   difficultyProfiles:
   - tier: 0
     labelZh: "\u5165\u9580"
@@ -243,6 +236,13 @@ MonoBehaviour:
     overLimitBias: 2
     minSpellsBias: 2
     fixedDeckOverride: 
+  battleSceneName: BattleSimulation
+  persistentSceneName: Persistent
+  playerData: {fileID: 0}
+  cardStore: {fileID: 0}
+  enterBattleButton: {fileID: 0}
+  noDeckHintLegacyText: {fileID: 0}
+  noDeckHintTMPText: {fileID: 0}
 --- !u!1 &79245962
 GameObject:
   m_ObjectHideFlags: 0
@@ -661,15 +661,15 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_Material: {fileID: 0}
-  m_Color: {r: 0.3301887, g: 0.3301887, b: 0.3301887, a: 1}
+  m_Color: {r: 0.9056604, g: 0.9056604, b: 0.9056604, a: 1}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_Sprite: {fileID: 0}
-  m_Type: 1
+  m_Sprite: {fileID: 307714301162636570, guid: f05824b3997e52948b9e5f9035f4faa9, type: 3}
+  m_Type: 0
   m_PreserveAspect: 0
   m_FillCenter: 1
   m_FillMethod: 4

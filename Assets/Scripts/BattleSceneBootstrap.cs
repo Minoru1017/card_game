@@ -35,5 +35,7 @@ public static class BattleSceneBootstrap
             manager.TryApplyLaunchDifficultyFromContext();
             manager.CaptureBattleDifficultyForRecords();
         }
+
+        HarborTrainingBattleBackground.ApplyForActiveBattleContext();
     }
 }

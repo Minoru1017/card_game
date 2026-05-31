@@ -4,7 +4,9 @@
   "hideInSceneNameContains": [
     "battle",
     "buildbeck",
-    "builddeck"
+    "builddeck",
+    "plot",
+    "story progress"
   ],
   "triggerSize": 128.0,
   "triggerTopRightMargin": 28.0

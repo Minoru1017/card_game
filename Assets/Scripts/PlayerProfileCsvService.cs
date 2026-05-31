@@ -218,7 +218,8 @@ public static class PlayerProfileCsvService
             {
                 string slotKey = cols[2].Trim();
                 // Clear active slot runtime progress rows.
-                if (slotKey == "coins" || slotKey == "selected_deck_slot" || slotKey == "card" || slotKey == "deck" || slotKey == "deckslot")
+                if (slotKey == "coins" || slotKey == "selected_deck_slot" || slotKey == "card" || slotKey == "deck" ||
+                    slotKey == "deckslot" || slotKey == "tutorial_plot" || slotKey == "tutorial_battle")
                     continue;
                 if (slotKey == "slot_name") slotNameKept = true;
             }
@@ -944,6 +945,9 @@ public static class PlayerProfileCsvService
         }
         return false;
     }
+
+    /// <summary>標準五階難度索引：入門 0、簡單 1、普通 2、困難 3、魔王 4；無法辨識時為 0。</summary>
+    public static int GetStandardDifficultyIndex(string labelZh) => GetDifficultyIndex(labelZh);
 
     private static int GetDifficultyIndex(string labelZh)
     {

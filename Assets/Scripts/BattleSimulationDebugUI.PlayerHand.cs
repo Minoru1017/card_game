@@ -6,6 +6,10 @@ using UnityEngine.UI;
 
 public partial class BattleSimulationDebugUI : MonoBehaviour
 {
+    /// <summary>手牌橫向排版參考張數；超過後改在相同跨度內壓縮間距，避免手牌區向外擴張。</summary>
+    private const int PlayerHandLayoutReferenceCount = 7;
+    private const float PlayerHandStackStepMinPx = 10f;
+
     private int ComputeHandSignature()
     {
         int count = battleManager.GetPlayerHandCount();
@@ -72,8 +76,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         }
 
         float cardWidth = GetBattleHandDisplayedWidth();
-        // Symmetric fan layout with wider spacing for better readability/selectability.
-        float stackStep = Mathf.Max(32f, cardWidth * 0.42f + GetHandCardSpacing());
+        float stackStep = ComputePlayerHandStackStep(count, cardWidth);
         float centerX = handArea.rect.width * 0.5f;
         float center = (count - 1) * 0.5f;
 
@@ -100,7 +103,31 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         }
 
         SetHandButtonsInteractable();
+        if (TutorialBattleCoachUi.IsActiveForCurrentBattle)
+            RefreshTutorialHandPlayHighlights();
         TrySchedulePlayerOpeningHandFlyFromDeck();
+    }
+
+    /// <summary>
+    /// ≤7 張：維持可讀間距；&gt;7 張：總寬度不超過 7 張時的跨度（並限制在手牌區內）。
+    /// </summary>
+    private float ComputePlayerHandStackStep(int cardCount, float cardWidth)
+    {
+        float baseStep = Mathf.Max(32f, cardWidth * 0.42f + GetHandCardSpacing());
+        if (cardCount <= 1)
+            return baseStep;
+
+        float naturalSpan = (cardCount - 1) * baseStep;
+        float referenceSpan = (PlayerHandLayoutReferenceCount - 1) * baseStep;
+        float targetSpan = cardCount > PlayerHandLayoutReferenceCount ? referenceSpan : naturalSpan;
+
+        if (handArea != null)
+        {
+            float maxSpan = Mathf.Max(cardWidth * 1.05f, handArea.rect.width - cardWidth * 0.2f);
+            targetSpan = Mathf.Min(targetSpan, maxSpan);
+        }
+
+        return Mathf.Max(PlayerHandStackStepMinPx, targetSpan / (cardCount - 1));
     }
 
     private void RebuildEnemyHandCards()

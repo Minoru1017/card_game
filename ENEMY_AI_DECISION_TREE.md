@@ -6,7 +6,7 @@
 | **程式入口** | `EnemyAI.ExecutePlay` → `BattleSimulationManager.ChooseEnemyHandCardToPlayIndex` |
 | **難度注入** | `SceneLoader.MapDifficultyToEnemyAiPlayStyle` → `QueueRuntimeDifficultyConfig` |
 | **關聯程式** | `EnemyAiPlayStyle.cs` · `CardRarityUtility` · `BattleSimulationManager.cs` |
-| **最後更新** | 2026-05-16 |
+| **最後更新** | 2026-05-30 |
 
 ---
 
@@ -16,9 +16,9 @@
 
 | 難度（UI） | `BattleDifficultyTier` | `EnemyAiPlayStyle` | 出牌策略摘要 |
 | ---------- | ---------------------- | ------------------ | ------------ |
-| 入門 | Intro | **Greedy** | 每回合依優先度立即打出最佳可出牌 |
-| 簡單 | Easy | **Greedy** | 同上 |
-| 普通 | Normal | **Greedy** | 同上 |
+| 入門 | Intro | **IntroGreedy** | Greedy 基礎，法術出牌評分降低，較常先出怪 |
+| 簡單 | Easy | **EasySpellLean** | Greedy 基礎，法術出牌評分提高，較常施法 |
+| 普通 | Normal | **Greedy** | 每回合依優先度立即打出最佳可出牌 |
 | 困難 | Hard | **SchemingHard** | Greedy 基礎上，**SR／SSR／UR** 可囤牌待時機 |
 | 魔王 | Boss | **SchemingBoss** | 囤牌門檻更高（**R 以上**），出手條件更嚴 |
 
@@ -213,20 +213,74 @@ flowchart TD
 
 ---
 
-## 5. 棄牌決策樹（全難度相同）
+## 5. 棄牌決策樹（敵我共用流程、評分函式分開）
 
-手牌數 > `maxHandSize` 時，敵方回合抽牌後反覆執行 `ChooseEnemyDiscardIndex`，直到不超過上限。
+手牌數 > `maxHandSize`（預設 **7**）時進入棄牌：每輪只棄 **1** 張，重複直到手牌 ≤ 上限。敵方在抽牌後由 AI 自動棄；玩家需手動長按拖曳至棄牌區（`PlayerDiscardCardFromHand`），或使用 `AutoDiscardOneForPlayer`。
+
+**決策流程（敵我相同的三階段）：**
 
 ```mermaid
 flowchart TD
     A[需棄 1 張] --> B{有當下不可出的牌?}
-    B -->|是| C[棄第一張找到的不可出牌]
-    B -->|否| D{有重複 id 的牌?}
-    D -->|是| E[在重複牌中棄 Evaluate 價值最低者]
-    D -->|否| F[棄全手 Evaluate 價值最低者]
+    B -->|是| C[棄手牌中第一張符合者<br/>掃描順序：索引 0 → N-1]
+    B -->|否| D{有重複 card.id 的牌?}
+    D -->|是| E[僅在重複牌中<br/>棄保留價值最低者]
+    D -->|否| F[全手牌中<br/>棄保留價值最低者]
 ```
 
-`EvaluateEnemyCardKeepValue` = `EvaluateEnemyCardPlayPriority`（含稀有度加權）→ **優先度低的先丟**，高稀有、高效用牌較易留在手牌（利於困難／魔王囤牌）。
+### 5.1 敵方棄牌
+
+| 項目 | 說明 |
+| ---- | ---- |
+| 入口 | `ChooseEnemyDiscardIndex`（`BattleSimulationManager.cs`） |
+| 不可出判定 | `IsEnemyCardUnplayableNow` |
+| 保留價值 | `EvaluateEnemyCardKeepValue` = `EvaluateEnemyCardPlayPriority`（含稀有度加權） |
+
+**優先度低的先丟**；高稀有、高效用牌較易留在手牌（利於困難／魔王囤牌）。
+
+### 5.2 玩家棄牌
+
+| 項目 | 說明 |
+| ---- | ---- |
+| 入口 | `ChoosePlayerDiscardIndex` |
+| 對外查詢 | `GetRecommendedPlayerDiscardHandIndex()`（與 `AutoDiscardOneForPlayer` 同一邏輯） |
+| 不可出判定 | `IsPlayerCardUnplayableNow` |
+| 保留價值 | `EvaluatePlayerCardKeepValue`（**不含**出牌決策樹的斬殺／開局囤牌等加權） |
+
+#### 5.2.1 「當下打不出去」（`IsPlayerCardUnplayableNow`）
+
+| 場上狀態 | 視為不可出（會優先被建議棄掉） |
+| -------- | ------------------------------ |
+| 我方場上**已有怪獸** | 所有**怪獸**；法術中僅 **初級治療**（`SpellOrdinal == 1`）仍可打出，其餘法術不可出 |
+| 我方場上**無怪** | **初級治療**（ordinal 1）不可出；**林可的凝視**（ordinal 2）在 `CanPlayerCastLinGazeNow()` 為 false 時不可出 |
+
+掃描時取**第一張**符合條件的手牌索引（由左至右）。
+
+> **與出牌教學的差異**：`TutorialHandPlayAdvisor` 會把「第一回合火球封鎖」等納入**出牌**建議；**棄牌**邏輯**未**將開局火球封鎖算入「打不出去」。若場上空、手牌僅剩被封鎖的火球，會改走 §5.2.2 的保留價值比較（火球在空場時分值 75，通常不會成為首選棄牌）。
+
+#### 5.2.2 保留價值（`EvaluatePlayerCardKeepValue`）
+
+分數**越低越先棄**。無「打不出去」的牌、且無重複 `id` 時，棄全手最低分者。
+
+| 牌種 | 計算方式 |
+| ---- | -------- |
+| 怪獸 | `attack × 2 + healthPointMax` |
+| 火球術（ordinal 0） | 場上有己方怪：**55**；場上無怪：**75** |
+| 初級治療（ordinal 1） | 場上有己方怪：**90**；場上無怪：**8** |
+| 林可的凝視（ordinal 2） | 當下可施放：**62**；不可施放：**10** |
+| 其他法術 | **20** |
+
+**重複牌**：若多張手牌 `card.id` 相同，只在這些重複牌裡比較保留價值，棄**最低**者。
+
+#### 5.2.3 教學戰 UI（1-1 入門課 · 學院內）
+
+| 行為 | 程式 |
+| ---- | ---- |
+| 林可姐棄牌文案 | `TutorialBattleCoachUi`（`discard` 提示鍵） |
+| 手牌高亮 | `TutorialHandDiscardAdvisor` → `RequestTutorialHandDiscardHighlights` |
+| 高亮規則 | 每次只亮 **1** 張：即 `GetRecommendedPlayerDiscardHandIndex()` 的結果；玩家棄掉後會依新手牌重算 |
+
+出牌建議（`TutorialHandPlayAdvisor`）與棄牌建議為**兩套評分**，勿混用。教戰文案見 [`TUTORIAL_PLOT_SCRIPT.md`](TUTORIAL_PLOT_SCRIPT.md) §五。
 
 ---
 
@@ -293,7 +347,9 @@ flowchart LR
 | 優先度 | `EvaluateEnemyCardPlayPriority` | 同上 |
 | 暫緩 | `ShouldDeferSchemingCard` | 同上 |
 | 囤牌 streak | `NoteEnemySchemingCardPlayed` | 同上（`EnemyPlayCardFromHand` 成功後） |
-| 棄牌 | `ChooseEnemyDiscardIndex` | 同上 |
+| 敵棄牌 | `ChooseEnemyDiscardIndex` | 同上 |
+| 玩家棄牌 | `ChoosePlayerDiscardIndex` · `GetRecommendedPlayerDiscardHandIndex` | 同上 |
+| 教學棄牌高亮 | `TutorialHandDiscardAdvisor.TryGetRecommendedDiscardHandIndices` | `TutorialHandDiscardAdvisor.cs` |
 | 攻擊 | `EnemyAttackIfPossible` | 同上 |
 
 ---
@@ -303,7 +359,8 @@ flowchart LR
 | 日期 | 說明 |
 | ---- | ---- |
 | 2026-05-16 | 初版：五階難度對照、出牌／囤牌／棄牌／攻擊決策樹，對齊 `EnemyAiPlayStyle` 實作 |
+| 2026-05-30 | §5 擴充：玩家棄牌三階段、保留價值表、與教學出牌建議差異、教學戰棄牌高亮索引 |
 
 ---
 
-*數值門檻（HP ％、囤牌 3 回合）若調整程式，請同步更新本文件 §4。*
+*數值門檻（HP ％、囤牌 3 回合）若調整程式，請同步更新本文件 §4。棄牌保留價值若調整 `EvaluatePlayerCardKeepValue`，請同步更新 §5.2.2。*

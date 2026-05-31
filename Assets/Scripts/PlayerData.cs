@@ -29,7 +29,10 @@ public class PlayerData : MonoBehaviour
     [Header("UI")]
     public TextMeshProUGUI coinsText;
 
-    /// <summary>唯一應讀寫存檔的 PlayerData（優先 DataManager 上的實例）。</summary>
+    /// <summary>
+    /// 唯一應讀寫存檔的 <see cref="PlayerData"/>（優先 <c>DataManager</c> 物件上的實例，其次帶 <see cref="DeckManager"/> 者）。
+    /// 全專案請用此方法，勿再 <c>FindFirstObjectByType&lt;PlayerData&gt;</c>。
+    /// </summary>
     public static PlayerData ResolveCanonical()
     {
         GameObject dmGo = GameObject.Find("DataManager");
@@ -52,8 +55,7 @@ public class PlayerData : MonoBehaviour
         }
 
         if (withDeckManager != null) return withDeckManager;
-        if (any != null) return any;
-        return UnityEngine.Object.FindFirstObjectByType<PlayerData>();
+        return any;
     }
 
     void Awake()
@@ -165,6 +167,13 @@ public class PlayerData : MonoBehaviour
         return deckSlotMaps[slot];
     }
 
+    public void ClearDeckSlot(int slot)
+    {
+        EnsureDeckSlotMaps();
+        slot = Mathf.Clamp(slot, 0, deckSlotCount - 1);
+        deckSlotMaps[slot].Clear();
+    }
+
     public void ClearAllCollectionAndDecks()
     {
         playerCollection.Clear();
@@ -178,6 +187,11 @@ public class PlayerData : MonoBehaviour
     {
         return cardProficiencyWins.TryGetValue(monsterId, out CardProficiencyWins wins) ? wins : default;
     }
+
+    public IEnumerable<KeyValuePair<int, CardProficiencyWins>> GetAllCardProficiencyWinsSnapshot() =>
+        cardProficiencyWins;
+
+    public void RemoveCardProficiencyWins(int monsterId) => cardProficiencyWins.Remove(monsterId);
 
     public void SetCardProficiencyWins(int monsterId, float progressAny, int winsNormalDifficulty)
     {
@@ -194,7 +208,28 @@ public class PlayerData : MonoBehaviour
         };
     }
 
-    /// <summary>對戰結算：累加 toward-B 進度；普通難度勝利時 winsNormal +1。</summary>
+    /// <summary>
+    /// 測試用：移除所有非御三家（國王／皇后／民兵）的熟練度存檔列；御三家維持不寫入或保留原狀，
+    /// 遊戲內仍依 <see cref="CardSkillProficiencyService.IsStarterTrio"/> 視為完整解放。
+    /// </summary>
+    /// <returns>移除的怪物 id 筆數</returns>
+    public int ResetAllCardProficiencyForTesting(bool saveAfter = true)
+    {
+        PlayerData canonical = ResolveCanonical();
+        if (canonical != null && canonical != this)
+            return canonical.ResetAllCardProficiencyForTesting(saveAfter);
+
+        CardStore store = CardStore != null ? CardStore : GetComponent<CardStore>();
+        int removed = CardProficiencyDebugReset.ClearRuntimeProficiency(this, store);
+        CardProficiencyDebugReset.StripAllNonStarterProficiencyRows(CardProficiencyDebugReset.GetPersistentPlayerDataCsvPath());
+
+        if (saveAfter)
+            SavePlayerData();
+
+        return removed;
+    }
+
+    /// <summary>對戰結算：累加 toward-B 進度；普通以上難度勝利時 winsNormal +1。</summary>
     public void AddCardProficiencyProgress(int monsterId, float progressDelta, bool addNormalWin)
     {
         if (progressDelta <= 0f && !addNormalWin) return;
@@ -492,10 +527,8 @@ public class PlayerData : MonoBehaviour
         string path = GetPlayerDataPath();
         Directory.CreateDirectory(dir);
 
-        // PlayerProfileCsvService syncs W/L/D/Q and per-match battle_record rows into playerdata.
-        // Those rows are not represented in Player fields; without preserving them here,
-        // the next save would strip battle stats / difficulty breakdown.
-        var preservedActiveProfileRows = new List<string>(64);
+        // Rows not rebuilt below must be preserved: profile_*, battle_record, tutorial/harbor 旗標等。
+        var preservedActiveSlotExtraRows = new List<string>(64);
         if (PlayerPersistSafeIO.TryReadPlayerDataLines(path, out string[] existingLines, out _))
         {
             for (int li = 0; li < existingLines.Length; li++)
@@ -507,9 +540,8 @@ public class PlayerData : MonoBehaviour
                 if (!string.Equals(cols[0].Trim(), "slot", StringComparison.OrdinalIgnoreCase)) continue;
                 if (!int.TryParse(cols[1].Trim(), out int slotNum) || slotNum != activePlayerSlot) continue;
                 string slotKey = cols[2].Trim();
-                if (slotKey.StartsWith("profile_", StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(slotKey, "battle_record", StringComparison.OrdinalIgnoreCase))
-                    preservedActiveProfileRows.Add(line);
+                if (ShouldPreserveActiveSlotRowOnPlayerSave(slotKey, cols.Length))
+                    preservedActiveSlotExtraRows.Add(line);
             }
         }
 
@@ -573,12 +605,41 @@ public class PlayerData : MonoBehaviour
 
         for (int i = 0; i < current.Count; i++) datas.Add(current[i]);
         EnsureAllSlotContainers(datas);
-        for (int pi = 0; pi < preservedActiveProfileRows.Count; pi++)
-            datas.Add(preservedActiveProfileRows[pi]);
+        for (int pi = 0; pi < preservedActiveSlotExtraRows.Count; pi++)
+            datas.Add(preservedActiveSlotExtraRows[pi]);
+
+        TutorialProgressState.EnsureGraduationFlagRowsInPlayerSave(datas, activePlayerSlot, playerCollection);
 
         PlayerPersistSafeIO.WriteAllLinesWithAtomicRotateBackups(path, datas);
         RebuildCachedOtherSlotRowsFromDisk(path);
         Debug.Log("Save path: " + path);
+    }
+
+    /// <summary>
+    /// 作用中槽位在 SavePlayerData 時不重建的 CSV 列（教學／港灣旗標、戰績 profile、battle_record 等）。
+    /// 若未保留，港灣戰後存檔會清掉入門畢業旗標，Story progress 會誤回到「入門未通關」。
+    /// </summary>
+    private static bool ShouldPreserveActiveSlotRowOnPlayerSave(string slotKey, int columnCount)
+    {
+        if (string.IsNullOrWhiteSpace(slotKey)) return false;
+        if (slotKey.StartsWith("profile_", StringComparison.OrdinalIgnoreCase)) return true;
+        if (string.Equals(slotKey, "battle_record", StringComparison.OrdinalIgnoreCase)) return true;
+        if (columnCount != 4) return false;
+
+        switch (slotKey)
+        {
+            case "coins":
+            case "selected_deck_slot":
+            case "slot_name":
+            case "card":
+            case "deck":
+            case "deckslot":
+            case "deck_slot_name":
+            case "proficiency":
+                return false;
+            default:
+                return true;
+        }
     }
 
     private void RebuildCachedOtherSlotRowsFromDisk(string path)
@@ -638,9 +699,20 @@ public class PlayerData : MonoBehaviour
         }
     }
 
+    public static string GetPlayerSaveCsvPath() => GetPlayerDataPath();
+
     private static string GetPlayerDataPath()
     {
         return Path.Combine(Application.persistentDataPath, "playerdata.csv");
+    }
+
+    /// <summary>從 playerdata.csv 讀取目前作用中槽位（不依賴場景內 PlayerData 元件）。</summary>
+    public static int ReadActivePlayerSlotFromSave()
+    {
+        string path = GetPlayerDataPath();
+        if (!PlayerPersistSafeIO.TryReadPlayerDataLines(path, out string[] rows, out _))
+            return 1;
+        return Mathf.Clamp(ReadActiveSlotFromRows(rows), 1, MaxPlayerSlots);
     }
 
     public static bool TryGetActiveSlotCoinsFromSave(out int coins)
@@ -795,6 +867,7 @@ public class PlayerData : MonoBehaviour
         rows.Add($"slot,{slot},slot_name,玩家{slot}");
         EnsureAllSlotContainers(rows);
         PlayerPersistSafeIO.WriteAllLinesWithAtomicRotateBackups(path, rows);
+        TutorialProgressState.ResetTutorialForSlot(slot);
     }
 
     private static int FindFirstNonDeletedSlot(string[] rows, int deletedSlot)
@@ -950,6 +1023,15 @@ public class PlayerData : MonoBehaviour
         return snapshots;
     }
 
+    public static int GetActivePlayerSlotOrDefault()
+    {
+        int slot = ReadActivePlayerSlotFromSave();
+        PlayerData pd = ResolveCanonical();
+        if (pd != null)
+            pd.activePlayerSlot = slot;
+        return slot;
+    }
+
     public static string GetActivePlayerSlotName()
     {
         string path = GetPlayerDataPath();
@@ -1068,8 +1150,9 @@ public class PlayerData : MonoBehaviour
     public int GetSelectedDeckTotalCount()
     {
         EnsureDeckSlotMaps();
+        int slot = Mathf.Clamp(selectedDeckSlot, 0, deckSlotCount - 1);
         int total = 0;
-        foreach (var kv in deckSlotMaps[selectedDeckSlot])
+        foreach (var kv in deckSlotMaps[slot])
         {
             if (kv.Value > 0) total += kv.Value;
         }

@@ -51,8 +51,8 @@ public static class BuildbeckSceneAutoScaffold
 
         Transform rootT = root.transform;
 
-        EnsurePanel("Library Grid", rootT, new Vector2(0f, 0f), new Vector2(0.55f, 1f), new Color(1f, 1f, 1f, 0.03f));
-        EnsurePanel("Deck Grid", rootT, new Vector2(0.55f, 0.18f), new Vector2(1f, 1f), new Color(1f, 1f, 1f, 0.03f));
+        EnsurePanel("Library Grid", rootT, new Vector2(0f, 0f), new Vector2(0.55f, 1f), new Color(1f, 1f, 1f, 0.01f));
+        EnsurePanel("Deck Grid", rootT, new Vector2(0.55f, 0.18f), new Vector2(1f, 1f), new Color(1f, 1f, 1f, 0.01f));
         EnsureSaveDeckButton(rootT);
         DeckManager dmSave = cachedDeckManager;
         if (dmSave == null) dmSave = Object.FindFirstObjectByType<DeckManager>();

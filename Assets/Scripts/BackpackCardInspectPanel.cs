@@ -16,10 +16,12 @@ public class BackpackCardInspectPanel : MonoBehaviour
     private const float HeaderLeftAnchorMax = 0.54f;
     private const float HeaderRightAnchorMin = 0.56f;
     private const float DeckBarHeight = 54f;
-    private const float MasteryBarHeight = 120f;
-    private const float MasteryInset = 12f;
-    private const float MasteryHeaderHeight = 42f;
-    private const float MasteryTrackHeight = 22f;
+    private const float MasteryBarHeight = BackpackInspectMasteryLayout.BarHeight;
+    private const float MasteryInset = BackpackInspectMasteryLayout.Inset;
+    private const float MasteryHeaderHeight = BackpackInspectMasteryLayout.HeaderHeight;
+    private const float MasteryHelpButtonSizePx = BackpackInspectMasteryLayout.HelpButtonSizePx;
+    private const float MasteryStatusRightReservePx = BackpackInspectMasteryLayout.StatusRightReservePx;
+    private const float MasteryTrackHeight = BackpackInspectMasteryLayout.TrackHeight;
     private const float StageTabRowHeight = 94f;
     private const float StatStripHeight = 84f;
     private const float StatChipSpacing = 8f;
@@ -224,11 +226,17 @@ public class BackpackCardInspectPanel : MonoBehaviour
             masteryStatusTmp.ForceMeshUpdate();
         }
 
-        if (masteryFillRt != null)
-        {
-            float w = Mathf.Clamp01(bar.fill01);
-            masteryFillRt.anchorMax = new Vector2(w, 1f);
-        }
+        CardProficiencyDebugReset.ApplyBackpackMasteryFill(masteryFillRt, bar.fill01);
+    }
+
+    /// <summary>Debug 清空熟練度後刷新目前詳情列。</summary>
+    public void RefreshMasteryBarIfOpen()
+    {
+        if (!IsOpen || currentCard == null) return;
+        ApplyMasteryBar(currentCard);
+        RefreshStageTabVisuals();
+        if (skillTmp != null)
+            skillTmp.text = BuildSkillRich(currentCard);
     }
 
     private void RefreshStageTabVisuals()
@@ -829,14 +837,14 @@ public class BackpackCardInspectPanel : MonoBehaviour
 
         masteryStatusTmp = CreateText(barBg.rectTransform, string.Empty, font, BackpackInspectVisualStyle.Typography.BodySize,
             FontStyles.Bold, BackpackInspectUiColors.ProficiencyStatus, TextAlignmentOptions.TopRight);
-        PlaceMasteryHeaderText(masteryStatusTmp.rectTransform, false, headerBottom, rightReservePx: 44f);
+        PlaceMasteryHeaderText(masteryStatusTmp.rectTransform, false, headerBottom, rightReservePx: MasteryStatusRightReservePx);
 
         Image helpImg = CreateChild(barBg.rectTransform, "ProficiencyHelpButton", true);
         RectTransform helpRt = helpImg.rectTransform;
         helpRt.anchorMin = helpRt.anchorMax = new Vector2(1f, 1f);
         helpRt.pivot = new Vector2(1f, 1f);
         helpRt.anchoredPosition = new Vector2(-MasteryInset, -MasteryInset);
-        helpRt.sizeDelta = new Vector2(44f, 44f);
+        helpRt.sizeDelta = new Vector2(MasteryHelpButtonSizePx, MasteryHelpButtonSizePx);
         helpImg.color = BackpackInspectUiColors.ProficiencyFill;
         Outline helpOutline = helpImg.gameObject.AddComponent<Outline>();
         helpOutline.effectColor = BackpackInspectUiColors.Ink;
@@ -871,8 +879,9 @@ public class BackpackCardInspectPanel : MonoBehaviour
         }
 
         float rightPad = MasteryInset + (alignLeft ? 0f : rightReservePx);
-        rt.anchorMin = new Vector2(alignLeft ? 0f : 0.55f, 1f);
-        rt.anchorMax = new Vector2(alignLeft ? 0.55f : 1f, 1f);
+        const float masteryHeaderSplit = 0.36f;
+        rt.anchorMin = new Vector2(alignLeft ? 0f : masteryHeaderSplit, 1f);
+        rt.anchorMax = new Vector2(alignLeft ? masteryHeaderSplit : 1f, 1f);
         rt.pivot = new Vector2(alignLeft ? 0f : 1f, 1f);
         rt.offsetMin = new Vector2(alignLeft ? MasteryInset : 0f, -headerBottom);
         rt.offsetMax = new Vector2(alignLeft ? 0f : -rightPad, -MasteryInset);
