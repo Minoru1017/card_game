@@ -84,6 +84,23 @@ public class PlayerData : MonoBehaviour
     {
     }
 
+    /// <summary>手機切背景／來電、PC 失焦時：將延遲存檔與貴重品變更落盤。</summary>
+    private void OnApplicationPause(bool pauseStatus)
+    {
+        if (!pauseStatus || ResolveCanonical() != this)
+            return;
+
+        PlayerSaveCoordinator.FlushPendingPlayerDataIfNeeded();
+    }
+
+    private void OnApplicationQuit()
+    {
+        if (ResolveCanonical() != this)
+            return;
+
+        PlayerSaveCoordinator.FlushPendingPlayerDataIfNeeded();
+    }
+
     public void RefreshCoins()
     {
         if (coinsText != null)
@@ -253,6 +270,7 @@ public class PlayerData : MonoBehaviour
 
         EnsureMinimumDeckSlotCount();
         EnsureDeckSlotMaps();
+        ValuablesVaultState.InvalidateAllCaches();
 
         playerCollection.Clear();
         for (int s = 0; s < deckSlotMaps.Length; s++)
@@ -511,8 +529,23 @@ public class PlayerData : MonoBehaviour
         return false;
     }
 
+    /// <summary>合併短時間內多次存檔（Buildbeck 拖卡、切換牌組分頁）。離場景／進戰鬥前請用 <see cref="SavePlayerData"/> 或 <see cref="PlayerSaveCoordinator.FlushDebouncedThenSavePlayerData"/>。</summary>
+    public void SavePlayerDataDebounced()
+    {
+        PlayerData canonical = ResolveCanonical();
+        if (canonical != null && canonical != this)
+        {
+            canonical.SavePlayerDataDebounced();
+            return;
+        }
+
+        PlayerSaveDebouncer.RequestDebouncedSave(this);
+    }
+
     public void SavePlayerData()
     {
+        PlayerSaveDebouncer.CancelPending();
+
         PlayerData canonical = ResolveCanonical();
         if (canonical != null && canonical != this)
         {
@@ -540,6 +573,8 @@ public class PlayerData : MonoBehaviour
                 if (!string.Equals(cols[0].Trim(), "slot", StringComparison.OrdinalIgnoreCase)) continue;
                 if (!int.TryParse(cols[1].Trim(), out int slotNum) || slotNum != activePlayerSlot) continue;
                 string slotKey = cols[2].Trim();
+                if (ValuablesVaultState.IsValuableCsvRow(line))
+                    continue;
                 if (ShouldPreserveActiveSlotRowOnPlayerSave(slotKey, cols.Length))
                     preservedActiveSlotExtraRows.Add(line);
             }
@@ -548,9 +583,14 @@ public class PlayerData : MonoBehaviour
         var datas = new List<string>();
         datas.Add($"active_slot,{activePlayerSlot}");
 
-        // Preserve all rows for non-active slots.
+        // Preserve all rows for non-active slots (貴重品改由 ValuablesVaultState 統一附加)。
         for (int i = 0; i < cachedOtherSlotRows.Count; i++)
-            datas.Add(cachedOtherSlotRows[i]);
+        {
+            string row = cachedOtherSlotRows[i];
+            if (ValuablesVaultState.IsValuableCsvRow(row))
+                continue;
+            datas.Add(row);
+        }
 
         var current = new List<string>();
         current.Add($"slot,{activePlayerSlot},coins,{playerCoins}");
@@ -609,8 +649,10 @@ public class PlayerData : MonoBehaviour
             datas.Add(preservedActiveSlotExtraRows[pi]);
 
         TutorialProgressState.EnsureGraduationFlagRowsInPlayerSave(datas, activePlayerSlot, playerCollection);
+        ValuablesVaultState.AppendAllSlotsSerializedRows(datas);
+        ValuablesVaultState.MarkPersisted();
 
-        PlayerPersistSafeIO.WriteAllLinesWithAtomicRotateBackups(path, datas);
+        PlayerSaveCoordinator.WritePlayerDataCsv(datas);
         RebuildCachedOtherSlotRowsFromDisk(path);
         Debug.Log("Save path: " + path);
     }
@@ -624,6 +666,8 @@ public class PlayerData : MonoBehaviour
         if (string.IsNullOrWhiteSpace(slotKey)) return false;
         if (slotKey.StartsWith("profile_", StringComparison.OrdinalIgnoreCase)) return true;
         if (string.Equals(slotKey, "battle_record", StringComparison.OrdinalIgnoreCase)) return true;
+        if (string.Equals(slotKey, ValuablesVaultState.SaveKey, StringComparison.OrdinalIgnoreCase))
+            return true;
         if (columnCount != 4) return false;
 
         switch (slotKey)
@@ -781,7 +825,8 @@ public class PlayerData : MonoBehaviour
         }
         if (!activeWritten) rows.Insert(0, $"active_slot,{slot}");
         EnsureAllSlotContainers(rows);
-        PlayerPersistSafeIO.WriteAllLinesWithAtomicRotateBackups(path, rows);
+        PlayerSaveCoordinator.WritePlayerDataCsv(rows);
+        ValuablesVaultState.InvalidateAllCaches();
     }
 
     public static int FindFirstEmptySlot()
@@ -866,7 +911,8 @@ public class PlayerData : MonoBehaviour
         rows.Add($"slot,{slot},selected_deck_slot,0");
         rows.Add($"slot,{slot},slot_name,玩家{slot}");
         EnsureAllSlotContainers(rows);
-        PlayerPersistSafeIO.WriteAllLinesWithAtomicRotateBackups(path, rows);
+        PlayerSaveCoordinator.WritePlayerDataCsv(rows);
+        ValuablesVaultState.InvalidateSlotCache(slot);
         TutorialProgressState.ResetTutorialForSlot(slot);
     }
 
@@ -1080,7 +1126,7 @@ public class PlayerData : MonoBehaviour
         }
         if (!wrote) rows.Add($"slot,{active},slot_name,{safeName}");
         EnsureAllSlotContainers(rows);
-        PlayerPersistSafeIO.WriteAllLinesWithAtomicRotateBackups(path, rows);
+        PlayerSaveCoordinator.WritePlayerDataCsv(rows);
     }
 
     private static string SanitizeSlotName(string name, int slot)

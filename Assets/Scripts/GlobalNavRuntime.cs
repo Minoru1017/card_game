@@ -41,7 +41,7 @@ public class GlobalNavRuntime : MonoBehaviour
     private TextMeshProUGUI playerInfoLastResultText;
     private TextMeshProUGUI playerInfoProgressText;
     private TextMeshProUGUI playerInfoRecordTotalText;
-    private const int PlayerInfoOverlayLayoutVersion = 2;
+    private const int PlayerInfoOverlayLayoutVersion = 3;
     private int builtPlayerInfoLayoutVersion;
     private int playerInfoActiveRecordFilter = 1;
     private readonly Button[] playerInfoRecordFilterButtons = new Button[4];
@@ -71,6 +71,11 @@ public class GlobalNavRuntime : MonoBehaviour
     private const float PlayerInfoLineGap = 10f;
     private const float PlayerInfoHeaderHeight = 76f;
     private const float PlayerInfoFooterHeight = 60f;
+    /// <summary>玩家資訊主面板寬高（參考解析度比例 + 上限）。</summary>
+    private const float PlayerInfoPanelWidthRatio = 0.9f;
+    private const float PlayerInfoPanelMaxWidthPx = 1320f;
+    private const float PlayerInfoPanelHeightRatio = 0.9f;
+    private const float PlayerInfoPanelMaxHeightPx = 900f;
     private static readonly Color PlayerInfoTextPrimary = new Color(0.2f, 0.16f, 0.12f, 1f);
     private static readonly Color PlayerInfoTextMuted = new Color(0.48f, 0.42f, 0.36f, 1f);
     private static readonly Color PlayerInfoSectionBg = new Color(0.98f, 0.96f, 0.92f, 0.98f);
@@ -81,8 +86,10 @@ public class GlobalNavRuntime : MonoBehaviour
     private float playerInfoContentWidth;
     private TMP_InputField playerSlotNameInput;
     private Button backpackButton;
+    private Button valuablesVaultButton;
     private Button settingsButton;
     private Button goLoginButton;
+    private GlobalNavValuablesVaultOverlay valuablesVaultOverlay;
     private const float TabPanelRightMargin = 28f;
     private const float TabPanelTopMargin = 176f;
     private const float TabPanelLeftMargin = 24f;
@@ -106,6 +113,13 @@ public class GlobalNavRuntime : MonoBehaviour
         EnsureInitialized();
         if (instance == null) return false;
         return instance.OpenPlayerInfoOverlay();
+    }
+
+    public static bool TryOpenValuablesVaultOverlay()
+    {
+        EnsureInitialized();
+        if (instance == null) return false;
+        return instance.OpenValuablesVaultOverlay();
     }
 
     private static GlobalNavConfigData LoadConfig()
@@ -138,10 +152,7 @@ public class GlobalNavRuntime : MonoBehaviour
         canvas.sortingOrder = 6000;
 
         CanvasScaler scaler = canvasObj.GetComponent<CanvasScaler>();
-        scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-        scaler.referenceResolution = new Vector2(1920f, 1080f);
-        scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
-        scaler.matchWidthOrHeight = 0.5f;
+        MobileUiLayoutPolicy.ApplyCanvasScaler(scaler);
 
         GameObject trigger = CreateButton(
             canvasObj.transform,
@@ -182,6 +193,17 @@ public class GlobalNavRuntime : MonoBehaviour
             Vector2.zero,
             new Vector2(160f, 160f),
             new Color(0.35f, 0.56f, 0.34f, 0.98f),
+            30f);
+        GameObject valuablesVaultBtnObj = CreateNavTileButton(
+            panel.transform,
+            "ValuablesVaultButton",
+            "貴重品庫",
+            new Vector2(0.5f, 0.38f),
+            new Vector2(0.5f, 0.38f),
+            new Vector2(0.5f, 0.5f),
+            Vector2.zero,
+            new Vector2(160f, 160f),
+            new Color(0.62f, 0.48f, 0.28f, 0.98f),
             30f);
         GameObject backpackBtnObj = CreateNavTileButton(
             panel.transform,
@@ -225,8 +247,15 @@ public class GlobalNavRuntime : MonoBehaviour
         view.playerInfoButton = playerInfoBtnObj.GetComponent<Button>();
         view.closeButton = null;
         backpackButton = backpackBtnObj.GetComponent<Button>();
+        valuablesVaultButton = valuablesVaultBtnObj.GetComponent<Button>();
         settingsButton = settingsBtnObj.GetComponent<Button>();
         goLoginButton = goLoginBtnObj.GetComponent<Button>();
+
+        valuablesVaultOverlay = new GlobalNavValuablesVaultOverlay(
+            ValuablesVaultFonts.ApplyTo,
+            CreatePlayerInfoStyleCloseButton);
+        if (view.rootCanvas != null)
+            valuablesVaultOverlay.EnsureBuilt(view.rootCanvas.transform);
 
         if (view.rootCanvas != null) view.rootCanvas.sortingOrder = 6000;
 
@@ -274,6 +303,16 @@ public class GlobalNavRuntime : MonoBehaviour
             view.playerInfoButton.onClick.AddListener(() =>
             {
                 TogglePlayerInfoPanel();
+                SetTabPanelOpen(false);
+            });
+        }
+
+        if (valuablesVaultButton != null)
+        {
+            valuablesVaultButton.onClick.RemoveAllListeners();
+            valuablesVaultButton.onClick.AddListener(() =>
+            {
+                ToggleValuablesVaultPanel();
                 SetTabPanelOpen(false);
             });
         }
@@ -470,7 +509,8 @@ public class GlobalNavRuntime : MonoBehaviour
     }
 
     private static bool FontSupportsRequiredGlyphs(TMP_FontAsset font) =>
-        BuildbeckUiFonts.FontSupportsText(font, PlayerInfoProgressCopy.FontGlyphProbe);
+        BuildbeckUiFonts.FontSupportsText(font, PlayerInfoProgressCopy.FontGlyphProbe) &&
+        BuildbeckUiFonts.FontSupportsText(font, ValuablesVaultDisplay.FontGlyphProbe);
 
     private static bool FontNameLikelySupportsCjk(string fontAssetName)
     {
@@ -502,11 +542,12 @@ public class GlobalNavRuntime : MonoBehaviour
         panelRt.offsetMin = new Vector2(TabPanelLeftMargin, TabPanelBottomMargin);
         panelRt.offsetMax = new Vector2(-TabPanelRightMargin, -TabPanelTopMargin);
 
-        ResizeTabButton(view.homeButton, 0.12f, 0.5f);
-        ResizeTabButton(view.playerInfoButton, 0.30f, 0.5f);
-        ResizeTabButton(backpackButton, 0.48f, 0.5f);
-        ResizeTabButton(settingsButton, 0.66f, 0.5f);
-        ResizeTabButton(goLoginButton, 0.84f, 0.5f);
+        ResizeTabButton(view.homeButton, 0.10f, 0.5f);
+        ResizeTabButton(view.playerInfoButton, 0.26f, 0.5f);
+        ResizeTabButton(valuablesVaultButton, 0.42f, 0.5f);
+        ResizeTabButton(backpackButton, 0.58f, 0.5f);
+        ResizeTabButton(settingsButton, 0.74f, 0.5f);
+        ResizeTabButton(goLoginButton, 0.90f, 0.5f);
     }
 
     private static void ResizeTabButton(UnityEngine.UI.Button button, float anchorX, float anchorY)
@@ -535,6 +576,7 @@ public class GlobalNavRuntime : MonoBehaviour
 
         if (view.homeButton != null) view.homeButton.interactable = open;
         if (view.playerInfoButton != null) view.playerInfoButton.interactable = open;
+        if (valuablesVaultButton != null) valuablesVaultButton.interactable = open;
         if (backpackButton != null) backpackButton.interactable = open;
         if (settingsButton != null) settingsButton.interactable = open;
         if (goLoginButton != null) goLoginButton.interactable = open;
@@ -583,6 +625,61 @@ public class GlobalNavRuntime : MonoBehaviour
         if (view != null && view.triggerButtonObject != null) view.triggerButtonObject.SetActive(!hidden);
         SetTabPanelOpen(false);
         if (playerInfoOverlayRoot != null) playerInfoOverlayRoot.SetActive(false);
+        CloseValuablesVaultOverlay();
+    }
+
+    private void ToggleValuablesVaultPanel()
+    {
+        EnsureValuablesVaultOverlay();
+        if (valuablesVaultOverlay == null) return;
+        if (valuablesVaultOverlay.IsOpen)
+            valuablesVaultOverlay.Close();
+        else
+            OpenValuablesVaultOverlay();
+    }
+
+    private bool OpenValuablesVaultOverlay()
+    {
+        EnsureValuablesVaultOverlay();
+        if (valuablesVaultOverlay == null) return false;
+        if (playerInfoOverlayRoot != null) playerInfoOverlayRoot.SetActive(false);
+        valuablesVaultOverlay.Open();
+        return true;
+    }
+
+    private void CloseValuablesVaultOverlay()
+    {
+        valuablesVaultOverlay?.Close();
+        if (ValuablesVaultState.HasPendingChanges)
+            PlayerSaveCoordinator.FlushDebouncedThenSavePlayerData();
+    }
+
+    private void EnsureValuablesVaultOverlay()
+    {
+        if (view == null || view.rootCanvas == null) return;
+        if (valuablesVaultOverlay == null)
+        {
+            valuablesVaultOverlay = new GlobalNavValuablesVaultOverlay(
+                ValuablesVaultFonts.ApplyTo,
+                CreatePlayerInfoStyleCloseButton);
+        }
+
+        valuablesVaultOverlay.EnsureBuilt(view.rootCanvas.transform);
+    }
+
+    private static GameObject CreatePlayerInfoStyleCloseButton(Transform headerParent)
+    {
+        return CreateButton(
+            headerParent,
+            "CloseButton",
+            "關閉",
+            new Vector2(1f, 1f),
+            new Vector2(1f, 1f),
+            new Vector2(1f, 1f),
+            new Vector2(-24f, -18f),
+            new Vector2(124f, 54f),
+            new Color(0.45f, 0.29f, 0.24f, 0.96f),
+            28f);
     }
 
     private static void TryLoadHomeScene()
@@ -655,6 +752,7 @@ public class GlobalNavRuntime : MonoBehaviour
     private bool OpenPlayerInfoOverlay()
     {
         Input.imeCompositionMode = IMECompositionMode.On;
+        CloseValuablesVaultOverlay();
         EnsurePlayerInfoOverlay();
         if (playerInfoOverlayRoot == null) return false;
         RefreshPlayerInfoOverlayContent();
@@ -694,6 +792,7 @@ public class GlobalNavRuntime : MonoBehaviour
             playerInfoRoleText.text = PlayerInfoProgressCopy.FormatRoleWithSlot(p.role, slot);
         if (playerInfoProgressText != null)
         {
+            TutorialProgressState.SyncActiveSlotGraduationFromCollection();
             playerInfoProgressText.text = PlayerInfoProgressCopy.BuildSummary(slot);
             FitProfileValueTextHeight(playerInfoProgressText, 26f, 28f);
         }
@@ -733,8 +832,8 @@ public class GlobalNavRuntime : MonoBehaviour
         dim.color = new Color(0.1f, 0.08f, 0.06f, 0.72f);
         dim.raycastTarget = true;
 
-        float panelWidth = Mathf.Min(Screen.width * 0.8f, 1160f);
-        float panelHeight = Mathf.Min(Screen.height * 0.82f, 780f);
+        float panelWidth = MobileUiLayoutPolicy.PanelWidthInReferenceUnits(PlayerInfoPanelWidthRatio, PlayerInfoPanelMaxWidthPx);
+        float panelHeight = MobileUiLayoutPolicy.PanelHeightInReferenceUnits(PlayerInfoPanelHeightRatio, PlayerInfoPanelMaxHeightPx);
 
         GameObject panel = new GameObject("ProfilePanel", typeof(RectTransform), typeof(Image));
         panel.transform.SetParent(root.transform, false);
@@ -773,17 +872,7 @@ public class GlobalNavRuntime : MonoBehaviour
         titleTmp.color = new Color(0.25f, 0.2f, 0.15f, 1f);
         titleTmp.text = "玩家資訊";
 
-        GameObject closeBtnObj = CreateButton(
-            header.transform,
-            "CloseButton",
-            "關閉",
-            new Vector2(1f, 1f),
-            new Vector2(1f, 1f),
-            new Vector2(1f, 1f),
-            new Vector2(-24f, -18f),
-            new Vector2(124f, 54f),
-            new Color(0.45f, 0.29f, 0.24f, 0.96f),
-            28f);
+        GameObject closeBtnObj = CreatePlayerInfoStyleCloseButton(header.transform);
         Button closeBtn = closeBtnObj.GetComponent<Button>();
         closeBtn.onClick.RemoveAllListeners();
         closeBtn.onClick.AddListener(() =>
@@ -864,7 +953,7 @@ public class GlobalNavRuntime : MonoBehaviour
         playerInfoDeckSummaryText = PlaceProfileField(assetBody, "牌組", "DeckSummaryText", ref rowY, profileDeckBlockRowH, 19f, wrapValue: true, valueLineSpacing: 6f);
         playerInfoHeroSummaryText = PlaceProfileField(assetBody, "英雄", "HeroSummaryText", ref rowY, profileTwoLineRowH, 19f);
 
-        Transform recordBody = CreatePlayerInfoSection(scrollContent, "對戰紀錄", 300f);
+        Transform recordBody = CreatePlayerInfoSection(scrollContent, "對戰紀錄", 340f);
         rowY = -12f;
         playerInfoLastResultText = PlaceProfileField(recordBody, "最近結果", "LastResultText", ref rowY, profileTwoLineRowH, 19f);
         BuildPlayerInfoRecordPanel(recordBody, ref rowY);

@@ -2,7 +2,7 @@
 
 > 追蹤畢業專題程式端待優化項目。完成後將 `[ ]` 改為 `[x]`，並在項目末尾加上完成日期（例：`（2026-05-20 完成）`）。
 >
-> **最後更新**：2026-05-20
+> **最後更新**：2026-06-01
 
 ---
 
@@ -23,7 +23,8 @@ _（P0 已全部實作；見下方「已完成」。）_
 
 ## P1 — 短期優化（demo 前建議）
 
-_（P1 已全部實作；見下方「已完成」。）_
+- [ ] **拆分 `BattleSimulationDebugUI` 主檔**（教練／手牌 UI 等 `partial`）
+- [ ] **港灣普通 KPI 真人試玩校準**（`HarborTrainingNormalBattleRules` 常數）
 
 ---
 
@@ -34,6 +35,12 @@ _（P2 已全部實作；見下方「已完成」。）_
 ---
 
 ## 已完成
+
+- [x] **港灣三檔難度體系與統一 Runtime**（2026-06-01 完成）  
+  `HarborTrainingHardBattleRules`、`HarborTrainingDifficultyRuntime`、`HarborTrainingTierConfig`；`SceneLoader.HarborTraining` 不再 fallback `BuildDifficultyConfig`（困難）。
+
+- [x] **`BattleSimulationManager` 港灣邏輯拆分**（2026-06-01 完成）  
+  `partial` + `BattleSimulationManager.HarborTraining.cs`；戰中數值改走 `HarborTrainingDifficultyRuntime`。
 
 - [x] **結算觸發改為事件驅動**（2026-05-20 完成）  
   `BattleSimulationManager.BattleEnded`／`BattleRuleMessageChanged`；`BattleSimulationDebugUI` 不再於 `Update` 每幀呼叫 `UpdateBattleResultText()`。

@@ -110,7 +110,8 @@ public class CardDisplay : MonoBehaviour
             }
             if (effectText != null)
             {
-                if (MonsterSkillRegistry.TryGetSkillLineB(monster.id, out string skillLine))
+                if (CardSkillProficiencyService.ShouldShowMonsterSkillLineOnCard(monster.id) &&
+                    MonsterSkillRegistry.TryGetSkillLineB(monster.id, out string skillLine))
                 {
                     effectText.gameObject.SetActive(true);
                     effectText.richText = true;

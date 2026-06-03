@@ -122,6 +122,9 @@ public static class PlayerPersistSafeIO
         return false;
     }
 
+    /// <summary>
+    /// 原子寫入與備份輪替。寫入 <c>playerdata.csv</c> 時請改經 <see cref="PlayerSaveCoordinator.WritePlayerDataCsv"/>。
+    /// </summary>
     public static void WriteAllLinesWithAtomicRotateBackups(string primaryPath, IReadOnlyList<string> lines)
     {
         if (lines == null) throw new ArgumentNullException(nameof(lines));

@@ -30,6 +30,17 @@ public static class HarborTrainingEasyBattleRules
     public const int FastAttackMonsterBonusFull = 16;
 
     /// <summary>簡單檔固定敵牌組：入門弱牌組為基礎，略增 1 張火球供「練習解法術」。</summary>
+    public const int EnemyOverLimitAllowance = 2;
+
+    public const int MinEnemySpellsInDeck = 1;
+
+    public static HarborTrainingTierConfig PendingConfig =>
+        new HarborTrainingTierConfig(
+            "簡單",
+            EasyEnemyDeckCardIds,
+            EnemyOverLimitAllowance,
+            MinEnemySpellsInDeck);
+
     public static readonly int[] EasyEnemyDeckCardIds =
     {
         4, 4, 4, 4,

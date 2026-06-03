@@ -161,7 +161,7 @@ public partial class DeckManager
                     _owner.ApplyLibraryDeckGenStackPresentation(_owner.libraryDic[id], libCount);
                 }
             }
-            _owner.PlayerData.SavePlayerData();
+            _owner.PlayerData.SavePlayerDataDebounced();
             _owner.RefreshScrollablePanels();
             _owner.ForceRebuildPanelsLayout(!deferDeckForceRebuild);
         }

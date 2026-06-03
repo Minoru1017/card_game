@@ -19,7 +19,8 @@
 
 | 模組 | 功能描述 | 主要類別/函式 | 典型輸入 | 典型輸出 |
 | --- | --- | --- | --- | --- |
-| 玩家資料庫 | 玩家金幣/收藏/牌組槽位讀寫 | `PlayerData` / `LoadPlayerData()` / `SavePlayerData()` / `GetCollectionCount()` / `SetDeckCount()` | 卡牌ID、槽位、存檔資料 | 記憶體資料與存檔同步 |
+| 玩家資料庫 | 玩家金幣/收藏/牌組槽位讀寫 | `PlayerData` / `LoadPlayerData()` / `SavePlayerData()` / `SavePlayerDataDebounced()` / `GetCollectionCount()` / `SetDeckCount()` | 卡牌ID、槽位、存檔資料 | 經 `PlayerSaveCoordinator` 寫入 `playerdata.csv` |
+| 存檔協調 | 主檔唯一寫入、旗標 Upsert、離場前 flush | `PlayerSaveCoordinator` / `PlayerSaveDebouncer` | — | 勿直接 `PlayerPersistSafeIO.Write…` 寫主檔 |
 | 卡牌資料庫 | 載入卡牌主資料、查詢、隨機抽取 | `CardStore` / `Card` `MonsterCard` `SpellCard` / `GetCardById()` / `LoadCardData()` / `RandomCard()` | 卡牌CSV/ID | `Card` 物件與卡牌清單 |
 | 劇本資料庫 | 劇情步驟、分支選項與跳轉 | `MainPlotSceneController` / `PlotStep` / `ShowStep()` / `OnChoiceClicked()` | 步驟索引、玩家選項 | 劇情畫面切換、下一步更新 |
 | 卡牌ID轉換層 | 舊ID與法術Key對應 | `DeckCardId` / `NormalizeLegacyUnifiedId()` / `SpellKeyFromOrdinal()` | 舊版ID、法術序號 | 正規化後Key/ID |
@@ -53,6 +54,15 @@
 
 **啟用**：`BattleLaunchContext.IsHarborTrainingGroundBattle`（與 `TutorialBattleCoachUi` 互斥）。
 
+## H. 港灣訓練場難度（1-1 實戰三檔）
+
+| 職責 | 類別／API | 備註 |
+|------|-----------|------|
+| 三檔常數 | `HarborTrainingEasyBattleRules` / `Normal` / `Hard` | 牌組、傷害、快攻、抽牌 |
+| 開戰與戰中統一入口 | `HarborTrainingDifficultyRuntime` / `HarborTrainingTierConfig` | `SceneLoader.HarborTraining`、`BattleSimulationManager` |
+| 回合上限勝利 | `BattleSimulationManager.HarborTraining.cs` | 僅簡單第 10 回合 |
+| 對照文件 | `HARBOR_1-1_VS_TRAINING_GROUND_DIFFICULTY.md` | 與 Buildbeck 訓練場分離 |
+
 ---
 
 ## D. 場景與維運工具
@@ -63,6 +73,7 @@
 | 開發日誌 | Editor 保留、Release 不洗版 | `GameDevLog` | 訊息字串 | Console 輸出 |
 | EditMode 測試 | 熟練度／牌組名稱煙霧測試 | `Assets/Editor/CardGameEditModeTests.cs` | NUnit | 斷言通過 |
 | 存檔重置/維運 | 由全域玩家資訊面板執行重置流程 | `GlobalNavRuntime` / `TryOpenPlayerInfoOverlay()` | 玩家資訊面板互動 | 玩家資料重置與刷新 |
+| 貴重品庫 | 4×6 儲存格、每槽存檔、全局選單視窗 | `ValuablesVaultState` / `GlobalNavValuablesVaultOverlay` / `TryOpenValuablesVaultOverlay()` | 格子索引、definitionId | playerdata `slot,N,valuable,...` |
 | 自動模擬/測試 | 批次自動對戰與勝率統計 | `BattleAutoSimPlugin` / `Run()` / `EnsureProgressUi()` / `TryAutoPlayOneCard()` | 模擬參數、回合數 | 勝率統計、進度與結果 |
 
 ---

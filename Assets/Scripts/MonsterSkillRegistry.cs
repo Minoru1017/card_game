@@ -150,6 +150,18 @@ public static class MonsterSkillRegistry
                 return HighlightPhrases(plainIntro,
                     new[] { "攻擊力+5點", "僅1次" },
                     new[] { "首次置於場上時", "離場或對局結束" });
+            case MonsterSkillIds.Nun:
+                return HighlightPhrases(plainIntro,
+                    new[] { "溢出轉補英雄", "英雄+10點", "英雄+12點", "僅1次" },
+                    new[] { "初級治療", "修女在場", "無溢出時", "聖療連攜" });
+            case MonsterSkillIds.Bishop:
+                return HighlightPhrases(plainIntro,
+                    new[] { "首傷減3點", "宗教減4點", "治療+5點", "最少1點", "僅1次" },
+                    new[] { "祝聖預留", "宗教連攜", "聖療連攜", "下隻場怪" });
+            case MonsterSkillIds.Castle:
+                return HighlightPhrases(plainIntro,
+                    new[] { "首次減5點", "最少1點", "僅1次" },
+                    new[] { "堅城駐守", "城堡在場", "祝聖不疊加" });
             default:
                 return plainIntro;
         }
@@ -172,6 +184,18 @@ public static class MonsterSkillRegistry
                 return HighlightPhrases(plainLineB,
                     new[] { "攻擊+5", "全場1次" },
                     new[] { "留至離場" });
+            case MonsterSkillIds.Nun:
+                return HighlightPhrases(plainLineB,
+                    new[] { "溢出轉英雄", "無溢+10", "連攜+12", "全場1次" },
+                    new[] { "修女在場", "首次治療" });
+            case MonsterSkillIds.Bishop:
+                return HighlightPhrases(plainLineB,
+                    new[] { "首傷減3", "宗教減4", "全場1次" },
+                    new[] { "祝聖預留", "置場", "下隻場怪" });
+            case MonsterSkillIds.Castle:
+                return HighlightPhrases(plainLineB,
+                    new[] { "首次減5", "最少1", "全場1次" },
+                    new[] { "堅城駐守", "城堡在場" });
             default:
                 return plainLineB;
         }
@@ -242,6 +266,27 @@ public static class MonsterSkillRegistry
                     "庭訓號令 在場減5 最少1 全場3次 無場怪打英雄共用 薄霧先場後技",
                     "在場時 國王減傷5點 最少1點 對戰內最多3次 我方無場怪時 敵方直擊我方英雄或對英雄施放火球時 次數共用 若場地為訓練薄霧效果時 先套用場地效果 再套用此戰技效果");
                 return true;
+            case MonsterSkillIds.Nun:
+                entry = new SkillEntry(
+                    "聖療共鳴",
+                    "據說能在聖光治療時將多餘生命力分送給導師",
+                    "聖療共鳴 修女在場 首次治療 溢出轉英雄 無溢+10 連攜+12 全場1次",
+                    "場上為修女時 本局首次對其結算初級治療後 若修女HP超過上限 溢出轉補英雄 並將修女HP設為上限 若無溢出 英雄+10點 若已觸發主教聖療連攜則改+12點 對戰內僅1次");
+                return true;
+            case MonsterSkillIds.Bishop:
+                entry = new SkillEntry(
+                    "祝聖預留",
+                    "據說能在聖壇前為下一位上場者預先祝聖；對同袍效果更佳",
+                    "祝聖預留 首次置場 下隻首傷減3 宗教連攜減4 全場1次",
+                    "本局首次將主教置於場上時 獲得祝聖 可選擇綁定主教本人或下一張打出的場怪 綁定後該怪首次受到傷害時減3點最少1點 若為宗教派系則改減4點 若為修女則本局該修女第一次初級治療多5點 僅觸發1次");
+                return true;
+            case MonsterSkillIds.Castle:
+                entry = new SkillEntry(
+                    "堅城駐守",
+                    "據說能在海牆前像城堡一樣擋下第一波衝擊",
+                    "堅城駐守 城堡在場 首次受傷減5 最少1 全場1次",
+                    "場上為城堡時 本局首次對其結算傷害減5點最少1點 對戰內僅1次 若該次已觸發主教祝聖預留減傷則不疊加");
+                return true;
             default:
                 entry = default;
                 return false;
@@ -257,7 +302,166 @@ public static class MonsterSkillRegistry
         if (reduced >= incomingDamage)
             return incomingDamage;
         chargesRemaining--;
+        M12TrioMasteryBattleTracker.NotifyKingDecreeTriggered();
         logHistory?.Invoke("庭訓號令：這次傷害少 5 點 本局還可觸發 " + chargesRemaining + " 次");
+        return reduced;
+    }
+
+    /// <summary>修女·聖療共鳴：場上修女首次初級治療後，溢出轉英雄；無溢出則 heroBonusWhenNoOverflow（預設 10，聖療連攜 12）。</summary>
+    public static int ApplyNunHolyResonance(
+        ref bool resonanceUsed,
+        int monsterId,
+        ref int fieldCurrentHp,
+        int fieldMaxHp,
+        ref int heroHp,
+        Action<string> logHistory,
+        int heroBonusWhenNoOverflow = 10)
+    {
+        if (resonanceUsed || monsterId != MonsterSkillIds.Nun || fieldMaxHp <= 0)
+            return 0;
+
+        int overflow = Mathf.Max(0, fieldCurrentHp - fieldMaxHp);
+        int toHero;
+        if (overflow > 0)
+        {
+            fieldCurrentHp = fieldMaxHp;
+            toHero = overflow;
+        }
+        else
+        {
+            toHero = Mathf.Max(1, heroBonusWhenNoOverflow);
+        }
+
+        if (toHero <= 0)
+            return 0;
+
+        resonanceUsed = true;
+        heroHp += toHero;
+        if (overflow > 0)
+            logHistory?.Invoke("聖療共鳴：溢出 " + overflow + " 點轉補英雄 本局僅1次");
+        else
+            logHistory?.Invoke("聖療共鳴：無溢出 英雄額外 +" + toHero + " 點 本局僅1次");
+        return toHero;
+    }
+
+    /// <summary>主教·祝聖預留：本局首次置場主教。回傳 true 表示本次為授予祝聖（不綁定當前這次置場）。</summary>
+    /// <param name="deferBindTargetChoice">true=玩家稍後在 UI 選擇綁主教或下一張場怪。</param>
+    public static bool TryGrantBishopConsecrationReserve(
+        ref BishopConsecrationBattleState state,
+        Action<string> logHistory,
+        Action<string, float> showToast,
+        bool deferBindTargetChoice = false)
+    {
+        if (state.reserveGrantedThisBattle)
+            return false;
+        state.reserveGrantedThisBattle = true;
+        if (deferBindTargetChoice)
+        {
+            state.awaitingPlayerBindChoice = true;
+            state.awaitingNextSummon = false;
+            logHistory?.Invoke("祝聖預留：請選擇綁定主教本人或下一張打出的場怪 本局僅1次");
+            showToast?.Invoke("主教·祝聖預留：請選擇祝聖綁定對象", 2.8f);
+        }
+        else
+        {
+            state.awaitingPlayerBindChoice = false;
+            state.awaitingNextSummon = true;
+            logHistory?.Invoke("祝聖預留：下一隻場怪已預祝 本局僅1次");
+            showToast?.Invoke("主教·祝聖預留：下一隻場怪首傷減 3（宗教減 4）", 2.4f);
+        }
+        return true;
+    }
+
+    /// <summary>玩家選擇「下一張打出的場怪」承載祝聖。</summary>
+    public static void ApplyConsecrationBindToNextMonsterChoice(
+        ref BishopConsecrationBattleState state,
+        Action<string> logHistory)
+    {
+        state.awaitingPlayerBindChoice = false;
+        state.awaitingNextSummon = true;
+        logHistory?.Invoke("祝聖預留：已選擇綁定下一張打出的場怪");
+    }
+
+    /// <summary>將祝聖綁定至本局下一隻已置場怪獸（含僅主教在場時改綁主教自身）。回傳是否本次有綁定。</summary>
+    public static bool TryBindConsecrationToFieldMonster(
+        ref BishopConsecrationBattleState state,
+        int monsterId,
+        string boundDisplayName,
+        Action<string> logHistory)
+    {
+        if (!state.awaitingNextSummon)
+            return false;
+
+        state.awaitingNextSummon = false;
+        state.awaitingFirstHit = true;
+        state.religiousSynergy = MonsterSkillReligion.IsReligiousMonsterId(monsterId);
+        state.holyTherapyLinkOnNun = monsterId == MonsterSkillIds.Nun;
+
+        string name = string.IsNullOrWhiteSpace(boundDisplayName) ? "場上怪獸" : boundDisplayName.Trim();
+        if (state.holyTherapyLinkOnNun)
+        {
+            logHistory?.Invoke("祝聖 · 聖療連攜：已綁定 " + name + " 本局僅1次");
+            logHistory?.Invoke("聖療連攜：此修女首次初級治療將多 5 點");
+        }
+        else if (state.religiousSynergy)
+            logHistory?.Invoke("宗教連攜：祝聖已綁定 " + name + " 首傷減 4 本局僅1次");
+        else
+            logHistory?.Invoke("祝聖：已綁定 " + name + " 首傷減 3 本局僅1次");
+
+        return true;
+    }
+
+    /// <summary>祝聖首次受傷減傷（先於其他場上減傷之外、王后之後由呼叫端控制順序）。</summary>
+    public static int ApplyConsecrationFirstHit(
+        ref BishopConsecrationBattleState state,
+        int incomingDamage,
+        Action<string> logHistory)
+    {
+        if (!state.awaitingFirstHit || incomingDamage <= 0)
+            return incomingDamage;
+
+        int reduction = state.religiousSynergy ? 4 : 3;
+        int reduced = Mathf.Max(1, incomingDamage - reduction);
+        if (reduced >= incomingDamage)
+            return incomingDamage;
+
+        state.awaitingFirstHit = false;
+        if (state.religiousSynergy)
+            logHistory?.Invoke("宗教連攜：祝聖這次傷害少 " + reduction + " 點 本局僅1次");
+        else
+            logHistory?.Invoke("祝聖：這次傷害少 " + reduction + " 點 本局僅1次");
+        return reduced;
+    }
+
+    /// <summary>聖療連攜：祝聖後下隻為修女時，首次初級治療 +5（在加 HP 前）。</summary>
+    public static int TryApplyHolyTherapyHealBonus(
+        ref BishopConsecrationBattleState state,
+        int monsterId,
+        ref int healAmount,
+        Action<string> logHistory,
+        Action<string, float> showToast)
+    {
+        if (!state.holyTherapyLinkOnNun || state.holyTherapyHealBonusUsed ||
+            monsterId != MonsterSkillIds.Nun || healAmount <= 0)
+            return 0;
+
+        state.holyTherapyHealBonusUsed = true;
+        healAmount += 5;
+        logHistory?.Invoke("聖療連攜：初級治療多 5 點 本局僅1次");
+        showToast?.Invoke("聖療連攜：初級治療多 5 點", 2.2f);
+        return 5;
+    }
+
+    /// <summary>城堡·堅城駐守：場上城堡首次受到傷害時 −5（減後至少 1）。每局 1 次。</summary>
+    public static int ApplyCastleFortressStand(ref bool fortressUsed, int incomingDamage, Action<string> logHistory)
+    {
+        if (fortressUsed || incomingDamage <= 0)
+            return incomingDamage;
+        int reduced = Mathf.Max(1, incomingDamage - 5);
+        if (reduced >= incomingDamage)
+            return incomingDamage;
+        fortressUsed = true;
+        logHistory?.Invoke("堅城駐守：這次傷害少 5 點 本局僅1次");
         return reduced;
     }
 
@@ -270,6 +474,7 @@ public static class MonsterSkillRegistry
         if (reduced >= incomingDamage)
             return incomingDamage;
         firstHitConsumed = true;
+        M12TrioMasteryBattleTracker.NotifyQueenShelterTriggered();
         logHistory?.Invoke("王室庇護：這次傷害少 3 點 本局不再觸發");
         return reduced;
     }

@@ -124,6 +124,9 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
     private Coroutine endBattleProficiencyAnimRoutine;
     private readonly List<SettlementProficiencyRowUi> endBattleProficiencyRows = new List<SettlementProficiencyRowUi>();
     private int endBattlePanelLayoutBuilt;
+    private float endBattlePanelLayoutScale = 1f;
+    private Vector2Int endBattlePanelBuiltScreenSize;
+    private Rect endBattlePanelBuiltSafeArea;
     private GameObject battleHistoryOverlayRoot;
     private TextMeshProUGUI battleHistoryContentTmp;
     private ScrollRect battleHistoryScrollRect;
@@ -256,6 +259,9 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         battleManager.BattleLayoutVisualRefreshRequested += OnBattleLayoutVisualRefreshRequested;
         battleManager.PlayerLesserHealVisualRequested += OnPlayerLesserHealVisualRequested;
         battleManager.EnemyLesserHealVisualRequested += OnEnemyLesserHealVisualRequested;
+        battleManager.BishopConsecrationVisualRequested += OnBishopConsecrationVisualRequested;
+        battleManager.CastleFortressStandVisualRequested += OnCastleFortressStandVisualRequested;
+        battleManager.BishopConsecrationBindChoiceRequested += OnBishopConsecrationBindChoiceRequested;
         battleManager.SpellCastHandAnchorCommitted += OnSpellCastHandAnchorCommitted;
         battleManager.FireballVisualRequested += OnFireballVisualRequested;
         battleManager.LinGazePeriodicStrikeVisualRequested += OnLinGazePeriodicStrikeVisualRequested;
@@ -324,6 +330,8 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
             StopCoroutine(lesserHealFieldFxRoutine);
             lesserHealFieldFxRoutine = null;
         }
+        ClearPendingBishopConsecrationVisuals();
+        ClearPendingCastleFortressVisuals();
         if (fireballFxRoutine != null)
         {
             StopCoroutine(fireballFxRoutine);
@@ -493,6 +501,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
             }
         }
         TickDiscardSelectionUi();
+        TickBishopConsecrationChoiceUi();
         if (roundText != null)
         {
             roundText.text = "Round " + battleManager.GetCurrentRound();
@@ -1653,6 +1662,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         RebuildEnemyHandCards();
         RefreshFieldCards();
         EnsureDiscardSelectionUi(parent);
+        EnsureBishopConsecrationChoiceUi(parent);
         EnsureBattleLiveHistoryFeed();
 
         debugUiRoot.SetActive(debugPanelVisibleOnPlay);
@@ -1747,6 +1757,9 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
             battleManager.BattleLayoutVisualRefreshRequested -= OnBattleLayoutVisualRefreshRequested;
             battleManager.PlayerLesserHealVisualRequested -= OnPlayerLesserHealVisualRequested;
             battleManager.EnemyLesserHealVisualRequested -= OnEnemyLesserHealVisualRequested;
+            battleManager.BishopConsecrationVisualRequested -= OnBishopConsecrationVisualRequested;
+            battleManager.CastleFortressStandVisualRequested -= OnCastleFortressStandVisualRequested;
+            battleManager.BishopConsecrationBindChoiceRequested -= OnBishopConsecrationBindChoiceRequested;
             battleManager.SpellCastHandAnchorCommitted -= OnSpellCastHandAnchorCommitted;
             battleManager.FireballVisualRequested -= OnFireballVisualRequested;
             battleManager.LinGazePeriodicStrikeVisualRequested -= OnLinGazePeriodicStrikeVisualRequested;
@@ -1766,6 +1779,8 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
             StopCoroutine(lesserHealFieldFxRoutine);
             lesserHealFieldFxRoutine = null;
         }
+        ClearPendingBishopConsecrationVisuals();
+        ClearPendingCastleFortressVisuals();
         if (fireballFxRoutine != null)
         {
             StopCoroutine(fireballFxRoutine);
@@ -4288,20 +4303,20 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         }
     }
 
-    private void OnPlayerLesserHealVisualRequested()
+    private void OnPlayerLesserHealVisualRequested(LesserHealVisualRequest request)
     {
         if (BattleAutoSimPlugin.IsRunning) return;
         if (lesserHealFieldFxRoutine != null)
             StopCoroutine(lesserHealFieldFxRoutine);
-        lesserHealFieldFxRoutine = StartCoroutine(PlayLesserHealFieldFxRoutine(true));
+        lesserHealFieldFxRoutine = StartCoroutine(PlayLesserHealVisualRoutine(request));
     }
 
-    private void OnEnemyLesserHealVisualRequested()
+    private void OnEnemyLesserHealVisualRequested(LesserHealVisualRequest request)
     {
         if (BattleAutoSimPlugin.IsRunning) return;
         if (lesserHealFieldFxRoutine != null)
             StopCoroutine(lesserHealFieldFxRoutine);
-        lesserHealFieldFxRoutine = StartCoroutine(PlayLesserHealFieldFxRoutine(false));
+        lesserHealFieldFxRoutine = StartCoroutine(PlayLesserHealVisualRoutine(request));
     }
 
     private static Sprite GetUnitWhiteSprite()
@@ -4316,16 +4331,15 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         return s_unitWhiteSprite;
     }
 
-    /// <param name="onPlayerField">true=我方場上怪獸受初級治療；false=敵方場上怪獸。</param>
-    private IEnumerator PlayLesserHealFieldFxRoutine(bool onPlayerField)
+    private IEnumerator PlayLesserHealVisualRoutine(LesserHealVisualRequest request)
     {
-        const float duration = 2f;
-        const int healAmount = 40;
+        const float fieldDuration = 1.65f;
+        bool onPlayerSide = request.onPlayerSide;
         try
         {
             yield return null;
 
-            if (onPlayerField)
+            if (onPlayerSide)
             {
                 if (playerFieldCardObj == null && battleManager != null && battleManager.PlayerHasFieldMonster())
                     RefreshFieldCards();
@@ -4336,13 +4350,13 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
                     RefreshFieldCards();
             }
 
-            GameObject fieldRoot = onPlayerField ? playerFieldCardObj : enemyFieldCardObj;
+            GameObject fieldRoot = onPlayerSide ? playerFieldCardObj : enemyFieldCardObj;
             if (fieldRoot == null) yield break;
 
             CardDisplay display = fieldRoot.GetComponentInChildren<CardDisplay>(true);
             if (display != null && battleManager != null)
             {
-                Card fc = onPlayerField ? battleManager.GetPlayerFieldCard() : battleManager.GetEnemyFieldCard();
+                Card fc = onPlayerSide ? battleManager.GetPlayerFieldCard() : battleManager.GetEnemyFieldCard();
                 if (fc != null)
                 {
                     display.SetCard(fc);
@@ -4351,6 +4365,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
             }
 
             Transform fxParent = fieldRoot.transform;
+            int fieldHeal = request.fieldHealAmount;
 
             GameObject glowOuter = new GameObject("LesserHealGlowOuter", typeof(RectTransform), typeof(Image));
             glowOuter.transform.SetParent(fxParent, false);
@@ -4387,7 +4402,6 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
             GameObject floatObj = new GameObject("LesserHealFloat", typeof(RectTransform), typeof(TextMeshProUGUI));
             floatObj.transform.SetParent(fxParent, false);
             RectTransform fRt = floatObj.GetComponent<RectTransform>();
-            // 錨在卡片右上角外圍（數值貼在框外，不壓在卡面中央）
             fRt.anchorMin = new Vector2(1f, 1f);
             fRt.anchorMax = new Vector2(1f, 1f);
             fRt.pivot = new Vector2(1f, 1f);
@@ -4400,36 +4414,300 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
             floatTmp.fontSize = 34f;
             floatTmp.alignment = TextAlignmentOptions.TopRight;
             floatTmp.font = sharedUIFont != null ? sharedUIFont : TMP_Settings.defaultFontAsset;
-            floatTmp.text = "+" + healAmount;
+            floatTmp.text = "+" + fieldHeal;
             floatTmp.color = BattleFxColors.HealFloat;
             CanvasGroup fCg = floatObj.AddComponent<CanvasGroup>();
 
+            if (request.HasHolyTherapyLink)
+                giImg.color = Color.Lerp(BattleFxColors.HealGlowInner, BattleFxColors.HolyTherapyGlowInner, 0.55f);
+
+            GameObject resonanceTag = null;
+            CanvasGroup resonanceTagCg = null;
+            GameObject holyTherapyTag = null;
+            CanvasGroup holyTherapyTagCg = null;
+            if (request.HasHolyTherapyLink)
+            {
+                holyTherapyTag = new GameObject("HolyTherapyTag", typeof(RectTransform), typeof(TextMeshProUGUI));
+                holyTherapyTag.transform.SetParent(fxParent, false);
+                RectTransform htRt = holyTherapyTag.GetComponent<RectTransform>();
+                htRt.anchorMin = new Vector2(0f, 1f);
+                htRt.anchorMax = new Vector2(0f, 1f);
+                htRt.pivot = new Vector2(0f, 0f);
+                htRt.anchoredPosition = new Vector2(-8f, 22f);
+                htRt.sizeDelta = new Vector2(200f, 36f);
+                holyTherapyTag.transform.SetAsLastSibling();
+                TextMeshProUGUI htTmp = holyTherapyTag.GetComponent<TextMeshProUGUI>();
+                htTmp.raycastTarget = false;
+                htTmp.fontSize = 22f;
+                htTmp.alignment = TextAlignmentOptions.TopLeft;
+                htTmp.font = sharedUIFont != null ? sharedUIFont : TMP_Settings.defaultFontAsset;
+                htTmp.text = "聖療連攜 +" + request.holyTherapyBonus;
+                htTmp.color = BattleFxColors.HolyTherapyLabelText;
+                holyTherapyTagCg = holyTherapyTag.AddComponent<CanvasGroup>();
+                holyTherapyTagCg.alpha = 0f;
+            }
+
+            if (request.HasHolyResonance)
+            {
+                resonanceTag = new GameObject("HolyResonanceTag", typeof(RectTransform), typeof(TextMeshProUGUI));
+                resonanceTag.transform.SetParent(fxParent, false);
+                RectTransform tagRt = resonanceTag.GetComponent<RectTransform>();
+                tagRt.anchorMin = new Vector2(0.5f, 1f);
+                tagRt.anchorMax = new Vector2(0.5f, 1f);
+                tagRt.pivot = new Vector2(0.5f, 0f);
+                tagRt.anchoredPosition = new Vector2(0f, 22f);
+                tagRt.sizeDelta = new Vector2(220f, 36f);
+                resonanceTag.transform.SetAsLastSibling();
+                TextMeshProUGUI tagTmp = resonanceTag.GetComponent<TextMeshProUGUI>();
+                tagTmp.raycastTarget = false;
+                tagTmp.fontSize = 22f;
+                tagTmp.alignment = TextAlignmentOptions.Center;
+                tagTmp.font = sharedUIFont != null ? sharedUIFont : TMP_Settings.defaultFontAsset;
+                tagTmp.text = "聖療共鳴";
+                tagTmp.color = BattleFxColors.ResonanceLabelText;
+                resonanceTagCg = resonanceTag.AddComponent<CanvasGroup>();
+                resonanceTagCg.alpha = 0f;
+            }
+
             Vector2 floatStart = fRt.anchoredPosition;
             float t = 0f;
-            while (t < duration && fieldRoot != null)
+            while (t < fieldDuration && fieldRoot != null)
             {
                 t += Time.unscaledDeltaTime;
-                float u = Mathf.Clamp01(t / duration);
+                float u = Mathf.Clamp01(t / fieldDuration);
                 float pulse = 0.55f + 0.38f * Mathf.Sin(t * 7.5f);
                 float tail = 1f - u * u;
                 goCg.alpha = Mathf.Clamp01(0.2f * pulse * tail + 0.06f);
                 giCg.alpha = Mathf.Clamp01(0.36f * pulse * tail + 0.1f);
-                float fade = Mathf.Lerp(1f, 0f, Mathf.Clamp01((t - 0.4f) / 1.15f));
+                float fade = Mathf.Lerp(1f, 0f, Mathf.Clamp01((t - 0.35f) / 1f));
                 floatTmp.color = BattleFxColors.WithAlpha(BattleFxColors.HealFloat, fade);
                 fCg.alpha = fade;
-                float drift = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(t / 0.85f));
+                float drift = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(t / 0.75f));
                 fRt.anchoredPosition = floatStart + new Vector2(18f, 32f) * drift;
+                if (holyTherapyTagCg != null)
+                {
+                    float htIn = Mathf.Clamp01((t - 0.2f) / 0.3f);
+                    float htOut = 1f - Mathf.Clamp01((t - 0.95f) / 0.4f);
+                    holyTherapyTagCg.alpha = htIn * htOut;
+                }
+                if (resonanceTagCg != null)
+                {
+                    float tagIn = Mathf.Clamp01((t - 0.55f) / 0.35f);
+                    float tagOut = 1f - Mathf.Clamp01((t - 1.15f) / 0.45f);
+                    resonanceTagCg.alpha = tagIn * tagOut;
+                }
                 yield return null;
             }
 
             if (glowOuter != null) Destroy(glowOuter);
             if (glowInner != null) Destroy(glowInner);
             if (floatObj != null) Destroy(floatObj);
+            if (holyTherapyTag != null) Destroy(holyTherapyTag);
+            if (resonanceTag != null) Destroy(resonanceTag);
+
+            if (request.HasHolyResonance && uiRoot != null)
+            {
+                RectTransform fieldTr = fieldRoot.GetComponent<RectTransform>();
+                Vector2 fromLocal = GetCenterInUiRoot(fieldTr);
+                Vector2 toLocal = GetHeroHpCenterLocal(!onPlayerSide);
+                yield return PlayHolyResonanceChainRoutine(fromLocal, toLocal);
+                yield return PlayHeroHealFromResonanceRoutine(onPlayerSide, request.heroResonanceBonus);
+            }
         }
         finally
         {
             lesserHealFieldFxRoutine = null;
         }
+    }
+
+    private IEnumerator PlayHolyResonanceChainRoutine(Vector2 fromLocal, Vector2 toLocal)
+    {
+        const float travel = 0.52f;
+        if (uiRoot == null) yield break;
+
+        Vector2 delta = toLocal - fromLocal;
+        float length = Mathf.Max(24f, delta.magnitude);
+        float angle = Mathf.Atan2(delta.y, delta.x) * Mathf.Rad2Deg;
+
+        GameObject beam = new GameObject("HolyResonanceBeam", typeof(RectTransform), typeof(Image), typeof(CanvasGroup));
+        beam.transform.SetParent(uiRoot, false);
+        beam.transform.SetAsLastSibling();
+        RectTransform beamRt = beam.GetComponent<RectTransform>();
+        beamRt.anchorMin = beamRt.anchorMax = new Vector2(0.5f, 0.5f);
+        beamRt.pivot = new Vector2(0f, 0.5f);
+        beamRt.sizeDelta = new Vector2(length, 10f);
+        beamRt.anchoredPosition = fromLocal;
+        beamRt.localRotation = Quaternion.Euler(0f, 0f, angle);
+        Image beamImg = beam.GetComponent<Image>();
+        beamImg.sprite = GetUnitWhiteSprite();
+        beamImg.raycastTarget = false;
+        beamImg.color = BattleFxColors.ResonanceChainCore;
+        CanvasGroup beamCg = beam.GetComponent<CanvasGroup>();
+        beamCg.alpha = 0f;
+
+        GameObject beamGlow = new GameObject("HolyResonanceBeamGlow", typeof(RectTransform), typeof(Image));
+        beamGlow.transform.SetParent(beam.transform, false);
+        beamGlow.transform.SetAsFirstSibling();
+        RectTransform glowRt = beamGlow.GetComponent<RectTransform>();
+        glowRt.anchorMin = glowRt.anchorMax = new Vector2(0f, 0.5f);
+        glowRt.pivot = new Vector2(0f, 0.5f);
+        glowRt.sizeDelta = new Vector2(length, 22f);
+        glowRt.anchoredPosition = Vector2.zero;
+        Image glowImg = beamGlow.GetComponent<Image>();
+        glowImg.sprite = GetUnitWhiteSprite();
+        glowImg.raycastTarget = false;
+        glowImg.color = BattleFxColors.ResonanceChainGlow;
+
+        GameObject spark = new GameObject("HolyResonanceSpark", typeof(RectTransform), typeof(Image), typeof(CanvasGroup));
+        spark.transform.SetParent(uiRoot, false);
+        spark.transform.SetAsLastSibling();
+        RectTransform sparkRt = spark.GetComponent<RectTransform>();
+        sparkRt.anchorMin = sparkRt.anchorMax = new Vector2(0.5f, 0.5f);
+        sparkRt.pivot = new Vector2(0.5f, 0.5f);
+        sparkRt.sizeDelta = new Vector2(28f, 28f);
+        sparkRt.anchoredPosition = fromLocal;
+        Image sparkImg = spark.GetComponent<Image>();
+        sparkImg.sprite = GetUnitWhiteSprite();
+        sparkImg.raycastTarget = false;
+        sparkImg.color = BattleFxColors.ResonanceSpark;
+        CanvasGroup sparkCg = spark.GetComponent<CanvasGroup>();
+
+        float t = 0f;
+        while (t < travel && beam != null)
+        {
+            t += Time.unscaledDeltaTime;
+            float p = Mathf.Clamp01(t / travel);
+            float eased = p * p * (3f - 2f * p);
+            beamCg.alpha = Mathf.Clamp01(Mathf.Sin(p * Mathf.PI) * 0.92f);
+            sparkRt.anchoredPosition = Vector2.Lerp(fromLocal, toLocal, eased);
+            sparkCg.alpha = 0.55f + 0.45f * Mathf.Sin(p * Mathf.PI * 2f);
+            float sc = 0.85f + 0.35f * Mathf.Sin(p * Mathf.PI);
+            sparkRt.localScale = Vector3.one * sc;
+            yield return null;
+        }
+
+        if (beam != null) Destroy(beam);
+        if (spark != null) Destroy(spark);
+        yield return PlayHolyResonanceImpactBurstAt(toLocal);
+    }
+
+    private IEnumerator PlayHolyResonanceImpactBurstAt(Vector2 localInUiRoot)
+    {
+        const float dur = 0.38f;
+        if (uiRoot == null) yield break;
+
+        GameObject burst = new GameObject("HolyResonanceImpact", typeof(RectTransform), typeof(Image), typeof(CanvasGroup));
+        burst.transform.SetParent(uiRoot, false);
+        burst.transform.SetAsLastSibling();
+        RectTransform brt = burst.GetComponent<RectTransform>();
+        brt.anchorMin = brt.anchorMax = new Vector2(0.5f, 0.5f);
+        brt.pivot = new Vector2(0.5f, 0.5f);
+        brt.anchoredPosition = localInUiRoot;
+        brt.sizeDelta = new Vector2(72f, 72f);
+        Image bImg = burst.GetComponent<Image>();
+        bImg.sprite = GetUnitWhiteSprite();
+        bImg.raycastTarget = false;
+        bImg.color = BattleFxColors.ResonanceChainGlow;
+        CanvasGroup bCg = burst.GetComponent<CanvasGroup>();
+
+        float t = 0f;
+        while (t < dur && burst != null)
+        {
+            t += Time.unscaledDeltaTime;
+            float u = Mathf.Clamp01(t / dur);
+            float ring = 0.5f + u * 1.35f;
+            brt.localScale = Vector3.one * ring;
+            bCg.alpha = (1f - u) * 0.75f;
+            yield return null;
+        }
+        if (burst != null) Destroy(burst);
+    }
+
+    private IEnumerator PlayHeroHealFromResonanceRoutine(bool playerHero, int healAmount)
+    {
+        const float duration = 1.85f;
+        TextMeshProUGUI heroTmp = playerHero ? playerHeroHpText : enemyHeroHpText;
+        if (heroTmp == null) yield break;
+
+        if (playerHero)
+            lastShownPlayerHeroHp = int.MinValue;
+        else
+            lastShownEnemyHeroHp = int.MinValue;
+        RefreshHeroHpHud();
+
+        GameObject heroGo = heroTmp.gameObject;
+        RectTransform heroRt = heroTmp.rectTransform;
+        Transform fxParent = heroRt;
+
+        GameObject glowOuter = new GameObject("HeroHealGlowOuter", typeof(RectTransform), typeof(Image));
+        glowOuter.transform.SetParent(fxParent, false);
+        RectTransform goRt = glowOuter.GetComponent<RectTransform>();
+        goRt.anchorMin = Vector2.zero;
+        goRt.anchorMax = Vector2.one;
+        goRt.offsetMin = new Vector2(-12f, -8f);
+        goRt.offsetMax = new Vector2(12f, 8f);
+        glowOuter.transform.SetAsFirstSibling();
+        Image goImg = glowOuter.GetComponent<Image>();
+        goImg.sprite = GetUnitWhiteSprite();
+        goImg.raycastTarget = false;
+        goImg.color = BattleFxColors.HeroHealGlowOuter;
+        CanvasGroup goCg = glowOuter.AddComponent<CanvasGroup>();
+
+        GameObject glowInner = new GameObject("HeroHealGlowInner", typeof(RectTransform), typeof(Image));
+        glowInner.transform.SetParent(fxParent, false);
+        RectTransform giRt = glowInner.GetComponent<RectTransform>();
+        giRt.anchorMin = Vector2.zero;
+        giRt.anchorMax = Vector2.one;
+        giRt.offsetMin = new Vector2(-6f, -4f);
+        giRt.offsetMax = new Vector2(6f, 4f);
+        glowInner.transform.SetAsFirstSibling();
+        Image giImg = glowInner.GetComponent<Image>();
+        giImg.sprite = GetUnitWhiteSprite();
+        giImg.raycastTarget = false;
+        giImg.color = BattleFxColors.HeroHealGlowInner;
+        CanvasGroup giCg = glowInner.AddComponent<CanvasGroup>();
+
+        GameObject floatObj = new GameObject("HeroHealFloat", typeof(RectTransform), typeof(TextMeshProUGUI));
+        floatObj.transform.SetParent(fxParent, false);
+        RectTransform fRt = floatObj.GetComponent<RectTransform>();
+        fRt.anchorMin = new Vector2(1f, 0.5f);
+        fRt.anchorMax = new Vector2(1f, 0.5f);
+        fRt.pivot = new Vector2(0f, 0.5f);
+        fRt.anchoredPosition = new Vector2(8f, 0f);
+        fRt.sizeDelta = new Vector2(180f, 56f);
+        floatObj.transform.SetAsLastSibling();
+        TextMeshProUGUI floatTmp = floatObj.GetComponent<TextMeshProUGUI>();
+        floatTmp.raycastTarget = false;
+        floatTmp.fontSize = Mathf.Clamp(heroTmp.fontSize * 0.42f, 36f, 56f);
+        floatTmp.alignment = TextAlignmentOptions.MidlineLeft;
+        floatTmp.font = sharedUIFont != null ? sharedUIFont : TMP_Settings.defaultFontAsset;
+        floatTmp.text = "+" + healAmount;
+        floatTmp.color = BattleFxColors.HeroHealFloat;
+        CanvasGroup fCg = floatObj.AddComponent<CanvasGroup>();
+
+        yield return PlayColorFlashOnCard(heroGo, 0.28f, BattleFxColors.HealFlashPeak);
+
+        Vector2 floatStart = fRt.anchoredPosition;
+        float t = 0f;
+        while (t < duration && heroGo != null)
+        {
+            t += Time.unscaledDeltaTime;
+            float u = Mathf.Clamp01(t / duration);
+            float pulse = 0.5f + 0.42f * Mathf.Sin(t * 6.5f);
+            float tail = 1f - u * u;
+            goCg.alpha = Mathf.Clamp01(0.16f * pulse * tail + 0.05f);
+            giCg.alpha = Mathf.Clamp01(0.3f * pulse * tail + 0.08f);
+            float fade = Mathf.Lerp(1f, 0f, Mathf.Clamp01((t - 0.3f) / 1.1f));
+            floatTmp.color = BattleFxColors.WithAlpha(BattleFxColors.HeroHealFloat, fade);
+            fCg.alpha = fade;
+            float drift = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(t / 0.8f));
+            fRt.anchoredPosition = floatStart + new Vector2(24f, playerHero ? 18f : -18f) * drift;
+            yield return null;
+        }
+
+        if (glowOuter != null) Destroy(glowOuter);
+        if (glowInner != null) Destroy(glowInner);
+        if (floatObj != null) Destroy(floatObj);
     }
 
     private Button CreateButton(Transform parent, string name, string label, Vector2 anchoredPos, UnityEngine.Events.UnityAction action, bool centerTop = false)
@@ -4523,6 +4801,27 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         Text quickEndLabel = quickEndTurnButton.GetComponentInChildren<Text>();
         if (quickEndLabel != null) quickEndLabel.fontSize = 30;
         BattleUiColors.ApplyButtonStyle(quickEndTurnButton, quickEndTurnButton.gameObject.name);
+    }
+
+    /// <summary>動態富文本面板用字型：優先 Noto 等完整字集，避免卡牌精簡 TMP 缺標點。</summary>
+    private TMP_FontAsset ResolveBattleRichTextUIFont()
+    {
+        const string punctuationProbe = "（）：·請選擇綁定對象本局僅次";
+        TMP_FontAsset noto = SettingsUiFonts.ResolveParameterDetailsFont();
+        if (noto != null && BuildbeckUiFonts.FontSupportsText(noto, punctuationProbe))
+            return noto;
+        if (sharedUIFont != null && BuildbeckUiFonts.FontSupportsText(sharedUIFont, punctuationProbe))
+            return sharedUIFont;
+        if (noto != null) return noto;
+        return sharedUIFont != null ? sharedUIFont : TMP_Settings.defaultFontAsset;
+    }
+
+    private void ApplyBattleRichTextTmpFont(TextMeshProUGUI tmp)
+    {
+        if (tmp == null) return;
+        TMP_FontAsset font = ResolveBattleRichTextUIFont();
+        if (font != null)
+            tmp.font = font;
     }
 
     private TMP_FontAsset ResolveUIFont()

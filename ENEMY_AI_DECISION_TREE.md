@@ -6,7 +6,7 @@
 | **程式入口** | `EnemyAI.ExecutePlay` → `BattleSimulationManager.ChooseEnemyHandCardToPlayIndex` |
 | **難度注入** | `SceneLoader.MapDifficultyToEnemyAiPlayStyle` → `QueueRuntimeDifficultyConfig` |
 | **關聯程式** | `EnemyAiPlayStyle.cs` · `CardRarityUtility` · `BattleSimulationManager.cs` |
-| **最後更新** | 2026-05-30 |
+| **最後更新** | 2026-05-30（§3.5 六張戰技怪） |
 
 ---
 
@@ -54,10 +54,14 @@ flowchart TD
     Start -->|否| Lethal{§3.1 斬殺?}
     Lethal -->|是| PlayLethal[打出斬殺怪<br/>忽略囤牌]
     Lethal -->|否| FieldEmpty{敵方場上無怪?}
-    FieldEmpty -->|是| MonPick[§3.2 在怪物中選優先度最高<br/>先排除暫緩卡 §4]
+    FieldEmpty -->|是| MonPick[§3.2 在怪物中選優先度最高<br/>先排除暫緩卡 §4<br/>含 §3.5 戰技加權]
     MonPick -->|有| PlayMon[打出該怪物]
     MonPick -->|無可出怪| SpellPick[§3.3 全手牌選優先度最高<br/>先排除暫緩卡]
-    FieldEmpty -->|否| SpellPick2[§3.3 全手牌選優先度最高<br/>先排除暫緩卡]
+    FieldEmpty -->|否| Consec{§3.5 祝聖待換?}
+    Consec -->|是| BindPick[§3.5.4 專用綁定選怪<br/>修女 &gt; 宗教 &gt; 高血]
+    BindPick -->|有| PlayBind[替換場怪 + 綁定祝聖<br/>Toast／戰報給玩家]
+    BindPick -->|無| SpellPick2
+    Consec -->|否| SpellPick2[§3.3 全手牌選優先度最高<br/>先排除暫緩卡]
     SpellPick -->|有| PlaySpell[打出該牌]
     SpellPick -->|僅剩暫緩高稀| ForcePlay[強制從全手牌再選一次<br/>避免本回合無牌可出]
     SpellPick2 --> PlaySpell
@@ -91,7 +95,7 @@ flowchart TD
 
 | 牌種 | 不可出條件 |
 | ---- | ---------- |
-| 怪物 | 敵方場上已有怪（只能 1 隻） |
+| 怪物 | 敵方場上已有怪時**不可出**，**例外**：`CanReplaceFieldMonsterForConsecration`（主教·祝聖待換）時可用手牌怪**替換**場怪（§3.5.4） |
 | 火球（ordinal 0） | 首回合禁火球 |
 | 初級治療（ordinal 1） | 敵方場上無怪 |
 | 林可的凝視（ordinal 2） | 無法滿足施放條件（例如我方場上有怪） |
@@ -131,6 +135,120 @@ priority = 攻擊力 × 2 + 生命值上限 + rarityBonus
 | 2 | 林可的凝視 | 62 或 10（看能否施放） | 通常不可出 |
 
 首回合火球若被規則封鎖，該牌優先度視為極低。
+
+**戰技加權**（§3.5）疊加於上式之後、難度風格微調（`ApplyIntroEasyPriorityTweak`）之前。
+
+---
+
+## 3.5 戰技怪獸出牌決策（6 張）
+
+戰技**結算規則**見 [`卡牌技能階段式揭露.md`](卡牌技能階段式揭露.md)（§4 國王、§5 王后、§6 民兵、§7 修女、§8 主教、§9 城堡）。本節僅描述**敵方 AI 如何因戰技調整出牌優先度與合法出牌**。
+
+| 分類 | id | 卡名 | 戰技 | 程式加權 |
+| ---- | -- | ---- | ---- | -------- |
+| 御三家 | 4 | 民兵 | 列陣 | `EvaluateEnemyStarterTrioMonsterPlayBonus` |
+| 御三家 | 12 | 王后 | 王室庇護 | 同上 |
+| 御三家 | 13 | 國王 | 庭訓號令 | 同上 |
+| 宗教線 | 14 | 主教 | 祝聖預留 | `EvaluateEnemyReligiousMonsterPlayBonus` |
+| 宗教線 | 7 | 城堡 | 堅城駐守 | 同上 |
+| 宗教線 | 17 | 修女 | 聖療共鳴 | 同上 |
+
+> **敵方示範對戰**：主教／城堡戰技在 AI 局內視為**一律可觸發**（`IsEnemyBishopSkillActiveForBattle`／`IsEnemyCastleSkillActiveForBattle`）。御三家依 `CardSkillProficiencyService.IsStarterTrio`。玩家方仍受熟練度 B／牌組等條件約束。
+
+### 3.5.1 優先度疊加順序
+
+```
+EvaluateEnemyCardPlayPriority(card)
+  → 基礎分（§3.4：攻×2+血 或 法術場況分 + rarityBonus）
+  → ApplyEnemyReligiousLineSkillPlayBonus   // 修女／主教／城堡
+  → ApplyEnemyStarterTrioSkillPlayBonus     // 國王／王后／民兵
+  → ApplyIntroEasyPriorityTweak             // 入門／快攻／法術偏好
+```
+
+法術牌僅在 `EvaluateEnemyReligiousSpellPlayBonus`／`EvaluateEnemyStarterTrioSpellPlayBonus` 有額外加權（多為**初級治療**）。
+
+### 3.5.2 御三家加權（怪物牌）
+
+條件欄中的「空場」= `enemyField == null`；「我方有場怪」= `playerField != null`；「我方可能直擊敵英雄」= `playerField == null` 且我方無林可凝視鎖攻。
+
+| 卡 | 戰技狀態 | 加權（疊加，愈大愈想打） |
+| -- | -------- | ------------------------ |
+| **民兵** | 本局未觸發列陣且空場 | **+34** |
+| 民兵 | 上列 + 我方有場怪 | **+18** |
+| 民兵 | 上列 + 我方可能直擊 | **+14** |
+| **王后** | 王室庇護未用且空場 + 我方有場怪 | **+44** |
+| 王后 | 庇護未用且空場（我方無場怪） | **+12** |
+| 王后 | 場上已是王后且庇護未用 | **+8** |
+| **國王** | 庭訓次數 > 0 且空場 + 我方可能直擊 | **+38** |
+| 國王 | 上列改為我方有場怪 | **+22** |
+| 國王 | 庭訓次數 > 0 且空場（其餘） | **+14** |
+| 國王 | 上列 + 敵英雄 HP ≤ 62% `startHealth` | **+12** |
+| 國王 | 場上已是國王且庭訓尚有次數 | **+10** |
+| 國王 | 本局曾出過國王、庭訓尚有次數、我方可能直擊（場上非國王） | **+6** |
+
+**初級治療（法術）加權**（`EvaluateEnemyStarterTrioSpellPlayBonus`，僅 ordinal 1 且敵方場上有怪）：
+
+| 場上怪 | 加權 |
+| ------ | ---- |
+| 王后且庇護未用 | +14 |
+| 國王且庭訓次數 > 0 | +8 |
+| 民兵且列陣未用 | +6 |
+
+### 3.5.3 宗教線加權（怪物牌）
+
+| 卡 | 戰技狀態 | 加權 |
+| -- | -------- | ---- |
+| **主教** | 空場且本局未授予祝聖預留 | **+52** |
+| 主教 | 場上是主教且祝聖待換（`awaitingNextSummon`） | **−18**（避免重複出主教） |
+| **城堡** | 空場 + 我方有場怪 | **+44** |
+| 城堡 | 空場 + 我方英雄 HP ≤ 55% `startHealth` | **+22** |
+| 城堡 | 場上已是城堡且堅城駐守未用 | **+12** |
+| **修女** | 祝聖待換中 | **+58**（聖療連攜綁定首選） |
+| 修女 | 空場且手牌有初級治療 | **+14** |
+| **其他宗教怪**（`MonsterSkillReligion` 名單，非主教） | 祝聖待換中 | **+30** |
+| 任意怪 | 祝聖待換可替換場怪時 | 另加 **§3.5.4 綁定分**（與下表） |
+
+**初級治療加權**（`EvaluateEnemyReligiousSpellPlayBonus`）：
+
+| 條件 | 加權 |
+| ---- | ---- |
+| 場上怪 HP < 88% maxHp | +12（滿血約 +7） |
+| 場上為修女 | +28 |
+| 修女且聖療共鳴未用 | +18 |
+| 修女且已聖療連攜（祝聖綁修女） | +22 |
+| 場上為城堡且堅城未用 | +10 |
+| 場上為主教且祝聖待換 | **−8** |
+
+### 3.5.4 主教·祝聖待換（出牌樹分支）
+
+**觸發**：敵方首次置場主教且授予祝聖後，`enemyConsecration.awaitingNextSummon == true`（敵方**不**彈玩家選擇 UI，程式預設「下一張場怪」）。
+
+**決策**（在 §3 斬殺之後、一般法術選牌之前）：
+
+1. `CanReplaceFieldMonsterForConsecration(false)` 為真  
+2. `PickBestEnemyConsecrationBindHandIndex()`：只在手牌**怪物**中選，分數 = 綁定分 + 稀有度加權（**不用**完整 `EvaluateEnemyCardPlayPriority`）  
+3. 打出該怪 → `EnemyPlayCardFromHand` 走**替換場怪**路徑 → `ApplySummonMonsterSkills` 綁定祝聖  
+
+**綁定分**（`EvaluateEnemyConsecrationBindMonsterBonus`）：
+
+| 候選怪 | 分數 |
+| ------ | ---- |
+| 修女（17） | 62 |
+| 其他宗教派系怪 | 40 |
+| 其餘 | 12 + min(生命值上限, 16) |
+
+**玩家播報**：`LogBattleHistory` + `ShowBattleToast`（`敵方以 … 替換場上 …（祝聖轉移）`）；綁定時 Toast 前綴 **敵方**。
+
+**玩家 UI**：無選擇面板；我方仍須在己方回合自行選擇（見技能 GDD §8）。
+
+### 3.5.5 困難／魔王·治療囤牌與戰技
+
+`IsSchemingSpellReady`（ordinal 1）在一般 HP 比例之外，下列情況視為**時機成熟、可出治療**：
+
+| 場上怪 | 條件 |
+| ------ | ---- |
+| 修女 | 聖療連攜中，或聖療共鳴本局未用 |
+| 王后 | 王室庇護未用且**我方場上有怪**（預期將挨打） |
 
 ---
 
@@ -201,7 +319,8 @@ flowchart TD
 | ---- | ---- |
 | 不出 | 敵方場上無怪 |
 | 出 | 場上怪 `currentHp < maxHp × 比例`（困難 78%；魔王 88%） |
-| 囤 | 怪血量夠滿 |
+| 出 | **或** 場上為**修女**（聖療連攜／共鳴未用）；**或** 場上為**王后**、庇護未用且我方有場怪（§3.5.5） |
+| 囤 | 怪血量夠滿且不符合上列戰技例外 |
 
 **林可的凝視（ordinal 2）**
 
@@ -345,6 +464,10 @@ flowchart LR
 | 出牌入口 | `EnemyAI.ExecutePlay` | `EnemyAI.cs` |
 | 出牌決策 | `ChooseEnemyHandCardToPlayIndex` | `BattleSimulationManager.cs` |
 | 優先度 | `EvaluateEnemyCardPlayPriority` | 同上 |
+| 戰技加權·宗教線 | `ApplyEnemyReligiousLineSkillPlayBonus` · `EvaluateEnemyReligiousMonsterPlayBonus` · `EvaluateEnemyReligiousSpellPlayBonus` | 同上 |
+| 戰技加權·御三家 | `ApplyEnemyStarterTrioSkillPlayBonus` · `EvaluateEnemyStarterTrioMonsterPlayBonus` · `EvaluateEnemyStarterTrioSpellPlayBonus` | 同上 |
+| 祝聖綁定選牌 | `PickBestEnemyConsecrationBindHandIndex` · `EvaluateEnemyConsecrationBindMonsterBonus` | 同上 |
+| 祝聖替換出牌 | `CanReplaceFieldMonsterForConsecration` · `EnemyPlayCardFromHand`（替換分支） | 同上 |
 | 暫緩 | `ShouldDeferSchemingCard` | 同上 |
 | 囤牌 streak | `NoteEnemySchemingCardPlayed` | 同上（`EnemyPlayCardFromHand` 成功後） |
 | 敵棄牌 | `ChooseEnemyDiscardIndex` | 同上 |
@@ -360,7 +483,8 @@ flowchart LR
 | ---- | ---- |
 | 2026-05-16 | 初版：五階難度對照、出牌／囤牌／棄牌／攻擊決策樹，對齊 `EnemyAiPlayStyle` 實作 |
 | 2026-05-30 | §5 擴充：玩家棄牌三階段、保留價值表、與教學出牌建議差異、教學戰棄牌高亮索引 |
+| 2026-05-30 | **§3.5**：六張戰技怪（御三家 + 宗教線）出牌加權、祝聖待換替換分支、玩家播報、囤牌治療例外；§3／§4.5／§8 同步 |
 
 ---
 
-*數值門檻（HP ％、囤牌 3 回合）若調整程式，請同步更新本文件 §4。棄牌保留價值若調整 `EvaluatePlayerCardKeepValue`，請同步更新 §5.2.2。*
+*數值門檻（HP ％、囤牌 3 回合）若調整程式，請同步更新本文件 §4。棄牌保留價值若調整 `EvaluatePlayerCardKeepValue`，請同步更新 §5.2.2。戰技加權分數若調整 `EvaluateEnemy*PlayBonus`，請同步更新 §3.5。*

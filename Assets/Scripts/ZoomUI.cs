@@ -36,22 +36,9 @@ public class ZoomUI : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler, 
         baseScale = transform.localScale;
     }
 
-    void Update()
-    {
-        if (shouldSuppressScaleEffects == null || !shouldSuppressScaleEffects()) return;
-        if (zoomRoutine != null)
-        {
-            StopCoroutine(zoomRoutine);
-            zoomRoutine = null;
-        }
-        if (activeZoom == this) activeZoom = null;
-        isZoomed = false;
-        transform.localScale = Vector3.one;
-    }
-
     public void OnPointerClick(PointerEventData eventData)
     {
-        if (shouldSuppressScaleEffects != null && shouldSuppressScaleEffects()) return;
+        if (IsScaleEffectsSuppressed()) return;
         if (eventData == null || eventData.button != PointerEventData.InputButton.Left) return;
         if (clickPulseOnly)
         {
@@ -71,17 +58,20 @@ public class ZoomUI : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler, 
 
     public void OnPointerEnter(PointerEventData eventData)
     {
-        if (shouldSuppressScaleEffects != null && shouldSuppressScaleEffects()) return;
+        if (IsScaleEffectsSuppressed()) return;
         if (!hoverToPreview || clickToToggle || isZoomed) return;
         SetZoomed(true, false);
     }
 
     public void OnPointerExit(PointerEventData eventData)
     {
-        if (shouldSuppressScaleEffects != null && shouldSuppressScaleEffects()) return;
+        if (IsScaleEffectsSuppressed()) return;
         if (!hoverToPreview || clickToToggle || !isZoomed) return;
         SetZoomed(false, false);
     }
+
+    private bool IsScaleEffectsSuppressed() =>
+        shouldSuppressScaleEffects != null && shouldSuppressScaleEffects();
 
     private void SetZoomed(bool zoomed, bool rememberSelection)
     {
@@ -132,7 +122,6 @@ public class ZoomUI : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler, 
         {
             t += Time.unscaledDeltaTime;
             float p = Mathf.Clamp01(t / dur);
-            // smoothstep easing
             float eased = p * p * (3f - 2f * p);
             transform.localScale = Vector3.Lerp(from, targetScale, eased);
             yield return null;

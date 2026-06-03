@@ -35,6 +35,7 @@ public partial class SceneLoader : MonoBehaviour
     public void EnterBattle()
     {
         if (playerData == null) playerData = PlayerData.ResolveCanonical();
+        PlayerSaveCoordinator.FlushDebouncedThenSavePlayerData();
         if (playerData != null) playerData.LoadPlayerData(); // always use latest saved deck
 
         RefreshEnterBattleState();

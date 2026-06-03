@@ -92,35 +92,13 @@ public partial class SceneLoader
 
     private void ApplyHarborTrainingPendingConfig(BattleDifficultyTier tier)
     {
-        BattleDifficultyConfig cfg = BuildDifficultyConfig(tier);
-        if (tier == BattleDifficultyTier.Easy)
-        {
-            pendingUseFixedEnemyDeck = true;
-            pendingFixedEnemyDeckCardIds = HarborTrainingEasyBattleRules.EasyEnemyDeckCardIds;
-            pendingEnemyOverLimitAllowance = 2;
-            pendingMinEnemySpellsInDeck = 1;
-            pendingEnemyAiPlayStyle = EnemyAiPlayStyle.FastAttack;
-            pendingDifficultyLabelZh = "簡單";
-            return;
-        }
-
-        if (tier == BattleDifficultyTier.Normal)
-        {
-            pendingUseFixedEnemyDeck = true;
-            pendingFixedEnemyDeckCardIds = HarborTrainingNormalBattleRules.NormalEnemyDeckCardIds;
-            pendingEnemyOverLimitAllowance = 2;
-            pendingMinEnemySpellsInDeck = 1;
-            pendingEnemyAiPlayStyle = EnemyAiPlayStyle.FastAttack;
-            pendingDifficultyLabelZh = "普通";
-            return;
-        }
-
-        pendingUseFixedEnemyDeck = cfg.UseFixedDeck;
-        pendingFixedEnemyDeckCardIds = cfg.FixedDeckIds;
-        pendingEnemyOverLimitAllowance = cfg.OverLimitAllowance;
-        pendingMinEnemySpellsInDeck = cfg.MinSpellsInDeck;
-        pendingEnemyAiPlayStyle = EnemyAiPlayStyle.FastAttack;
-        pendingDifficultyLabelZh = cfg.LabelZh;
+        HarborTrainingTierConfig harbor = HarborTrainingDifficultyRuntime.ResolvePendingConfig(tier);
+        pendingUseFixedEnemyDeck = true;
+        pendingFixedEnemyDeckCardIds = harbor.FixedEnemyDeckCardIds;
+        pendingEnemyOverLimitAllowance = harbor.EnemyOverLimitAllowance;
+        pendingMinEnemySpellsInDeck = harbor.MinEnemySpellsInDeck;
+        pendingEnemyAiPlayStyle = harbor.AiPlayStyle;
+        pendingDifficultyLabelZh = harbor.LabelZh;
     }
 
     private void ConfigureHarborTrainingBattlePending(BattleDifficultyTier tier)

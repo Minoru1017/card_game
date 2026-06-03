@@ -42,6 +42,8 @@ public class HallSceneFeatureBinder : MonoBehaviour
         TryBindSceneButton("設定", "Settings");
 
         RefreshResourceDisplay();
+        HallSceneResponsiveLayout.ApplyNow(scene);
+        HallSceneResponsiveLayoutDriver.EnsureExists();
     }
 
     private static void TryBindSceneButton(string objName, string targetSceneName)

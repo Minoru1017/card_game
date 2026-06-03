@@ -147,6 +147,7 @@ public static class TutorialHandPlayAdvisor
 
         if (manager.PlayerHasFieldMonster())
         {
+            if (card is MonsterCard && manager.CanPlayerReplaceFieldMonsterForConsecration()) return false;
             if (card is SpellCard heal && heal.SpellOrdinal == 1) return false;
             return true;
         }

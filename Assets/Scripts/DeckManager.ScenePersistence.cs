@@ -40,8 +40,7 @@ public partial class DeckManager
     {
         if (!scene.IsValid() || !scene.name.Equals("Buildbeck", System.StringComparison.OrdinalIgnoreCase))
             return;
-        PlayerData pd = PlayerData.ResolveCanonical();
-        if (pd != null) pd.SavePlayerData();
+        PlayerSaveCoordinator.FlushDebouncedThenSavePlayerData();
     }
 
     private void OnSceneLoadedEnsureBuildbeckDeckUi(Scene scene, LoadSceneMode mode)

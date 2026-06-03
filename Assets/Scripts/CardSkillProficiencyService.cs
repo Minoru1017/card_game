@@ -77,6 +77,32 @@ public static class CardSkillProficiencyService
     public static bool IsStageUnlocked(int monsterId, CardSkillRevealStage stage) =>
         (int)GetUnlockedStage(monsterId) >= (int)stage;
 
+    public static bool IsM12ReligiousLineMonster(int monsterId) =>
+        monsterId == MonsterSkillIds.Nun ||
+        monsterId == MonsterSkillIds.Bishop ||
+        monsterId == MonsterSkillIds.Castle;
+
+    /// <summary>卡面／手牌是否顯示 B 戰技一行（與對戰內是否結算相近，不含開局牌組快照）。</summary>
+    public static bool ShouldShowMonsterSkillLineOnCard(int monsterId)
+    {
+        if (!MonsterSkillRegistry.HasSkillTrack(monsterId))
+            return false;
+        if (IsStarterTrio(monsterId))
+            return true;
+        if (IsStageUnlocked(monsterId, CardSkillRevealStage.BasicB))
+            return true;
+        if (!IsM12ReligiousLineMonster(monsterId))
+            return false;
+        if (TutorialProgressState.IsM12ReligiousLineRewardGrantedForActivePlayer())
+            return true;
+        PlayerData pd = ResolvePlayerData();
+        if (pd == null)
+            return false;
+        pd.LoadPlayerData();
+        var deck = pd.GetDeckMap(pd.selectedDeckSlot);
+        return deck != null && deck.TryGetValue(monsterId, out int count) && count > 0;
+    }
+
     public static bool IsStarterTrio(int monsterId) =>
         monsterId == MonsterSkillIds.King ||
         monsterId == MonsterSkillIds.Queen ||

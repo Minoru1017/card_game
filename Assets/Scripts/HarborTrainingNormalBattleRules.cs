@@ -23,6 +23,17 @@ public static class HarborTrainingNormalBattleRules
 
     public const int FastAttackMonsterBonusFull = 6;
 
+    public const int EnemyOverLimitAllowance = 2;
+
+    public const int MinEnemySpellsInDeck = 1;
+
+    public static HarborTrainingTierConfig PendingConfig =>
+        new HarborTrainingTierConfig(
+            "普通",
+            NormalEnemyDeckCardIds,
+            EnemyOverLimitAllowance,
+            MinEnemySpellsInDeck);
+
     /// <summary>簡單弱牌組 + 1 主教、1 騎兵（循環至 30 張），無 SSR。</summary>
     public static readonly int[] NormalEnemyDeckCardIds =
     {

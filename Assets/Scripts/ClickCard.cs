@@ -35,11 +35,7 @@ public class ClickCard : MonoBehaviour, IPointerClickHandler
         }
     }
 
-    // Update is called once per frame
-    void Update()
-    {
-        
-    }
+    // Update removed: empty per-frame work on every library/deck card was wasteful on mobile.
     public void OnPointerClick(PointerEventData eventData)
     {
         if (eventData == null || eventData.button != PointerEventData.InputButton.Left) return;

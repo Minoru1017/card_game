@@ -85,7 +85,8 @@ flowchart TD
 |----------|----------|------------|------|
 | 入門教學戰**首次勝利** | UR 國王、SR 王后、N 民兵 各 1 | 否 | `tutorial_intro_trio_reward` · `TutorialBattleRewardService.TryGrantIntroTrioReward` |
 | 重溫入門課再勝 | 無卡牌；結算僅提示已於首次通關發放 | — | 同上旗標 |
-| 港灣**任一難度首次勝利** | 大地圖 **M-1-1 實戰 Clear**；解鎖 **M-1-2 海牆巡邏** | 否 | `harbor_combat_clear` |
+| 港灣**任一難度首次勝利** | 大地圖 **M-1-1 實戰 Clear**；解鎖 **M-1-2 海牆巡邏**（**不**發修女／主教／城堡） | 否 | `harbor_combat_clear` |
+| **M-1-2 段考首通** | 修女、主教、城堡 各 +1 收藏；戰技熟練度 **B** | 否 | `m12_religious_line_reward` · 見 [`LEVEL_DESIGN_M-1-2.md`](LEVEL_DESIGN_M-1-2.md) |
 | 港灣**困難級首次勝利** | **SR 聖院騎士** ×1（港灣畢業證） | 否 | `harbor_hard_reward`；CardList id `18` |
 | 港灣任一難度**再次勝利** | 無額外卡牌／解鎖 | — | 僅熟練度與戰績 |
 | 港灣戰敗 | 無懲罰性扣資源 | — | 可再戰 |
@@ -137,7 +138,18 @@ flowchart TD
 | 敵牌組 | 簡單弱牌組 + 主教／騎兵，**無 SSR**；超牌容許 2 |
 | KPI 驗證 | **真人**首通約 60%；`Tools/Harbor/Win Rate Sim` 自動 AI 僅作回歸（約 15～25%，不可直接當 KPI） |
 
-困難仍沿用 `BuildDifficultyConfig` + 全場 `FastAttack`。細節見 `DIFFICULTY_AND_AI_DESIGN.md`。
+**困難檔專用規則**（`HarborTrainingHardBattleRules.cs`，與 Buildbeck 一般 `Hard` 分離）：
+
+| 項目 | 困難實戰 |
+|------|----------|
+| 局長 | 不限回合 |
+| 敵起始 HP | 18 |
+| 敵傷害倍率 | 0.74 |
+| 敵抽牌 | 第 1～3 回合 1 張／回合，之後 2 張 |
+| 快攻 AI | 前 3 回合 +5、之後 +12 |
+| 敵牌組 | 普通池加強（雙主教／雙騎兵／審判官／雙火球），**無 SSR 四騎**；超牌容許 3 |
+
+三檔開戰設定統一由 `HarborTrainingDifficultyRuntime`／`HarborTrainingTierConfig` 提供；`BattleSimulationManager.HarborTraining.cs` 負責簡單回合上限勝利。細節見 [`HARBOR_1-1_VS_TRAINING_GROUND_DIFFICULTY.md`](HARBOR_1-1_VS_TRAINING_GROUND_DIFFICULTY.md)。
 
 **不包含**：魔王級、戰前謎題解鎖（PZ01／PZ02 僅 Buildbeck 隨機預覽用）。
 
@@ -198,6 +210,8 @@ flowchart TD
 | 困難畢業證 | `HarborTrainingProgressState` → `harbor_hard_reward` |
 | 發獎邏輯 | `HarborTrainingRewardService.ProcessVictory` |
 | 地圖 Clear / M-1-2 | `StoryProgressWorldMapRuntime.LoadClearedNodeProgress` |
+| M-1-2 宗教三張 B | `M12ReligiousLineRewardService` · `m12_religious_line_reward` |
+| M-1-2 段考戰技追蹤 | `M12TrioMasteryBattleTracker` · `BattleLaunchContext.IsM12TrioMasteryBattle` |
 | 戰前預覽 | `SceneLoader.HarborTraining.cs`、`HarborTrainingBattleCopy.cs` |
 | 結算副標題 | `BattleSimulationDebugUI.Settlement` |
 | 基礎牌組僅首次通知 | `tutorial_starter_deck_notify` + `MainPlotSceneController` |
@@ -223,7 +237,7 @@ flowchart TD
 | 方向 | 說明 |
 |------|------|
 | M-1-1 二階段 | 港灣碼頭外景、獨立 BG 與副本規則（見世界觀文件 §八） |
-| M-1-2 內容 | 海牆巡邏關卡敘事、獎勵表、首通條件待另案 |
+| M-1-2 內容 | 已定案：見 [`LEVEL_DESIGN_M-1-2.md`](LEVEL_DESIGN_M-1-2.md)（雙戰鬥、御三家觸發、宗教三張 B） |
 | 經濟獎勵 | 港灣重複通關金幣／熟練度加成尚未實裝 |
 | 困難以上 | 魔王級、天氣等留待後續章節 |
 
@@ -237,3 +251,4 @@ flowchart TD
 | 2026-05-30 | 入門御三家改為僅首次發放；重溫入門不可重複領（`tutorial_intro_trio_reward`）。 |
 | 2026-05-31 | 大地圖節點 icon 小幅調整：入門 48、一般 40、魔王 44（§5.2.1）。 |
 | 2026-05-31 | 地圖預設視野改為 `minZoom`（與 `[` 縮到最小相同）。 |
+| 2026-05-30 | M-1-2 定案：港灣首通僅解鎖；段考發修女／主教／城堡 **B**（`LEVEL_DESIGN_M-1-2.md`）。 |

@@ -45,10 +45,11 @@
 
 | ID | 優先 | 議題 | 現況 | 建議定案方向 |
 |----|------|------|------|----------------|
-| L1-2-001 | P1 | **M-1-2 關卡 GDD** | JSON 有節點；無 `LEVEL_DESIGN` 章節 | 新增 `LEVEL_DESIGN_M-1-2.md` 或擴寫 GDD 第二章 |
+| L1-2-001 | P1 | **M-1-2 關卡 GDD** | ✅ 已定案 | [`LEVEL_DESIGN_M-1-2.md`](LEVEL_DESIGN_M-1-2.md) |
 | L1-2-002 | P1 | **劇情銜接** | 實戰 Clear 後無規格過場 | 是否需要台詞／佈告／自動聚焦 M-1-2 |
-| L1-2-003 | P1 | **首通獎勵** | 未定 | 占位：卡牌、金幣、純解鎖 |
-| L1-2-004 | P2 | **戰鬥入口** | 解鎖後地圖點 M-1-2 僅 log | 與 §MAP 一併定案 |
+| L1-2-003 | P1 | **首通獎勵** | ✅ 已定案 | 修女／主教／城堡 **B**；重溫不重發；港灣首通不發 |
+| L1-2-004 | P2 | **戰鬥入口** | 解鎖後地圖點 M-1-2 僅 log | 接雙戰鬥：`BattleLaunchContext` M12 旗標已留 |
+| L1-2-005 | P1 | **段考戰鬥實裝** | 獎勵服務／觸發追蹤已有骨架 | 劇情、場景串接、結算 UI、教練台詞表 |
 
 ---
 
@@ -57,6 +58,7 @@
 | ID | 優先 | 議題 | 現況 | 建議定案方向 |
 |----|------|------|------|----------------|
 | MAP-001 | P1 | **M-1-1 點擊** | 聚焦地圖；實戰從 Story progress 按鈕進入 | 定案：Clear 後點節點是否仍只聚焦、是否直開港灣預覽 |
+| MAP-002 | P1 | **地圖 NEW 與玩家資訊不一致** | 入門已畢業／御三家已領時，玩家資訊顯示實戰區，M-1-1 節點徽章仍 NEW；或已港灣首通仍顯示實戰區而非 Clear | ✅ `EnsureSlotIntroProgressConsistent` + `EnsureSlotHarborProgressConsistent`（戰績 簡單～困難 勝利、畢業證、M-1-2）。**minori1017** |
 | MAP-002 | P1 | **M-1-2 點擊 → 進關** | 未接戰鬥場景 | 流程圖：解鎖 → 面板文案 → 預覽 → 場景 |
 | MAP-003 | P2 | **Available 節點文案** | 資料庫有 title；無 GDD 驗收表 | 與 `StoryProgressLevelCopy` 對照表 |
 
@@ -118,6 +120,8 @@
 | ID | 關閉日期 | 定案摘要 | 更新文件 |
 |----|----------|----------|----------|
 | TUT-004 | 2026-05-30 | 重溫入門不發御三家；旗標 `tutorial_intro_trio_reward` | `LEVEL_DESIGN_GDD.md` §3.1 |
+| MAP-002 | 2026-05-30 | 地圖節點與玩家資訊統一；入門／港灣旗標可從收藏、戰績、畢業證還原 | `TutorialProgressState` · `HarborTrainingProgressState` · `PlayerProfileCsvService` |
+| SAVE-001 | 2026-05-30 | `playerdata.csv` 單一寫入協調器；貴重品併入完整存檔；Buildbeck 延遲合併存檔 | `PlayerSaveCoordinator` · `DECK_SAVE_IMPLEMENTATION.md` §15 |
 
 ---
 

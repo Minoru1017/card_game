@@ -11,11 +11,13 @@ public static class PlayerInfoProgressCopy
     public static string BuildSummary(int slot)
     {
         slot = UnityEngine.Mathf.Clamp(slot, 1, PlayerData.MaxPlayerSlots);
-        TutorialProgressState.GetAcademyIntroProgressForDisplay(slot, out bool plot, out bool battle);
+        TutorialProgressState.EnsureSlotIntroProgressConsistent(slot);
+        HarborTrainingProgressState.EnsureSlotHarborProgressConsistent(slot);
         bool introGraduated = TutorialProgressState.IsAcademyIntroGraduated(slot);
         bool harbor = HarborTrainingProgressState.IsHarborCombatCleared(slot);
         bool hardGrad = HarborTrainingProgressState.IsHarborHardGraduationRewardGranted(slot);
-        string mapStatus = StoryProgressLevelCopy.ResolveMapStatusLabel(plot, battle, harbor);
+        string mapStatus = StoryProgressLevelCopy.ResolveMapStatusLabelForSlot(slot);
+        TutorialProgressState.GetAcademyIntroProgressForDisplay(slot, out bool plot, out bool battle);
 
         return "章節 " + StoryProgressLevelCopy.LevelTitle + "\n" +
                "地圖狀態 " + mapStatus + "\n" +

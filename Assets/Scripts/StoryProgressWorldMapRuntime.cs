@@ -32,9 +32,13 @@ public sealed class StoryProgressWorldMapRuntime : MonoBehaviour
     /// <summary>新玩家預設對焦：節點落在 viewport 寬度此比例處（0.5 = 正中）。</summary>
     private const float NewPlayerMapNodeViewportXFromLeft = 0.28f;
     [Header("World Map Zoom (focus mode: [ / ] only)")]
-    [SerializeField] private float minZoom = 0.75f;
-    [SerializeField] private float maxZoom = 2.2f;
+    [SerializeField] private float maxZoom = 4.5f;
     [SerializeField] private float bracketZoomStep = 0.22f;
+
+    /// <summary>Content scale floor: cover-filled layout at 1.0 — zooming out further exposes viewport margins.</summary>
+    private const float MapCoverMinZoom = 1f;
+
+    private const float DefaultMapZoom = 3f;
 
     private static bool sceneHookInstalled;
 
@@ -48,14 +52,15 @@ public sealed class StoryProgressWorldMapRuntime : MonoBehaviour
     private Image viewportBgImage;
     private int viewportSiblingIndex = -1;
     private Vector2 mapBaseSize;
-    private Vector3 mapVisualScale = Vector3.one;
-    private float currentZoom = 1f;
+    private float currentZoom = DefaultMapZoom;
     private bool mapFocusMode;
     private bool isManualDraggingMap;
     private Vector2 lastManualMousePos;
     private float lastFocusToggleUnscaledTime = -999f;
     private float blockM11PointerToggleUntilUnscaledTime = -999f;
     private int lastBracketZoomAppliedFrame = -1;
+    private Rect lastLayoutSafeArea;
+    private Vector2Int lastLayoutScreenSize;
     private const float FocusToggleDebounceSeconds = 0.22f;
     private const float M11PointerToggleBlockSeconds = 0.12f;
     private readonly List<UiVisibilityRecord> hiddenUiRecords = new List<UiVisibilityRecord>(16);
@@ -118,14 +123,18 @@ public sealed class StoryProgressWorldMapRuntime : MonoBehaviour
         mapContentRt = mapImage.rectTransform;
         if (!BuildScrollViewport(mapImage.transform.parent as RectTransform))
             return false;
-        currentZoom = Mathf.Max(0.0001f, mapContentRt.localScale.x);
-        if (maxZoom < currentZoom) maxZoom = currentZoom * 1.8f;
-        if (minZoom >= currentZoom) minZoom = currentZoom * 0.35f;
+        if (maxZoom < DefaultMapZoom)
+            maxZoom = DefaultMapZoom * 1.5f;
+        SetMapZoom(DefaultMapZoom);
 
+        int slot = PlayerData.GetActivePlayerSlotOrDefault();
+        TutorialProgressState.EnsureSlotIntroProgressConsistent(slot);
+        HarborTrainingProgressState.EnsureSlotHarborProgressConsistent(slot);
         LoadClearedNodeProgress();
         nodeDb = StoryProgressNodeDatabaseLibrary.Load();
         BuildNodeGraphVisuals();
         FocusInitialNode();
+        StoryProgressFooterLayer.ApplyIfNeeded(force: true);
         return true;
     }
 
@@ -166,7 +175,6 @@ public sealed class StoryProgressWorldMapRuntime : MonoBehaviour
         if (mapContentRt == null || originalParent == null) return false;
         int originalSibling = mapContentRt.GetSiblingIndex();
         Image mapImage = mapContentRt.GetComponent<Image>();
-        mapVisualScale = mapContentRt.localScale;
 
         GameObject viewportObj = new GameObject(
             "StoryProgressMapViewport",
@@ -181,21 +189,17 @@ public sealed class StoryProgressWorldMapRuntime : MonoBehaviour
         viewportSiblingIndex = originalSibling;
 
         viewportRt = viewportObj.GetComponent<RectTransform>();
-        CopyRectLayout(viewportRt, mapContentRt);
         viewportRt.anchorMin = Vector2.zero;
         viewportRt.anchorMax = Vector2.one;
         viewportRt.pivot = new Vector2(0.5f, 0.5f);
-        viewportRt.offsetMin = Vector2.zero;
-        viewportRt.offsetMax = Vector2.zero;
         viewportRt.anchoredPosition = Vector2.zero;
+        viewportRt.localScale = Vector3.one;
+        ApplyMapViewportResponsiveInsets();
 
         Image viewportImage = viewportObj.GetComponent<Image>();
         viewportImage.color = new Color(0f, 0f, 0f, 0.01f);
         viewportImage.raycastTarget = true;
         viewportBgImage = viewportImage;
-
-        Vector2 originalMapRectSize = mapContentRt.rect.size;
-        Vector2 viewportSize = viewportRt.rect.size;
 
         GameObject contentObj = new GameObject("StoryProgressMapContent", typeof(RectTransform));
         contentObj.transform.SetParent(viewportRt, false);
@@ -204,34 +208,7 @@ public sealed class StoryProgressWorldMapRuntime : MonoBehaviour
         contentRt.anchorMax = new Vector2(0.5f, 0.5f);
         contentRt.pivot = new Vector2(0.5f, 0.5f);
 
-        // Preserve authored map size first; fallback to sprite size if rect is not ready.
-        Vector2 preservedSize = originalMapRectSize;
-        if (preservedSize.x < 8f || preservedSize.y < 8f)
-        {
-            if (mapImage != null && mapImage.sprite != null)
-                preservedSize = mapImage.sprite.rect.size;
-            else
-                preservedSize = mapContentRt.sizeDelta;
-        }
-
-        if (preservedSize.x < 8f || preservedSize.y < 8f)
-            preservedSize = new Vector2(1600f, 900f);
-
-        // Guard against accidental tiny size from not-yet-settled layout.
-        if (preservedSize.x < viewportSize.x * 0.6f || preservedSize.y < viewportSize.y * 0.6f)
-            preservedSize = new Vector2(
-                Mathf.Max(viewportSize.x * 1.15f, preservedSize.x),
-                Mathf.Max(viewportSize.y * 1.15f, preservedSize.y));
-
-        mapBaseSize = preservedSize;
-        float minW = viewportSize.x * 1.08f;
-        float minH = viewportSize.y * 1.08f;
-        float scaledMapW = mapBaseSize.x * Mathf.Max(0.01f, Mathf.Abs(mapVisualScale.x));
-        float scaledMapH = mapBaseSize.y * Mathf.Max(0.01f, Mathf.Abs(mapVisualScale.y));
-        contentRt.sizeDelta = new Vector2(
-            Mathf.Max(scaledMapW, minW),
-            Mathf.Max(scaledMapH, minH));
-        contentRt.anchoredPosition = Vector2.zero;
+        mapBaseSize = ResolveNativeMapSize(mapImage, mapContentRt);
 
         mapGraphicRt = mapContentRt;
         mapGraphicRt.SetParent(contentRt, false);
@@ -240,10 +217,10 @@ public sealed class StoryProgressWorldMapRuntime : MonoBehaviour
         mapGraphicRt.anchorMax = new Vector2(0.5f, 0.5f);
         mapGraphicRt.pivot = new Vector2(0.5f, 0.5f);
         mapGraphicRt.anchoredPosition = Vector2.zero;
-        mapGraphicRt.sizeDelta = mapBaseSize;
-        mapGraphicRt.localScale = mapVisualScale;
 
         mapContentRt = contentRt;
+
+        ApplyMapCoverFillLayout();
 
         scrollRect = viewportObj.GetComponent<ScrollRect>();
         scrollRect.viewport = viewportRt;
@@ -291,6 +268,63 @@ public sealed class StoryProgressWorldMapRuntime : MonoBehaviour
 
         if (viewportRt != null && viewportRt.localScale != Vector3.one)
             viewportRt.localScale = Vector3.one;
+
+        if (viewportRt != null)
+            TryRefreshMapViewportResponsiveInsets();
+    }
+
+    private void TryRefreshMapViewportResponsiveInsets()
+    {
+        Rect safe = Screen.safeArea;
+        Vector2Int size = new Vector2Int(Screen.width, Screen.height);
+        if (safe == lastLayoutSafeArea && size == lastLayoutScreenSize)
+            return;
+
+        lastLayoutSafeArea = safe;
+        lastLayoutScreenSize = size;
+        ApplyMapViewportResponsiveInsets();
+        ApplyMapCoverFillLayout();
+    }
+
+    /// <summary>等比放大至填滿 viewport（cover）；超出部分靠 ScrollRect 滑動。</summary>
+    private void ApplyMapCoverFillLayout()
+    {
+        if (viewportRt == null || mapGraphicRt == null || mapContentRt == null)
+            return;
+        if (mapBaseSize.x < 1f || mapBaseSize.y < 1f)
+            return;
+
+        Canvas.ForceUpdateCanvases();
+        Vector2 viewportSize = viewportRt.rect.size;
+        if (viewportSize.x < 1f || viewportSize.y < 1f)
+            return;
+
+        float fillScale = Mathf.Max(
+            viewportSize.x / mapBaseSize.x,
+            viewportSize.y / mapBaseSize.y);
+
+        Vector2 filledSize = mapBaseSize * fillScale;
+        mapContentRt.sizeDelta = filledSize;
+        mapContentRt.anchoredPosition = Vector2.zero;
+        mapGraphicRt.sizeDelta = mapBaseSize;
+        mapGraphicRt.localScale = new Vector3(fillScale, fillScale, 1f);
+        ApplyNativeMapImageLayout(mapGraphicRt.GetComponent<Image>());
+        SyncCurrentZoomFromContent();
+        if (currentZoom < MapCoverMinZoom)
+            SetMapZoom(MapCoverMinZoom);
+        ClampContentAnchoredPosition();
+        ReapplyDefaultMapFocusOnNode();
+    }
+
+    private void ApplyMapViewportResponsiveInsets()
+    {
+        if (viewportRt == null)
+            return;
+
+        Canvas canvas = viewportRt.GetComponentInParent<Canvas>();
+        MobileUiLayoutPolicy.CanvasSafeInsets safe = MobileUiLayoutPolicy.GetCanvasSafeInsets(canvas);
+        viewportRt.offsetMin = new Vector2(safe.Left, safe.Bottom);
+        viewportRt.offsetMax = new Vector2(-safe.Right, -safe.Top);
     }
 
     private void Update()
@@ -338,20 +372,6 @@ public sealed class StoryProgressWorldMapRuntime : MonoBehaviour
             ClampContentAnchoredPosition();
         }
 
-    }
-
-    private void OnGUI()
-    {
-        if (!mapFocusMode || mapContentRt == null) return;
-
-        Event e = Event.current;
-        if (e == null || e.type != EventType.KeyDown) return;
-
-        int dir = BracketKeyCodeToZoomDirection(e.keyCode);
-        if (dir == 0) return;
-
-        TryApplyBracketZoom(dir);
-        e.Use();
     }
 
     private void HandleBracketKeyboardZoom()
@@ -414,7 +434,7 @@ public sealed class StoryProgressWorldMapRuntime : MonoBehaviour
         if (mapContentRt == null) return;
         SyncCurrentZoomFromContent();
 
-        float targetZoom = Mathf.Clamp(currentZoom + signedDelta, minZoom, maxZoom);
+        float targetZoom = Mathf.Clamp(currentZoom + signedDelta, MapCoverMinZoom, maxZoom);
         if (Mathf.Approximately(targetZoom, currentZoom)) return;
         ApplyZoom(targetZoom, screenPivot);
     }
@@ -466,15 +486,30 @@ public sealed class StoryProgressWorldMapRuntime : MonoBehaviour
         mapContentRt.anchoredPosition = anchored;
     }
 
-    private static void CopyRectLayout(RectTransform target, RectTransform source)
+    private static Vector2 ResolveNativeMapSize(Image mapImage, RectTransform mapRt)
     {
-        target.anchorMin = source.anchorMin;
-        target.anchorMax = source.anchorMax;
-        target.pivot = source.pivot;
-        target.anchoredPosition = source.anchoredPosition;
-        target.sizeDelta = source.sizeDelta;
-        target.localScale = source.localScale;
-        target.localRotation = source.localRotation;
+        if (mapImage != null && mapImage.sprite != null)
+            return mapImage.sprite.rect.size;
+
+        if (mapRt == null)
+            return new Vector2(1672f, 941f);
+
+        Vector2 size = mapRt.sizeDelta;
+        if (size.x < 8f || size.y < 8f)
+            size = mapRt.rect.size;
+        if (size.x >= 8f && size.y >= 8f)
+            return size;
+
+        return new Vector2(1672f, 941f);
+    }
+
+    private static void ApplyNativeMapImageLayout(Image mapImage)
+    {
+        if (mapImage == null)
+            return;
+
+        mapImage.preserveAspect = true;
+        mapImage.type = Image.Type.Simple;
     }
 
     private static bool IsUnderNamedAncestor(Transform t, string ancestorName)
@@ -714,14 +749,53 @@ public sealed class StoryProgressWorldMapRuntime : MonoBehaviour
         return "入門課 · 學院內";
     }
 
-    private static string ResolveTutorialRootStatusText()
+    private static string ResolveTutorialRootStatusText() =>
+        StoryProgressLevelCopy.ResolveMapStatusLabelForActiveSlot();
+
+    /// <summary>入門勝利／港灣通關後刷新地圖節點與 M-1-1 狀態徽章（與關卡面板、玩家資訊一致）。</summary>
+    public static void RequestRefreshProgress()
+    {
+        StoryProgressWorldMapRuntime runtime =
+            UnityEngine.Object.FindFirstObjectByType<StoryProgressWorldMapRuntime>();
+        if (runtime == null) return;
+        runtime.RefreshProgressFromSave();
+    }
+
+    public void RefreshProgressFromSave()
     {
         int slot = PlayerData.GetActivePlayerSlotOrDefault();
-        bool harborCleared = HarborTrainingProgressState.IsHarborCombatCleared(slot);
-        if (TutorialProgressState.IsAcademyIntroGraduated(slot))
-            return StoryProgressLevelCopy.ResolveMapStatusLabel(true, true, harborCleared);
-        TutorialProgressState.GetAcademyIntroProgressForDisplay(slot, out bool plotCompleted, out bool battleCompleted);
-        return StoryProgressLevelCopy.ResolveMapStatusLabel(plotCompleted, battleCompleted, harborCleared);
+        TutorialProgressState.EnsureSlotIntroProgressConsistent(slot);
+        HarborTrainingProgressState.EnsureSlotHarborProgressConsistent(slot);
+        LoadClearedNodeProgress();
+        if (nodeDb == null)
+            nodeDb = StoryProgressNodeDatabaseLibrary.Load();
+        BuildNodeGraphVisuals();
+        ApplyTutorialRootStatusBadgeToExistingNode();
+        ReapplyDefaultMapFocusOnNode();
+    }
+
+    private void ApplyTutorialRootStatusBadgeToExistingNode()
+    {
+        if (!nodeRects.TryGetValue(TutorialRootNodeId, out RectTransform nodeRt) || nodeRt == null)
+            return;
+
+        Transform statusTextTf = nodeRt.Find("StatusBadge/StatusText");
+        if (statusTextTf == null)
+            return;
+
+        string statusText = ResolveTutorialRootStatusText();
+        Color statusColor = ResolveTutorialRootStatusColor(statusText);
+
+        if (statusTextTf.parent != null)
+        {
+            Image badgeBg = statusTextTf.parent.GetComponent<Image>();
+            if (badgeBg != null)
+                badgeBg.color = statusColor;
+        }
+
+        TextMeshProUGUI tmp = statusTextTf.GetComponent<TextMeshProUGUI>();
+        if (tmp != null)
+            tmp.text = statusText;
     }
 
     private static Color ResolveTutorialRootStatusColor(string statusText)
@@ -908,6 +982,8 @@ public sealed class StoryProgressWorldMapRuntime : MonoBehaviour
         ApplyMapFocusInteractivity();
         if (viewportRt != null && viewportSiblingIndex >= 0)
             viewportRt.SetSiblingIndex(viewportSiblingIndex);
+        StoryProgressFooterLayer.ApplyIfNeeded(force: true);
+        StoryProgressSidebarResponsiveLayout.ApplyNow(SceneManager.GetActiveScene());
     }
 
     private void ApplyMapFocusInteractivity()
@@ -926,10 +1002,18 @@ public sealed class StoryProgressWorldMapRuntime : MonoBehaviour
     private void FocusInitialNode()
     {
         if (scrollRect == null || mapContentRt == null || viewportRt == null) return;
-        if (!nodeRects.TryGetValue(TutorialRootNodeId, out RectTransform rt)) return;
-        rt.SetAsLastSibling(); // keep tutorial node visible above lines
 
-        SetMapZoom(minZoom);
+        SetMapZoom(DefaultMapZoom);
+        ReapplyDefaultMapFocusOnNode();
+    }
+
+    /// <summary>Pan viewport so M-1-1 (1-1) is the default focal point after layout or progress refresh.</summary>
+    private void ReapplyDefaultMapFocusOnNode()
+    {
+        if (mapContentRt == null || viewportRt == null) return;
+        if (!nodeRects.TryGetValue(TutorialRootNodeId, out RectTransform rt)) return;
+
+        rt.SetAsLastSibling();
         Canvas.ForceUpdateCanvases();
 
         bool newPlayerMapFraming = TutorialProgressState.NeedsTutorialFlowForActivePlayer();
@@ -939,8 +1023,9 @@ public sealed class StoryProgressWorldMapRuntime : MonoBehaviour
     private void SetMapZoom(float zoom)
     {
         if (mapContentRt == null) return;
-        currentZoom = Mathf.Clamp(zoom, minZoom, maxZoom);
+        currentZoom = Mathf.Clamp(zoom, MapCoverMinZoom, maxZoom);
         mapContentRt.localScale = new Vector3(currentZoom, currentZoom, 1f);
+        ClampContentAnchoredPosition();
     }
 
     private Vector2 GetNewPlayerMapViewportAlignOffset()

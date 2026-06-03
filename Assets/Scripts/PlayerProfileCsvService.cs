@@ -67,6 +67,8 @@ public static class PlayerProfileCsvService
         if (string.IsNullOrWhiteSpace(p.role)) p.role = "一般玩家";
         if (string.IsNullOrWhiteSpace(p.startDate)) p.startDate = DateTime.Now.ToString("yyyy-MM-dd");
 
+        PlayerSaveCoordinator.FlushDebouncedThenSavePlayerData();
+
         PlayerData playerData = ResolvePlayerData();
         if (playerData != null)
         {
@@ -219,7 +221,8 @@ public static class PlayerProfileCsvService
                 string slotKey = cols[2].Trim();
                 // Clear active slot runtime progress rows.
                 if (slotKey == "coins" || slotKey == "selected_deck_slot" || slotKey == "card" || slotKey == "deck" ||
-                    slotKey == "deckslot" || slotKey == "tutorial_plot" || slotKey == "tutorial_battle")
+                    slotKey == "deckslot" || slotKey == "tutorial_plot" || slotKey == "tutorial_battle" ||
+                    slotKey == ValuablesVaultState.SaveKey)
                     continue;
                 if (slotKey == "slot_name") slotNameKept = true;
             }
@@ -236,7 +239,8 @@ public static class PlayerProfileCsvService
             merged.Add("slot," + activeSlot + ",slot_name,玩家" + activeSlot);
 
         EnsureAllSlotsMinimalRows(merged);
-        PlayerPersistSafeIO.WriteAllLinesWithAtomicRotateBackups(PlayerDataPath, merged);
+        PlayerSaveCoordinator.WritePlayerDataCsv(merged);
+        ValuablesVaultState.InvalidateAllCaches();
     }
 
     private static int ReadActiveSlotFromRows(string[] rows)
@@ -643,7 +647,8 @@ public static class PlayerProfileCsvService
 
         string dir = Application.persistentDataPath;
         Directory.CreateDirectory(dir);
-        PlayerPersistSafeIO.WriteAllLinesWithAtomicRotateBackups(PlayerDataPath, merged);
+        PlayerSaveCoordinator.WritePlayerDataCsv(merged);
+        ValuablesVaultState.InvalidateAllCaches();
         SaveProjectSnapshot("playerdata.profile_mirror.csv", merged);
     }
 
@@ -787,6 +792,45 @@ public static class PlayerProfileCsvService
         if (idxB > idxA) return b;
         if (idxA > idxB) return a;
         return b;
+    }
+
+    /// <summary>
+    /// 該槽在 playerdata.csv 是否有「勝利」且難度落在標準五階索引區間（例：港灣實戰 簡單～困難 = 1～3）。
+    /// 用於記錄點還原後補寫 <c>harbor_combat_clear</c>。
+    /// </summary>
+    public static bool SlotHasBattleVictoryInDifficultyIndexRangeOnPlayerSave(
+        int slot,
+        int minDifficultyIndexInclusive,
+        int maxDifficultyIndexInclusive)
+    {
+        slot = Mathf.Clamp(slot, 1, PlayerData.MaxPlayerSlots);
+        if (!PlayerPersistSafeIO.TryReadPlayerDataLines(PlayerData.GetPlayerSaveCsvPath(), out string[] rows, out _))
+            return false;
+
+        var parsed = new Dictionary<int, BattleRecordEntry>();
+        CollectBattleRecordsFromRows(rows, slot, parsed);
+        foreach (BattleRecordEntry entry in parsed.Values)
+        {
+            if (entry.result != 1)
+                continue;
+            int idx = GetStandardDifficultyIndex(entry.difficultyZh);
+            if (idx >= minDifficultyIndexInclusive && idx <= maxDifficultyIndexInclusive)
+                return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>該槽是否曾有任一筆對戰紀錄（勝／敗／和／棄）。用於排除僅靠商店抽卡誤推進度的存檔。</summary>
+    public static bool SlotHasAnyBattleRecordOnPlayerSave(int slot)
+    {
+        slot = Mathf.Clamp(slot, 1, PlayerData.MaxPlayerSlots);
+        if (!PlayerPersistSafeIO.TryReadPlayerDataLines(PlayerData.GetPlayerSaveCsvPath(), out string[] rows, out _))
+            return false;
+
+        var parsed = new Dictionary<int, BattleRecordEntry>();
+        CollectBattleRecordsFromRows(rows, slot, parsed);
+        return parsed.Count > 0;
     }
 
     private static void CollectBattleRecordsFromRows(string[] rows, int activeSlot, Dictionary<int, BattleRecordEntry> parsed)

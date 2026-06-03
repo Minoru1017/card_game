@@ -12,10 +12,20 @@ public static class BattleLaunchContext
     /// <summary>1-1 港灣訓練場實戰（入門通關後解鎖，簡單／普通／困難）。</summary>
     public static bool IsHarborTrainingGroundBattle { get; private set; }
 
+    /// <summary>M-1-2 御三家戰技段考：獨立教學戰（見 LEVEL_DESIGN_M-1-2.md）。</summary>
+    public static bool IsM12TrioTutorialBattle { get; private set; }
+
+    /// <summary>M-1-2 御三家戰技段考：帶教練實戰練習。</summary>
+    public static bool IsM12CoachPracticeBattle { get; private set; }
+
+    public static bool IsM12TrioMasteryBattle => IsM12TrioTutorialBattle || IsM12CoachPracticeBattle;
+
     public static void BeginIntroTutorialBattleLaunch()
     {
         IsIntroTutorialBattle = true;
         IsHarborTrainingGroundBattle = false;
+        IsM12TrioTutorialBattle = false;
+        IsM12CoachPracticeBattle = false;
         ReturnToStoryProgressAfterBattle = true;
     }
 
@@ -23,6 +33,26 @@ public static class BattleLaunchContext
     {
         IsIntroTutorialBattle = false;
         IsHarborTrainingGroundBattle = true;
+        IsM12TrioTutorialBattle = false;
+        IsM12CoachPracticeBattle = false;
+        ReturnToStoryProgressAfterBattle = true;
+    }
+
+    public static void BeginM12TrioTutorialBattleLaunch()
+    {
+        IsIntroTutorialBattle = false;
+        IsHarborTrainingGroundBattle = false;
+        IsM12TrioTutorialBattle = true;
+        IsM12CoachPracticeBattle = false;
+        ReturnToStoryProgressAfterBattle = true;
+    }
+
+    public static void BeginM12CoachPracticeBattleLaunch()
+    {
+        IsIntroTutorialBattle = false;
+        IsHarborTrainingGroundBattle = false;
+        IsM12TrioTutorialBattle = false;
+        IsM12CoachPracticeBattle = true;
         ReturnToStoryProgressAfterBattle = true;
     }
 
@@ -47,6 +77,8 @@ public static class BattleLaunchContext
         ReturnToStoryProgressAfterBattle = false;
         IsIntroTutorialBattle = false;
         IsHarborTrainingGroundBattle = false;
+        IsM12TrioTutorialBattle = false;
+        IsM12CoachPracticeBattle = false;
     }
 
     public static string PeekDifficultyLabelZh() => PendingDifficultyLabelZh;

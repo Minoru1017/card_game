@@ -47,7 +47,40 @@ public static class BattleFxColors
     public static readonly Color HealFloat = BattleUiColors.AllyHp;
     public static readonly Color HealGlowOuter = BattleUiColors.WithAlpha(HealFloat, 0.18f);
     public static readonly Color HealGlowInner = BattleUiColors.WithAlpha(HealFloat, 0.28f);
+    public static readonly Color HealFlashPeak = BattleUiColors.WithAlpha(HealFloat, 0.72f);
+    public static readonly Color HeroHealFloat = BattleUiColors.WithAlpha(HealFloat, 1f);
+    public static readonly Color HeroHealGlowOuter = BattleUiColors.WithAlpha(BattleUiColors.PanelMilk, 0.22f);
+    public static readonly Color HeroHealGlowInner = BattleUiColors.WithAlpha(HealFloat, 0.34f);
+    public static readonly Color ResonanceChainCore = BattleUiColors.WithAlpha(BattleUiColors.TurnPlayer, 0.9f);
+    public static readonly Color ResonanceChainGlow = BattleUiColors.WithAlpha(BattleUiColors.PanelMilk, 0.58f);
+    public static readonly Color ResonanceSpark = BattleUiColors.WithAlpha(BattleUiColors.Hex("#E8BB6A"), 0.95f);
+    public static readonly Color ResonanceLabelText = BattleUiColors.TurnPlayer;
     public static readonly Color FxShadow = BattleUiColors.WithAlpha(Color.black, 0.32f);
+
+    // 主教·祝聖預留／宗教連攜／聖療連攜
+    public static readonly Color ConsecrationReserveOuter = BattleUiColors.WithAlpha(BattleUiColors.Hex("#C9B4FF"), 0.42f);
+    public static readonly Color ConsecrationReserveCore = BattleUiColors.WithAlpha(BattleUiColors.Hex("#E8BB6A"), 0.55f);
+    public static readonly Color ConsecrationBoundRing = BattleUiColors.WithAlpha(BattleUiColors.Hex("#B8A0E8"), 0.72f);
+    public static readonly Color ConsecrationBoundCore = BattleUiColors.WithAlpha(BattleUiColors.PanelMilk, 0.88f);
+    public static readonly Color ConsecrationShieldPeak = BattleUiColors.WithAlpha(BattleUiColors.Hex("#D4C4FF"), 0.78f);
+    public static readonly Color ConsecrationReduceLabelBg = BattleUiColors.WithAlpha(BattleUiColors.Hex("#120A1E"), 0.94f);
+    public static readonly Color ConsecrationReduceLabelBorder = BattleUiColors.Hex("#E8D8FF");
+    public static readonly Color ConsecrationReduceLabelText = BattleUiColors.Hex("#FFF8F0");
+    public static readonly Color ConsecrationReduceLabelGlow = BattleUiColors.WithAlpha(BattleUiColors.Hex("#C9B4FF"), 0.58f);
+    public static readonly Color ConsecrationLabelText = BattleUiColors.Hex("#E8D8FF");
+    public static readonly Color HolyTherapyLabelText = BattleUiColors.WithAlpha(BattleUiColors.Hex("#E8BB6A"), 1f);
+    public static readonly Color HolyTherapyGlowInner = BattleUiColors.WithAlpha(BattleUiColors.Hex("#C9B4FF"), 0.32f);
+
+    // 城堡·堅城駐守（灰石護盾）
+    public static readonly Color CastleFortressWallOuter = BattleUiColors.WithAlpha(BattleUiColors.Hex("#6E7A88"), 0.62f);
+    public static readonly Color CastleFortressWallMid = BattleUiColors.WithAlpha(BattleUiColors.Hex("#9AA8B6"), 0.78f);
+    public static readonly Color CastleFortressWallHighlight = BattleUiColors.WithAlpha(BattleUiColors.Hex("#D8E0E8"), 0.88f);
+    public static readonly Color CastleFortressFlashPeak = BattleUiColors.WithAlpha(BattleUiColors.Hex("#EEF2F6"), 0.82f);
+    public static readonly Color CastleFortressShard = BattleUiColors.WithAlpha(BattleUiColors.Hex("#B8C4D0"), 0.75f);
+    public static readonly Color CastleFortressReduceLabelBg = BattleUiColors.WithAlpha(BattleUiColors.Hex("#141A22"), 0.94f);
+    public static readonly Color CastleFortressReduceLabelGlow = BattleUiColors.WithAlpha(BattleUiColors.Hex("#8B9AA8"), 0.55f);
+    public static readonly Color CastleFortressReduceLabelText = BattleUiColors.Hex("#F4F7FA");
+    public static readonly Color CastleFortressLabelText = BattleUiColors.Hex("#D8E4EE");
 
     // §3.2 — weather base tints
     public static readonly Color WeatherHolyBase = BattleUiColors.WithAlpha(BattleUiColors.PanelMilk, 0.04f);

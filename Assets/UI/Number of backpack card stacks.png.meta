@@ -152,7 +152,8 @@ TextureImporter:
     edges: []
     weights: []
     secondaryTextures: []
-    nameFileIdTable: {}
+    nameFileIdTable:
+      Number of backpack card stacks_0: 3473735904030047957
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 

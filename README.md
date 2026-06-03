@@ -4,8 +4,20 @@
 
 ## 執行環境
 
+- **專案路徑（請用這個開 Unity）**：`E:\School\Grade_5_2\card-game`  
+  Android 建置**不支援**路徑含中文等非 ASCII 字元（例如 `2024畢業專題`），請勿從舊路徑建 APK。
 - **Unity Editor**：2023.1.22f1（建議使用相同或相容版本開啟專案）
 - **平台**：於編輯器 Play 或建置後執行（依本機環境為準）
+- **建置啟動場景**：`File → Build Settings` 清單**第 0 格為 `login`**（APK／Player 啟動先進登入選槽，再進 `hall` 大廳）。若 Play 時想從別場景測試，在 Editor 直接開該場景按 Play 即可，不必改 Build 順序。
+
+### Android APK 建置（路徑與步驟）
+
+1. 關閉 Unity 後，用 Hub 開啟 **`E:\School\Grade_5_2\card-game`**（僅 ASCII 路徑）。
+2. **File → Build Settings → Android → Switch Platform**。
+3. 確認 Scenes 第 0 格為 **login** → **Build**（測試選 APK，可勾 Development Build）。
+4. 若仍報 non-ASCII path，代表 Hub 開錯資料夾，請確認不是 `...\2024畢業專題\card game\`。
+5. **螢幕方向**：橫向預設 **Landscape Left**（與 PC Editor 一致）；可左右橫向互轉。若畫面倒過來，請勿用 Landscape Right。
+6. **UI 縮放**：1920×1080 + `MobileUiCanvasBootstrap`；**Editor 與手機**進 Play 後皆依 Game 視窗／Safe Area **自動 match**（完整放入、不裁切）。手機另略縮 UI（`MobileReferenceResolutionScale`≈1.12）。Game 視窗建議 **16:9 橫向**。
 
 ---
 

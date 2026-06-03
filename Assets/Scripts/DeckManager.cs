@@ -179,10 +179,12 @@ public partial class DeckManager : MonoBehaviour, ICardInspectPanelHost
     /// Buildbeck：牌組 Scroll 視窗固定整數邏輯像素（與 CanvasScaler 參考解析度同一 UI 空間），
     /// 以父層右下角為錨靠右對齊；右內縮 231、寬 762 與舊版左緣 927 之矩形在 1920 寬下相同。
     /// </summary>
-    private const int BuildbeckDeckViewportWidthPx = 762;
-    private const int BuildbeckDeckViewportHeightPx = 788;
-    private const int BuildbeckDeckViewportRightInsetPx = 231;
-    private const int BuildbeckDeckViewportBottomPx = 151;
+    public const int BuildbeckDeckViewportWidthPx = 762;
+    public const int BuildbeckDeckViewportHeightPx = 788;
+    public const int BuildbeckDeckViewportRightInsetPx = 231;
+    /// <summary>Deck 容器自右緣再左移的邏輯像素（錨右下角）。</summary>
+    public const int BuildbeckDeckViewportLeftShiftPx = 98;
+    public const int BuildbeckDeckViewportBottomPx = 151;
     /// <summary>
     /// Buildbeck：左側「Library Grid」ScrollRect 視窗固定邏輯像素（錨定左下 + sizeDelta），
     /// 不經由錨點比例伸縮或額外縮放倍率函式推算尺寸。
@@ -198,6 +200,8 @@ public partial class DeckManager : MonoBehaviour, ICardInspectPanelHost
     /// <summary>額外水平右移（邏輯像素；錨左下時 x 增大）。與其餘常數一併加總為 <see cref="RectTransform.anchoredPosition"/>.x。</summary>
     public const int BuildbeckLibraryGridViewportExtraOffsetXPx = 100;
     public const int BuildbeckLibraryGridViewportBottomInsetPx = 16;
+    /// <summary>組牌區 Library / Deck 容器自底邊再上移的共用邏輯像素。</summary>
+    public const int BuildbeckDeckBuildingContainersVerticalLiftPx = 56;
     private const string BuildbeckLibraryDeckGenRootName = "DeckGen_Library";
     private const string BuildbeckLibraryDeckGenDefaultName = "DeckGen_Library_df";
     private const string BuildbeckLibraryDeckGenOverlayOiName = "DeckGen_Library_oi";
@@ -797,13 +801,13 @@ public partial class DeckManager : MonoBehaviour, ICardInspectPanelHost
             if (total <= 0) continue;
 
             PlayerData.SetSelectedDeckSlot(slot);
-            PlayerData.SavePlayerData();
+            PlayerData.SavePlayerDataDebounced();
             return;
         }
 
         // All slots are empty -> fallback to slot 1 (index 0).
         PlayerData.SetSelectedDeckSlot(0);
-        PlayerData.SavePlayerData();
+        PlayerData.SavePlayerDataDebounced();
     }
 
     private void EnsureMinimumDeckSlotCount()
@@ -976,7 +980,7 @@ public partial class DeckManager : MonoBehaviour, ICardInspectPanelHost
         EnsureCoreRefs();
         if (PlayerData == null) return;
         PlayerData.SetSelectedDeckSlot(slotIndex);
-        PlayerData.SavePlayerData();
+        PlayerData.SavePlayerDataDebounced();
 
         ClearPanels();
         UpdateLibrary();
@@ -2043,12 +2047,16 @@ public partial class DeckManager : MonoBehaviour, ICardInspectPanelHost
 
         if (IsBuildbeckSceneActive())
         {
+            Canvas canvas = viewport.GetComponentInParent<Canvas>();
+            int yTune = Mathf.RoundToInt(deckArcParentOffsetY);
+            BuildbeckSceneResponsiveLayout.ResolvedLayout layout =
+                BuildbeckSceneResponsiveLayout.Resolve(canvas, yTune);
+
             viewport.anchorMin = new Vector2(1f, 0f);
             viewport.anchorMax = new Vector2(1f, 0f);
             viewport.pivot = new Vector2(1f, 0f);
-            int yTune = Mathf.RoundToInt(deckArcParentOffsetY);
-            viewport.anchoredPosition = new Vector2(-BuildbeckDeckViewportRightInsetPx, BuildbeckDeckViewportBottomPx + yTune);
-            viewport.sizeDelta = new Vector2(BuildbeckDeckViewportWidthPx, BuildbeckDeckViewportHeightPx);
+            viewport.anchoredPosition = new Vector2(-layout.DeckRightInset, layout.DeckBottom);
+            viewport.sizeDelta = new Vector2(layout.DeckWidth, layout.DeckHeight);
             viewport.localEulerAngles = Vector3.zero;
             viewport.localScale = Vector3.one;
             return;
@@ -2079,6 +2087,14 @@ public partial class DeckManager : MonoBehaviour, ICardInspectPanelHost
         parentRt.anchoredPosition = ap;
     }
 
+    public void ApplyBuildbeckSceneResponsiveLayout()
+    {
+        if (!IsBuildbeckSceneActive())
+            return;
+
+        ApplyDeckParentLayoutOffsets();
+    }
+
     private void ApplyDeckParentLayoutOffsets()
     {
         ApplyDeckViewportForNewLayout();
@@ -2092,21 +2108,21 @@ public partial class DeckManager : MonoBehaviour, ICardInspectPanelHost
     /// <see cref="RectTransform.anchoredPosition"/> 與 <see cref="RectTransform.sizeDelta"/> 的常數邏輯像素，
     /// 不經比例伸縮、不寫 offsetMin/offsetMax 混用 stretch；並固定 <c>localScale</c>、<c>rotation</c>、<c>z</c>。
     /// </summary>
-    public static void ApplyBuildbeckLibraryGridViewportTo(RectTransform viewport)
+    public static void ApplyBuildbeckLibraryGridViewportTo(RectTransform viewport, float deckVerticalTunePx = 0f)
     {
         if (viewport == null) return;
+
+        Canvas canvas = viewport.GetComponentInParent<Canvas>();
+        BuildbeckSceneResponsiveLayout.ResolvedLayout layout =
+            BuildbeckSceneResponsiveLayout.Resolve(canvas, deckVerticalTunePx);
+
         viewport.anchorMin = new Vector2(0f, 0f);
         viewport.anchorMax = new Vector2(0f, 0f);
         viewport.pivot = new Vector2(0f, 0f);
         viewport.localScale = Vector3.one;
         viewport.localRotation = Quaternion.identity;
-        float x = BuildbeckLibraryGridViewportLeftInsetPx +
-                  BuildbeckLibraryGridViewportLeftBreathingPx +
-                  BuildbeckLibraryGridViewportCenterPointOffsetXPx +
-                  BuildbeckLibraryGridViewportExtraOffsetXPx;
-        float y = BuildbeckLibraryGridViewportBottomInsetPx;
-        viewport.anchoredPosition3D = new Vector3(x, y, 0f);
-        viewport.sizeDelta = new Vector2(BuildbeckLibraryGridViewportWidthPx, BuildbeckLibraryGridViewportHeightPx);
+        viewport.anchoredPosition3D = new Vector3(layout.LibraryX, layout.LibraryY, 0f);
+        viewport.sizeDelta = new Vector2(layout.LibraryWidth, layout.LibraryHeight);
         // 父層若有 LayoutGroup，避免每幀覆寫本視窗的 Rect；仍只信 sizeDelta / anchoredPosition。
         LayoutElement le = viewport.GetComponent<LayoutElement>();
         if (le == null)
@@ -2119,7 +2135,7 @@ public partial class DeckManager : MonoBehaviour, ICardInspectPanelHost
         if (!IsBuildbeckSceneActive()) return;
         if (libraryPanel != null && IsHorizontalBagPanelName(libraryPanel)) return;
         if (_libraryPanelScrollRect == null || _libraryPanelScrollRect.viewport == null) return;
-        ApplyBuildbeckLibraryGridViewportTo(_libraryPanelScrollRect.viewport);
+        ApplyBuildbeckLibraryGridViewportTo(_libraryPanelScrollRect.viewport, deckArcParentOffsetY);
     }
 
     private void AlignLibraryBottomToGoButtonTop()

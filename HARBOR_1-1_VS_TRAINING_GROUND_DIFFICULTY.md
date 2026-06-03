@@ -42,6 +42,7 @@
 | **戰術教練** | 有（`HarborCombatCoach*`） | 有 | **無** | **無** |
 | **通關進度** | 首通可 `harbor_combat_clear` | 同左 | 無章節旗標 | 無 |
 | **企劃 KPI** | 首通約 **70%**，均局約 **10 回合** | 首通約 **60%**（入門 30 張牌組） | 未定（非 1-1 主線） | 未定 |
+| **1-1 實戰 · 困難** | — | — | — | 見 §3.4（`HarborTrainingHardBattleRules`） |
 
 ---
 
@@ -79,7 +80,24 @@
 
 **特點**：在簡單池上略增長弓、主教、騎兵；仍 **無 SSR 四騎（8～11）**。
 
-### 3.3 訓練場 · 簡單／普通（共用 `previewFixedEnemyDeckCardIds`）
+### 3.3 1-1 實戰 · 困難（`HarborTrainingHardBattleRules`，30 張）
+
+| 編號 | 卡名 | 張數 |
+|------|------|------|
+| 4 | 民兵 | 4 |
+| 5 | 長弓兵 | 4 |
+| 22 | 教徒 | 3 |
+| 17 | 修女 | 2 |
+| 14 | 主教 | 2 |
+| 6 | 王國騎兵 | 2 |
+| 16 | 宗教審判官 | 1 |
+| -2 | 初級治療 | 2 |
+| -1 | 火球術 | 2 |
+| 填充 | 4／5／22 等 | 10 |
+
+**特點**：高於普通；**仍無 SSR 四騎**；畢業證僅困難首通發放（見 `LEVEL_DESIGN_GDD` §3）。
+
+### 3.4 訓練場 · 簡單／普通（共用 `previewFixedEnemyDeckCardIds`）
 
 | 編號 | 卡名 | 備註 |
 |------|------|------|
@@ -112,6 +130,16 @@
 | 快攻壓力 | +6 → +16 | +3 → +6 | 普通快攻評分明顯低於簡單後段 |
 | 敵牌 | 弱牌 + 1 火球 | 弱牌 + 主教／騎兵 | 普通牌面略強 |
 | KPI | 首通 ~70% | 首通 ~60% | 入門 30 張預設牌組 |
+
+### 4.1 1-1 實戰三檔梯次（簡表）
+
+| 維度 | 簡單 | 普通 | 困難 |
+|------|------|------|------|
+| 敵 HP | 17 | 15 | 18 |
+| 敵傷害倍率 | 0.78 | 0.66 | 0.74 |
+| 回合必勝 | 第 10 回合 | 無 | 無 |
+| 快攻（前段→後段） | +6→+16 | +3→+6 | +5→+12 |
+| 超牌容許 | 2 | 2 | 3 |
 
 ---
 
@@ -151,7 +179,7 @@
 | 企劃 KPI | 真人首通 **~60%** | 無 |
 | 教練 UI | 有 | 無 |
 
-**結論（給平衡／企劃）**：同名「簡單／普通」在 **1-1 實戰** 與 **Buildbeck 訓練場** 是 **兩套程式路徑**；調 1-1 請改 `HarborTrainingEasyBattleRules`／`HarborTrainingNormalBattleRules`，調訓練場請改 `SceneLoader` 的 `DifficultyDesignProfile` 或 `previewFixedEnemyDeckCardIds`，**互不覆蓋**。
+**結論（給平衡／企劃）**：1-1 三檔皆走 `HarborTraining*BattleRules` + `HarborTrainingDifficultyRuntime`；Buildbeck 訓練場仍走 `BuildDifficultyConfig`，**互不覆蓋**。困難已脫離 SSR 通用池。
 
 ---
 
@@ -159,10 +187,10 @@
 
 | 職責 | 1-1 實戰 | 訓練場（Buildbeck） |
 |------|----------|---------------------|
-| 開戰設定 | `SceneLoader.HarborTraining.ApplyHarborTrainingPendingConfig` | `SceneLoader.BattlePreview` → `OnBattlePreviewStartClicked` |
-| 難度構築 | `HarborTraining*BattleRules` + `QueueRuntimeDifficultyConfig` | `BuildDifficultyConfig(tier)` |
+| 開戰設定 | `HarborTrainingDifficultyRuntime.ResolvePendingConfig` | `SceneLoader.BattlePreview` → `BuildDifficultyConfig` |
+| 難度構築 | `HarborTrainingEasy/Normal/HardBattleRules` | `previewFixedEnemyDeckCardIds` + profile |
 | AI 映射 | 固定 `FastAttack` | `MapDifficultyToEnemyAiPlayStyle` |
-| 戰中數值 | `BattleSimulationManager` 內 `HarborTrainingEasy/Normal` 分支 | 僅通用敵構築／無港灣減傷 |
+| 戰中數值 | `HarborTrainingDifficultyRuntime` + `BattleSimulationManager.HarborTraining.cs` | 無港灣減傷 |
 | 勝率批次測 | `HarborNormalWinRateSimBootstrap`（僅港灣普通） | `BattleAutoSimPlugin`（預設 Buildbeck 開局） |
 
 ---
@@ -172,3 +200,4 @@
 | 日期 | 說明 |
 |------|------|
 | 2026-06-01 | 初版：四欄對照、牌組、跨系統結論、程式索引 |
+| 2026-06-01 | 困難專規、`HarborTrainingDifficultyRuntime`、三檔梯次表 |

@@ -39,6 +39,25 @@ public static class StoryProgressLevelCopy
         return "NEW";
     }
 
+    /// <summary>
+    /// 依槽位旗標／入門畢業狀態解析 1-1 地圖狀態標籤（玩家資訊、關卡面板、地圖節點共用）。
+    /// 進 Story progress 前若需修復收藏與旗標不一致，請先呼叫 <see cref="TutorialProgressState.SyncActiveSlotGraduationFromCollection"/>。
+    /// </summary>
+    public static string ResolveMapStatusLabelForSlot(int slot)
+    {
+        slot = UnityEngine.Mathf.Clamp(slot, 1, PlayerData.MaxPlayerSlots);
+        TutorialProgressState.EnsureSlotIntroProgressConsistent(slot);
+        HarborTrainingProgressState.EnsureSlotHarborProgressConsistent(slot);
+        TutorialProgressState.GetAcademyIntroProgressForDisplay(slot, out bool plotComplete, out bool battleComplete);
+        bool harborCleared = HarborTrainingProgressState.IsHarborCombatCleared(slot);
+        if (!harborCleared && TutorialProgressState.IsAcademyIntroGraduated(slot))
+            return "實戰區";
+        return ResolveMapStatusLabel(plotComplete, battleComplete, harborCleared);
+    }
+
+    public static string ResolveMapStatusLabelForActiveSlot() =>
+        ResolveMapStatusLabelForSlot(PlayerData.GetActivePlayerSlotOrDefault());
+
     public static string BuildScenarioIntro(bool academyIntroGraduated)
     {
         if (academyIntroGraduated)

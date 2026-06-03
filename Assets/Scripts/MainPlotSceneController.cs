@@ -40,6 +40,10 @@ public class MainPlotSceneController : MonoBehaviour
         public int choice1Next = -1;
         public int choice2Next = -1;
         public int choice3Next = -1;
+
+        [Header("NPC Voice (Resources/NPC voice/)")]
+        [Tooltip("檔名不含副檔名，例：1-1_4 對應步驟索引 4。留空則不播語音。")]
+        public string npcVoiceClipId;
     }
 
     private const float ChoiceButtonWidth = 366.94f;
@@ -78,7 +82,7 @@ public class MainPlotSceneController : MonoBehaviour
     private TMP_Text tapContinueHintTmp;
     private Button skipPlotButton;
     private PlotDialogueTypewriter dialogueTypewriter;
-    private PlotDialogueTypewriterSfx plotTypewriterSfx;
+    private PlotNpcVoicePlayer plotNpcVoice;
     private PlotMenuClickSfx plotMenuClickSfx;
     private PlotAdvanceKind currentStepAdvanceKind;
     private PlotBackgroundMusicPlayer plotBgm;
@@ -118,7 +122,7 @@ public class MainPlotSceneController : MonoBehaviour
             ApplyRuntimeSteps(injected, true);
 
         PreparePlotSceneUi();
-        EnsurePlotTypewriterSfx();
+        EnsurePlotNpcVoice();
         EnsurePlotMenuClickSfx();
     }
 
@@ -512,6 +516,7 @@ public class MainPlotSceneController : MonoBehaviour
 
     private void OnSkipPlotClicked()
     {
+        plotNpcVoice?.Stop();
         dialogueTypewriter?.Complete();
         HideAllChoiceButtons();
         ApplyTapToContinueUi(false);
@@ -745,6 +750,7 @@ public class MainPlotSceneController : MonoBehaviour
 
     private void FinishPlotAndReturn(bool skippedPlot = false)
     {
+        plotNpcVoice?.Stop();
         StopTutorialPlotBgm();
         PlotUiOverlayCleanup.DestroyStrayPlotTapUi();
 
@@ -797,16 +803,16 @@ public class MainPlotSceneController : MonoBehaviour
         ApplyTapToContinueUi(true);
         SuppressPlaceholderChoiceButtons();
         BringSkipButtonToFront();
-        BeginDialogueTypewriter(step.dialogueText);
+        BeginDialogueTypewriter(step);
     }
 
-    private void EnsurePlotTypewriterSfx()
+    private void EnsurePlotNpcVoice()
     {
-        if (plotTypewriterSfx != null)
+        if (plotNpcVoice != null)
             return;
 
-        plotTypewriterSfx = PlotDialogueTypewriterSfx.FindInMainPlotScene()
-                            ?? PlotDialogueTypewriterSfx.EnsureOnMainCamera();
+        plotNpcVoice = PlotNpcVoicePlayer.FindInMainPlotScene()
+                       ?? PlotNpcVoicePlayer.EnsureOnMainCamera();
     }
 
     private void EnsurePlotMenuClickSfx()
@@ -827,35 +833,25 @@ public class MainPlotSceneController : MonoBehaviour
         plotMenuClickSfx?.PlayMenuClick();
     }
 
-    private void BeginDialogueTypewriter(string dialogueText)
+    private void BeginDialogueTypewriter(PlotStep step)
     {
         if (dialogueTypewriter == null)
             dialogueTypewriter = new PlotDialogueTypewriter();
 
-        EnsurePlotTypewriterSfx();
-        System.Action onTypingStarted = null;
-        System.Action onTypingEnded = null;
-        if (launchedFromStoryProgress)
-        {
-            onTypingStarted = BeginPlotTypingSound;
-            onTypingEnded = StopPlotTypingSound;
-        }
+        EnsurePlotNpcVoice();
+        plotNpcVoice?.Stop();
+        if (step != null && !string.IsNullOrWhiteSpace(step.npcVoiceClipId))
+            plotNpcVoice?.Play(step.npcVoiceClipId);
 
         dialogueTypewriter.Begin(
             dialogueTextTmp,
-            dialogueText,
-            dialogueCharactersPerSecond,
-            onTypingStarted,
-            onTypingEnded);
+            step != null ? step.dialogueText : string.Empty,
+            dialogueCharactersPerSecond);
         RefreshTapContinueHint();
 
         if (dialogueTypewriter.IsComplete)
             OnDialogueTypewriterFinished();
     }
-
-    private void BeginPlotTypingSound() => plotTypewriterSfx?.BeginTypingSound();
-
-    private void StopPlotTypingSound() => plotTypewriterSfx?.StopTypingSound();
 
     private void OnDialogueTypewriterFinished()
     {

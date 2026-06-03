@@ -43,7 +43,7 @@ public partial class SceneLoader
     private static Sprite _cachedDefaultBattlePreviewPanelSprite;
     private static readonly Dictionary<BattleDifficultyTier, Sprite> CachedDifficultyTierSprites =
         new Dictionary<BattleDifficultyTier, Sprite>();
-    private const int BattlePreviewLayoutVersion = 25;
+    private const int BattlePreviewLayoutVersion = 26;
     private const string DifficultyLevelResourceRoot = "UI/Difficulty level";
     private static readonly Color BattlePreviewInk = new Color(0.2f, 0.17f, 0.12f, 1f);
     private static readonly Color BattlePreviewInkMuted = new Color(0.35f, 0.30f, 0.22f, 1f);
@@ -141,6 +141,9 @@ public partial class SceneLoader
     private TextMeshProUGUI battlePreviewAuthoredRightDetailText;
     private GameObject battlePreviewArchRowRoot;
     private float battlePreviewAuthoredLayoutSy = 1f;
+    private float battlePreviewAuthoredLayoutSx = 1f;
+    private Vector2Int battlePreviewBuiltScreenSize;
+    private Rect battlePreviewBuiltSafeArea;
     private TextMeshProUGUI battlePreviewAuthoredPuzzleTitleText;
     private TextMeshProUGUI battlePreviewAuthoredPuzzleHintText;
 
@@ -331,12 +334,8 @@ public partial class SceneLoader
     {
         if (battlePreviewOverlayRoot != null)
         {
-            bool layoutCurrent = battlePreviewLayoutBuilt == BattlePreviewLayoutVersion
-                && string.Equals(
-                    battlePreviewLayoutBuiltPuzzleId,
-                    battlePreviewActivePuzzleId,
-                    StringComparison.Ordinal);
-            if (layoutCurrent) return;
+            if (IsBattlePreviewLayoutStillValid())
+                return;
             DestroyBattlePreviewUi();
         }
 
@@ -375,14 +374,10 @@ public partial class SceneLoader
         Image panelBg = panelObj.GetComponent<Image>();
         Sprite panelSprite = ResolveBattlePreviewPanelSprite();
         bool authoredPanel = panelSprite != null;
+        TryComputeBattlePreviewPanelFitSize(parentCanvas, panelSprite, out float panelW, out float panelH);
+        panelRt.sizeDelta = new Vector2(panelW, panelH);
         if (authoredPanel)
         {
-            float artW = panelSprite.rect.width;
-            float artH = panelSprite.rect.height;
-            float maxW = Screen.width * 0.8f;
-            float maxH = Screen.height * 0.8f;
-            float fitScale = Mathf.Min(maxW / artW, maxH / artH);
-            panelRt.sizeDelta = new Vector2(artW * fitScale, artH * fitScale);
             panelBg.sprite = panelSprite;
             panelBg.color = Color.white;
             panelBg.type = Image.Type.Simple;
@@ -390,7 +385,6 @@ public partial class SceneLoader
         }
         else
         {
-            panelRt.sizeDelta = new Vector2(Screen.width * 0.8f, Screen.height * 0.8f);
             panelBg.color = new Color(0.96f, 0.92f, 0.84f, 1f);
             panelBg.type = Image.Type.Simple;
         }
@@ -470,8 +464,6 @@ public partial class SceneLoader
         else
             chipRowObj.SetActive(false);
 
-        float panelW = panelRt.sizeDelta.x;
-        float panelH = panelRt.sizeDelta.y;
         float authoredArtW = AuthoredArtWidth;
         float authoredArtH = AuthoredArtHeight;
         if (authoredPanel && panelSprite != null)
@@ -481,6 +473,8 @@ public partial class SceneLoader
         }
         float layoutSx = authoredPanel ? panelW / authoredArtW : 1f;
         float layoutSy = authoredPanel ? panelH / authoredArtH : 1f;
+        battlePreviewAuthoredLayoutSx = layoutSx;
+        battlePreviewAuthoredLayoutSy = layoutSy;
 
         const float previewFooterHeight = 100f;
         float previewContentBottom = authoredPanel ? 0f : previewFooterHeight + 12f;
@@ -587,7 +581,7 @@ public partial class SceneLoader
             diffRailRt.anchorMax = new Vector2(0f, 1f);
             diffRailRt.pivot = new Vector2(0f, 0.5f);
             diffRailRt.anchoredPosition = Vector2.zero;
-            diffRailRt.sizeDelta = new Vector2(BattlePreviewDifficultyRailWidthPx, 0f);
+            diffRailRt.sizeDelta = new Vector2(BattlePreviewDifficultyRailWidthPx * layoutSx, 0f);
         }
 
         Image diffRailBg = diffRailObj.GetComponent<Image>();
@@ -718,7 +712,63 @@ public partial class SceneLoader
         battlePreviewOverlayRoot = overlay;
         battlePreviewLayoutBuilt = BattlePreviewLayoutVersion;
         battlePreviewLayoutBuiltPuzzleId = battlePreviewActivePuzzleId;
+        battlePreviewBuiltScreenSize = new Vector2Int(Screen.width, Screen.height);
+        battlePreviewBuiltSafeArea = Screen.safeArea;
         battlePreviewOverlayRoot.SetActive(false);
+    }
+
+    private bool IsBattlePreviewLayoutStillValid()
+    {
+        if (battlePreviewOverlayRoot == null)
+            return false;
+        if (battlePreviewLayoutBuilt != BattlePreviewLayoutVersion)
+            return false;
+        if (!string.Equals(battlePreviewLayoutBuiltPuzzleId, battlePreviewActivePuzzleId, StringComparison.Ordinal))
+            return false;
+        if (battlePreviewBuiltScreenSize.x != Screen.width || battlePreviewBuiltScreenSize.y != Screen.height)
+            return false;
+        return battlePreviewBuiltSafeArea == Screen.safeArea;
+    }
+
+    /// <summary>
+    /// 依 Canvas 可視區（含 Safe Area）等比縮放預覽面板，維持美術稿寬高比。
+    /// </summary>
+    private static void TryComputeBattlePreviewPanelFitSize(
+        Canvas parentCanvas,
+        Sprite panelSprite,
+        out float panelWidth,
+        out float panelHeight)
+    {
+        float artW = AuthoredArtWidth;
+        float artH = AuthoredArtHeight;
+        if (panelSprite != null)
+        {
+            artW = panelSprite.rect.width;
+            artH = panelSprite.rect.height;
+        }
+
+        RectTransform canvasRt = parentCanvas != null ? parentCanvas.transform as RectTransform : null;
+        float canvasW = canvasRt != null && canvasRt.rect.width > 1f
+            ? canvasRt.rect.width
+            : MobileUiLayoutPolicy.ReferenceResolution.x;
+        float canvasH = canvasRt != null && canvasRt.rect.height > 1f
+            ? canvasRt.rect.height
+            : MobileUiLayoutPolicy.ReferenceResolution.y;
+
+        MobileUiLayoutPolicy.CanvasSafeInsets safe = parentCanvas != null
+            ? MobileUiLayoutPolicy.GetCanvasSafeInsets(parentCanvas)
+            : default;
+
+        float availW = Mathf.Max(320f, canvasW - safe.Left - safe.Right);
+        float availH = Mathf.Max(320f, canvasH - safe.Top - safe.Bottom);
+
+        const float widthFillRatio = 0.92f;
+        const float heightFillRatio = 0.9f;
+        float fitScale = Mathf.Min(
+            availW * widthFillRatio / artW,
+            availH * heightFillRatio / artH);
+        panelWidth = artW * fitScale;
+        panelHeight = artH * fitScale;
     }
 
     private void DestroyBattlePreviewUi()

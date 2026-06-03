@@ -2,6 +2,9 @@
 public static class MonsterSkillIds
 {
     public const int Militia = 4;
+    public const int Bishop = 14;
+    public const int Castle = 7;
+    public const int Nun = 17;
     public const int Queen = 12;
     public const int King = 13;
 }

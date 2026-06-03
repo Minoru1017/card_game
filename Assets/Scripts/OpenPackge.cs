@@ -45,9 +45,13 @@ public class OpenPackge : MonoBehaviour
 
     void Start()
     {
+        ClearStaleOpenStateOnLoad();
         if (cardStore == null) cardStore = Object.FindFirstObjectByType<CardStore>();
         if (playerData == null) playerData = PlayerData.ResolveCanonical();
+        if (playerData != null) playerData.LoadPlayerData();
+        if (packVideo != null) packVideo.EnsureUiDoesNotBlockInput();
         EnsureInspectHost();
+        CardStoreSceneUi.ApplyNow();
     }
 
     void Update()
@@ -59,7 +63,11 @@ public class OpenPackge : MonoBehaviour
 
     public void OnClickOpen()
     {
-        if (pendingOpen) return;
+        if (pendingOpen)
+        {
+            Debug.LogWarning("OpenPackge: open already in progress.");
+            return;
+        }
         if (!ValidateRefs()) return;
         if (packCost <= 0 || cardsPerPack <= 0)
         {
@@ -67,7 +75,13 @@ public class OpenPackge : MonoBehaviour
             return;
         }
 
-        if (playerData.playerCoins < packCost) return;
+        playerData.LoadPlayerData();
+        if (playerData.playerCoins < packCost)
+        {
+            Debug.LogWarning(
+                "OpenPackge: not enough coins (need " + packCost + ", have " + playerData.playerCoins + ").");
+            return;
+        }
 
         pendingOpen = true;
         openingFinalized = false;
@@ -269,6 +283,9 @@ public class OpenPackge : MonoBehaviour
 
         Debug.LogError(ex == null ? $"OpenPackge failed: {reason}" : $"OpenPackge failed: {reason}\n{ex}");
 
+        if (packVideo != null)
+            packVideo.StopAndHide();
+
         StopTimeoutGuard();
         pendingOpen = false;
         openingFinalized = true;
@@ -288,5 +305,19 @@ public class OpenPackge : MonoBehaviour
         }
 
         reservedCoins = 0;
+    }
+
+    private void ClearStaleOpenStateOnLoad()
+    {
+        if (!pendingOpen)
+            return;
+
+        Debug.LogWarning("OpenPackge: clearing stale open state from previous session.");
+        pendingOpen = false;
+        openingFinalized = false;
+        reservedCoins = 0;
+        StopTimeoutGuard();
+        if (packVideo != null)
+            packVideo.StopAndHide();
     }
 }

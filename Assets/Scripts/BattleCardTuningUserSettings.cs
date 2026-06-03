@@ -31,6 +31,7 @@ public static class BattleCardTuningUserSettings
     {
         int clamped = Mathf.Clamp(level, 0, Mathf.Max(0, QualitySettings.names.Length - 1));
         QualitySettings.SetQualityLevel(clamped, true);
+        MobilePerformanceBootstrap.ApplyMobileFramePacing();
         PlayerPrefs.SetInt(QualityLevelPrefsKey, clamped);
         PlayerPrefs.Save();
     }
@@ -39,5 +40,6 @@ public static class BattleCardTuningUserSettings
     {
         if (QualitySettings.names == null || QualitySettings.names.Length == 0) return;
         QualitySettings.SetQualityLevel(GetSavedQualityLevel(), true);
+        MobilePerformanceBootstrap.ApplyMobileFramePacing();
     }
 }

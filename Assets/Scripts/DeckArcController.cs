@@ -22,7 +22,7 @@ public partial class DeckManager
                 return;
             }
             if (_owner.deckArcHorizontalSmoothTime <= 0f) return;
-            _owner.RequestDeckArcLayout(_owner.deckPanel as RectTransform, false);
+            _owner.RequestDeckArcLayout(_owner.deckPanel as RectTransform, true);
         }
     }
 }

@@ -51,6 +51,9 @@
 | `Assets/Scripts/PlayerProfileCsvService.cs` | 玩家資訊；`RefreshProfileFromRuntime` 會觸發存檔與 profile 列合併 |
 | `Assets/Scripts/SceneLoader.cs` | 進戰鬥前可 `LoadPlayerData`；改名後應傳 `reloadFromDisk: false` |
 | `Assets/Scripts/PlayerPersistSafeIO.cs` | 原子寫入與備份輪替讀取 |
+| `Assets/Scripts/PlayerSaveCoordinator.cs` | **唯一**應寫入 `playerdata.csv` 的入口 |
+| `Assets/Scripts/PlayerSaveDebouncer.cs` | Buildbeck 高頻編輯的延遲合併存檔 |
+| `Assets/Scripts/ValuablesVaultState.cs` | 貴重品庫記憶體快取；完整存檔時由 `SavePlayerData` 一併寫入 |
 | `Assets/prefabs/DataManager.prefab` | `deckSlotCount` 應為 **5**（與 UI 一致） |
 
 **`PlayerData.ResolveCanonical()`**：所有存檔 API 若在非 canonical 實例上呼叫，會轉發到 `GameObject.Find("DataManager")` 上的那一個 `PlayerData`。
@@ -200,7 +203,7 @@ sequenceDiagram
     PD->>CSV: 讀取既有列（保留 profile_* / battle_record）
     PD->>PD: 組裝 datas：active_slot + cachedOtherSlotRows + 現玩家槽全部列
     Note over PD: 含 5 列 deck_slot_name<br/>含全部 deckslot + 選中 deck 鏡像
-    PD->>IO: WriteAllLinesWithAtomicRotateBackups
+    PD->>Coord: PlayerSaveCoordinator.WritePlayerDataCsv
     PD->>PD: RebuildCachedOtherSlotRowsFromDisk
 ```
 
@@ -212,9 +215,12 @@ sequenceDiagram
 4. `deckslot`（每槽所有卡牌）
 5. `deck`（僅 `selectedDeckSlot`）
 6. `proficiency`（若有）
-7. 合併後附加既有的 `profile_*`、`battle_record` 列（避免洗掉戰績）
+7. 合併後附加既有的 `profile_*`、`battle_record`、教學／港灣旗標等 **preserve** 列（避免洗掉戰績與進度）
+8. `ValuablesVaultState.AppendAllSlotsSerializedRows`：三個角色槽的 `valuable` 列（記憶體快取為準）
 
-寫入使用 `PlayerPersistSafeIO.WriteAllLinesWithAtomicRotateBackups`，降低寫到一半損檔的風險。
+寫入經 `PlayerSaveCoordinator` → `PlayerPersistSafeIO.WriteAllLinesWithAtomicRotateBackups`，降低寫到一半損檔與多模組互相覆蓋的風險。
+
+**新功能約定：** 請勿對 `playerdata.csv` 直接呼叫 `PlayerPersistSafeIO.Write…`；旗標類小改可用 `PlayerSaveCoordinator.UpsertSlotKeyedRow`。
 
 ---
 
@@ -249,18 +255,20 @@ sequenceDiagram
 
 ### 8.2 寫入磁碟的時機
 
-| 操作 | 是否 `SavePlayerData` |
-|------|----------------------|
-| 按「保存牌組」 | 是（`OnClickSaveDeckButton`） |
-| 切換牌組分頁 | 是（`SelectDeckSlot`） |
-| 確認改名 | 是 |
-| 解散牌組 | 是 |
-| 離開 Buildbeck 場景 | 是（`OnSceneUnloadedFlushBuildbeckSave`） |
-| 開啟玩家資訊浮層 | 是（經 `RefreshProfileFromRuntime`） |
+| 操作 | 存檔 API | 說明 |
+|------|----------|------|
+| 拖放／點擊調整牌組 | `SavePlayerDataDebounced()` | 約 0.75s 內合併多次寫入 |
+| 切換牌組分頁 | `SavePlayerDataDebounced()` | 同上 |
+| 按「保存牌組」 | `SavePlayerData()` | 立即寫入 |
+| 確認改名 | `SavePlayerData()` | 立即寫入 |
+| 解散牌組 | `SavePlayerData()` | 立即寫入 |
+| 離開 Buildbeck 場景 | `FlushDebouncedThenSavePlayerData()` | 先取消延遲再完整存檔 |
+| 進入戰鬥預覽 | `FlushDebouncedThenSavePlayerData()` + `LoadPlayerData()` | 避免延遲存檔尚未落盤 |
+| 開啟玩家資訊浮層 | `FlushDebounced…` + `SavePlayerData()` | 經 `RefreshProfileFromRuntime` |
 
 ### 8.3 進入戰鬥
 
-`SceneLoader.EnterBattle()` 會先 `LoadPlayerData()`，確保使用磁碟上最新牌組；與 Buildbeck 內剛存完尚未離場的流程不同。
+`SceneLoader.EnterBattle()` 會先 `FlushDebouncedThenSavePlayerData()`，再 `LoadPlayerData()`，確保使用磁碟上最新牌組；與 Buildbeck 內剛編輯、僅記憶體尚未延遲落盤的流程不同。
 
 ---
 
@@ -368,3 +376,18 @@ flowchart TD
 - 牌組槽數以 **`PlayerData.MinDeckSlotCount = 5`** 為準；`DataManager.prefab` 的 `deckSlotCount` 應為 5。
 - 舊存檔若僅 3 槽資料，升級後會在載入／存檔時擴充為 5 槽；第 4、5 槽名稱需使用者重新命名一次以寫入正確索引。
 - 本文對應程式約 2025～2026 年 Buildbeck 存檔修正後行為；若調整 CSV 欄位請同步更新 `ParsePlayerRow` / `SavePlayerData` 與本文件。
+
+## 15. 貴重品庫與協調器（2026-05）
+
+- **`valuable` 列**（6 欄）不再由各功能各自整檔覆寫；`ValuablesVaultState` 僅更新記憶體快取，`SavePlayerData` 結尾呼叫 `AppendAllSlotsSerializedRows` 一次寫入三槽。
+- **教學／港灣旗標** 的即時小改走 `PlayerSaveCoordinator.UpsertSlotKeyedRow`；完整存檔仍透過 `ShouldPreserveActiveSlotRowOnPlayerSave` 保留未重建的 4 欄旗標列。
+- **`player_profile.csv`** 仍可直接使用 `PlayerPersistSafeIO`（與主檔分離）。
+
+## 16. 手機／切背景落盤（2026-05）
+
+`PlayerData`（canonical / `DataManager`）在 **`OnApplicationPause(true)`** 與 **`OnApplicationQuit`** 呼叫 `PlayerSaveCoordinator.FlushPendingPlayerDataIfNeeded()`：
+
+- 僅在 **延遲存檔尚未執行**（`PlayerSaveDebouncer.HasPendingDebouncedSave`）或 **貴重品庫有未寫入變更** 時才 `SavePlayerData`，避免每次切 App 都整檔重寫。
+- Android / iOS 與 Editor 行為一致；正式路徑仍為 `Application.persistentDataPath`。
+
+**建置啟動**：`EditorBuildSettings` 第 0 場景為 `login`（非 `hall`），與 APK 首次安裝流程一致。

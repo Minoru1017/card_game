@@ -32,6 +32,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         if (battleManager != null)
         {
             hash = hash * 31 + (battleManager.PlayerHasFieldMonster() ? 1 : 0);
+            hash = hash * 31 + (battleManager.CanPlayerReplaceFieldMonsterForConsecration() ? 1 : 0);
             hash = hash * 31 + (battleManager.EnemyHasFieldMonster() ? 1 : 0);
             hash = hash * 31 + (battleManager.PlayerLinGazeActive() ? 1 : 0);
             hash = hash * 31 + (battleManager.EnemyLinGazeActive() ? 1 : 0);
@@ -390,8 +391,12 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         }
         if (battleManager.PlayerHasFieldMonster())
         {
-            if (card is MonsterCard) return;
-            if (!(card is SpellCard spGate && spGate.SpellOrdinal == 1)) return;
+            if (card is MonsterCard)
+            {
+                if (!battleManager.CanPlayerReplaceFieldMonsterForConsecration()) return;
+            }
+            else if (!(card is SpellCard spGate && spGate.SpellOrdinal == 1))
+                return;
         }
         if (IsLinGazeSpellCard(card) && !battleManager.CanPlayerCastLinGazeNow())
             return;
@@ -494,7 +499,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
 
     private static bool IsLinGazeSpellCard(Card c) => c is SpellCard sp && sp.SpellOrdinal == 2;
 
-    /// <summary>我方場上有怪時僅初級治療（SpellOrdinal 1）可打；其餘手牌灰階鎖定。</summary>
+    /// <summary>我方場上有怪時僅初級治療可打；祝聖待換時手牌怪獸可替換場怪。</summary>
     private bool IsPlayerHandCardLockedByFieldRule(Card card)
     {
         if (battleManager != null &&
@@ -504,6 +509,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
             return true;
 
         if (battleManager == null || !battleManager.PlayerHasFieldMonster()) return false;
+        if (card is MonsterCard && battleManager.CanPlayerReplaceFieldMonsterForConsecration()) return false;
         if (card is SpellCard sp && sp.SpellOrdinal == 1) return false;
         return true;
     }

@@ -725,6 +725,18 @@ public static class BattleAutoSimPlugin
 
             if (b.PlayerHasFieldMonster())
             {
+                if (b.CanPlayerReplaceFieldMonsterForConsecration())
+                {
+                    for (int i = 0; i < b.GetPlayerHandCount(); i++)
+                    {
+                        if (b.GetPlayerHandCard(i) is MonsterCard)
+                        {
+                            b.PlayerPlayCardFromHand(i);
+                            return;
+                        }
+                    }
+                }
+
                 for (int i = 0; i < b.GetPlayerHandCount(); i++)
                 {
                     if (b.GetPlayerHandCard(i) is SpellCard sp && !IsPlayerSpellUnplayableNow(b, sp))

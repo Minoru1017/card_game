@@ -9,6 +9,8 @@ public static class TutorialProgressState
     private const string BattleKey = "tutorial_battle";
     private const string StarterDeckNotifyKey = "tutorial_starter_deck_notify";
     private const string IntroTrioRewardKey = "tutorial_intro_trio_reward";
+    private const string M12ReligiousLineRewardKey = "m12_religious_line_reward";
+    private const string M12TrioMasteryClearedKey = "m12_trio_mastery_cleared";
     private const string AcademyGraduatedKey = "academy_intro_graduated";
 
     private const string PlotDonePrefix = "tutorial_plot_done_v1_slot_";
@@ -48,25 +50,125 @@ public static class TutorialProgressState
             return true;
         }
 
-        if (TryRepairAcademyIntroGraduatedFromCollection(slot))
+        if (TryRepairAcademyIntroGraduatedFromRuntimeCards(slot) ||
+            TryRepairAcademyIntroGraduatedFromSaveCards(slot))
             return true;
 
         return false;
     }
 
     /// <summary>
-    /// 存檔旗標被 SavePlayerData 誤刪時，若收藏仍有御三家則還原入門畢業（不重發卡牌）。
+    /// 依旗標、港灣通關、收藏／牌組／存檔列，修復入門與地圖狀態不一致（如已領御三家但 M-1-1 仍 NEW）。
     /// </summary>
-    private static bool TryRepairAcademyIntroGraduatedFromCollection(int slot)
+    public static void EnsureSlotIntroProgressConsistent(int slot)
+    {
+        slot = Mathf.Clamp(slot, 1, PlayerData.MaxPlayerSlots);
+        SanitizeInflatedIntroProgressIfNeverBattled(slot);
+        if (TryRepairFromRecordedProgressSignals(slot))
+            return;
+        if (TryRepairAcademyIntroGraduatedFromRuntimeCards(slot))
+            return;
+        TryRepairAcademyIntroGraduatedFromSaveCards(slot);
+    }
+
+    /// <summary>從未打過任何對戰卻因商店抽到御三家而寫入的入門旗標，還原為未通關。</summary>
+    private static void SanitizeInflatedIntroProgressIfNeverBattled(int slot)
+    {
+        if (PlayerProfileCsvService.SlotHasAnyBattleRecordOnPlayerSave(slot))
+            return;
+
+        bool inflated = ReadSlotFlag(slot, IntroTrioRewardKey) ||
+                        ReadSlotFlag(slot, BattleKey) ||
+                        ReadSlotFlag(slot, PlotKey) ||
+                        ReadSlotFlag(slot, AcademyGraduatedKey);
+        if (!inflated)
+            return;
+
+        WriteCompleted(slot, PlotKey, PlotDonePrefix, false);
+        WriteCompleted(slot, BattleKey, BattleDonePrefix, false);
+        WriteCompleted(slot, IntroTrioRewardKey, null, false);
+        WriteCompleted(slot, StarterDeckNotifyKey, null, false);
+        PersistAcademyIntroGraduated(slot, false);
+    }
+
+    /// <summary>進入 Story progress 時修復第一次入門後被存檔清掉的畢業狀態。</summary>
+    public static void SyncActiveSlotGraduationFromCollection() =>
+        EnsureSlotIntroProgressConsistent(PlayerData.GetActivePlayerSlotOrDefault());
+
+    private static bool TryRepairFromRecordedProgressSignals(int slot)
+    {
+        if (HarborTrainingProgressState.IsHarborCombatCleared(slot))
+        {
+            ApplyIntroGraduationRepair(slot);
+            return true;
+        }
+
+        if (IsIntroTrioRewardGranted(slot) || ReadCompleted(slot, AcademyGraduatedKey, null))
+        {
+            ApplyIntroGraduationRepair(slot);
+            return true;
+        }
+
+        if (IsTutorialBattleCompleted(slot))
+        {
+            ApplyIntroGraduationRepair(slot);
+            return true;
+        }
+
+        if (IsTutorialPlotCompleted(slot) && !IsTutorialBattleCompleted(slot))
+            return false;
+
+        return false;
+    }
+
+    /// <summary>作用中槽位記憶體：收藏或任一副牌組內已有御三家。</summary>
+    private static bool TryRepairAcademyIntroGraduatedFromRuntimeCards(int slot)
     {
         slot = Mathf.Clamp(slot, 1, PlayerData.MaxPlayerSlots);
         if (PlayerData.GetActivePlayerSlotOrDefault() != slot)
             return false;
 
         PlayerData playerData = PlayerData.ResolveCanonical();
-        if (playerData == null || !HasIntroTrioInCollection(playerData))
+        if (playerData == null || !HasIntroTrioOwnedOnRuntimePlayerData(playerData))
+            return false;
+        if (!CanInferIntroGraduationFromCollection(slot))
             return false;
 
+        ApplyIntroGraduationRepair(slot);
+        return true;
+    }
+
+    /// <summary>從 playerdata.csv 掃描該槽收藏／牌組列是否已有御三家（記錄點還原後旗標遺失時）。</summary>
+    private static bool TryRepairAcademyIntroGraduatedFromSaveCards(int slot)
+    {
+        slot = Mathf.Clamp(slot, 1, PlayerData.MaxPlayerSlots);
+        if (!TryLoadIntroTrioCountsFromSaveForSlot(slot, out Dictionary<int, int> counts))
+            return false;
+        if (!HasIntroTrioInCollection(counts))
+            return false;
+        if (!CanInferIntroGraduationFromCollection(slot))
+            return false;
+
+        ApplyIntroGraduationRepair(slot);
+        return true;
+    }
+
+    private static bool CanInferIntroGraduationFromCollection(int slot)
+    {
+        if (PlayerProfileCsvService.SlotHasAnyBattleRecordOnPlayerSave(slot))
+            return true;
+        if (HarborTrainingProgressState.IsHarborCombatCleared(slot))
+            return true;
+        if (ReadSlotFlag(slot, IntroTrioRewardKey))
+            return true;
+        if (ReadSlotFlag(slot, BattleKey))
+            return true;
+        return false;
+    }
+
+    private static void ApplyIntroGraduationRepair(int slot)
+    {
+        slot = Mathf.Clamp(slot, 1, PlayerData.MaxPlayerSlots);
         if (!IsIntroTrioRewardGranted(slot))
             WriteCompleted(slot, IntroTrioRewardKey, null, true);
         if (!IsTutorialBattleCompleted(slot))
@@ -74,11 +176,90 @@ public static class TutorialProgressState
         if (!IsTutorialPlotCompleted(slot))
             SetTutorialPlotCompleted(slot, true);
         PersistAcademyIntroGraduated(slot);
-        return true;
     }
 
-    private static bool HasIntroTrioInCollection(PlayerData playerData) =>
-        HasIntroTrioInCollection(playerData?.playerCollection);
+    private static bool HasIntroTrioOwnedOnRuntimePlayerData(PlayerData playerData)
+    {
+        if (playerData == null) return false;
+        if (HasIntroTrioInCollection(playerData.playerCollection))
+            return true;
+
+        int deckSlots = Mathf.Max(1, playerData.deckSlotCount);
+        for (int s = 0; s < deckSlots; s++)
+        {
+            bool allInDeck = true;
+            for (int i = 0; i < TutorialBattleRewardService.VictoryCardIds.Length; i++)
+            {
+                int id = TutorialBattleRewardService.VictoryCardIds[i];
+                if (playerData.GetDeckCount(s, id) < 1)
+                {
+                    allInDeck = false;
+                    break;
+                }
+            }
+
+            if (allInDeck)
+                return true;
+        }
+
+        return false;
+    }
+
+    private static bool TryLoadIntroTrioCountsFromSaveForSlot(int slot, out Dictionary<int, int> counts)
+    {
+        counts = new Dictionary<int, int>();
+        if (!TryLoadSaveLines(out string[] rows))
+            return false;
+
+        slot = Mathf.Clamp(slot, 1, PlayerData.MaxPlayerSlots);
+        for (int i = 0; i < rows.Length; i++)
+        {
+            string row = rows[i];
+            if (string.IsNullOrWhiteSpace(row) || row.StartsWith("#", System.StringComparison.Ordinal))
+                continue;
+
+            string[] cols = row.Split(',');
+            if (cols.Length < 4) continue;
+            if (!string.Equals(cols[0].Trim(), "slot", System.StringComparison.OrdinalIgnoreCase)) continue;
+            if (!int.TryParse(cols[1].Trim(), out int rowSlot) || rowSlot != slot) continue;
+
+            string kind = cols[2].Trim();
+            if (string.Equals(kind, "card", System.StringComparison.OrdinalIgnoreCase))
+                TryAccumulateSaveCardCount(cols, 3, counts);
+            else if (string.Equals(kind, "deck", System.StringComparison.OrdinalIgnoreCase))
+                TryAccumulateSaveCardCount(cols, 3, counts);
+            else if (string.Equals(kind, "deckslot", System.StringComparison.OrdinalIgnoreCase) && cols.Length >= 6)
+                TryAccumulateSaveCardCount(cols, 4, counts);
+        }
+
+        return counts.Count > 0;
+    }
+
+    private static void TryAccumulateSaveCardCount(string[] cols, int typeIndex, Dictionary<int, int> counts)
+    {
+        if (cols.Length < typeIndex + 2) return;
+        string typeToken = cols[typeIndex].Trim();
+        if (string.Equals(typeToken, "s", System.StringComparison.OrdinalIgnoreCase))
+            return;
+
+        int cardId;
+        int numIndex;
+        if (string.Equals(typeToken, "m", System.StringComparison.OrdinalIgnoreCase))
+        {
+            if (cols.Length < typeIndex + 3) return;
+            if (!int.TryParse(cols[typeIndex + 1].Trim(), out cardId)) return;
+            numIndex = typeIndex + 2;
+        }
+        else
+        {
+            if (!int.TryParse(typeToken, out cardId)) return;
+            numIndex = typeIndex + 1;
+        }
+
+        if (!int.TryParse(cols[numIndex].Trim(), out int num) || num <= 0) return;
+        counts.TryGetValue(cardId, out int existing);
+        counts[cardId] = existing + num;
+    }
 
     /// <summary>
     /// <see cref="PlayerData.SavePlayerData"/> 重建作用中槽位時，依記憶體收藏補寫入門畢業旗標（第一次入門勝利後御三家剛入收藏、旗標列尚未在 preserve 內時）。
@@ -92,17 +273,12 @@ public static class TutorialProgressState
             return;
 
         slot = Mathf.Clamp(slot, 1, PlayerData.MaxPlayerSlots);
+        if (!CanInferIntroGraduationFromCollection(slot))
+            return;
         UpsertSlotFlagRowInSaveList(datas, slot, IntroTrioRewardKey, true);
         UpsertSlotFlagRowInSaveList(datas, slot, BattleKey, true);
         UpsertSlotFlagRowInSaveList(datas, slot, PlotKey, true);
         UpsertSlotFlagRowInSaveList(datas, slot, AcademyGraduatedKey, true);
-    }
-
-    /// <summary>進入 Story progress 時修復第一次入門後被存檔清掉的畢業狀態。</summary>
-    public static void SyncActiveSlotGraduationFromCollection()
-    {
-        int slot = PlayerData.GetActivePlayerSlotOrDefault();
-        TryRepairAcademyIntroGraduatedFromCollection(slot);
     }
 
     private static bool HasIntroTrioInCollection(Dictionary<int, int> playerCollection)
@@ -215,6 +391,26 @@ public static class TutorialProgressState
             PersistAcademyIntroGraduated(slot);
     }
 
+    /// <summary>M-1-2 段考：修女／主教／城堡是否已發放（重溫不重發）。</summary>
+    public static bool IsM12ReligiousLineRewardGranted(int slot) =>
+        ReadCompleted(slot, M12ReligiousLineRewardKey, null);
+
+    public static bool IsM12ReligiousLineRewardGrantedForActivePlayer() =>
+        IsM12ReligiousLineRewardGranted(PlayerData.GetActivePlayerSlotOrDefault());
+
+    public static void SetM12ReligiousLineRewardGranted(int slot, bool granted = true) =>
+        WriteCompleted(slot, M12ReligiousLineRewardKey, null, granted);
+
+    /// <summary>M-1-2 段考通關（戰技觸發達標 + 兩階段完成）。</summary>
+    public static bool IsM12TrioMasteryCleared(int slot) =>
+        ReadCompleted(slot, M12TrioMasteryClearedKey, null);
+
+    public static bool IsM12TrioMasteryClearedForActivePlayer() =>
+        IsM12TrioMasteryCleared(PlayerData.GetActivePlayerSlotOrDefault());
+
+    public static void SetM12TrioMasteryCleared(int slot, bool cleared = true) =>
+        WriteCompleted(slot, M12TrioMasteryClearedKey, null, cleared);
+
     public static void SetTutorialPlotCompleted(int slot, bool completed = true) =>
         WriteCompleted(slot, PlotKey, PlotDonePrefix, completed);
 
@@ -289,42 +485,18 @@ public static class TutorialProgressState
 
     private static void WriteToSave(int slot, string saveKey, bool completed)
     {
-        string path = PlayerData.GetPlayerSaveCsvPath();
-        string dir = Application.persistentDataPath;
-        Directory.CreateDirectory(dir);
-
-        string[] existing = PlayerPersistSafeIO.TryReadPlayerDataLines(path, out string[] read, out _)
-            ? read
-            : System.Array.Empty<string>();
-
-        var rows = new List<string>(existing.Length + 2);
-        bool replaced = false;
         string newRow = FormatSlotFlagRow(slot, saveKey, completed);
-
-        for (int i = 0; i < existing.Length; i++)
-        {
-            string row = existing[i];
-            if (!replaced && TryParseSlotFlagRow(row, slot, saveKey, out _))
-            {
-                rows.Add(newRow);
-                replaced = true;
-                continue;
-            }
-
-            rows.Add(row);
-        }
-
-        if (!replaced)
-            rows.Add(newRow);
-
-        PlayerPersistSafeIO.WriteAllLinesWithAtomicRotateBackups(path, rows);
+        PlayerSaveCoordinator.UpsertSlotKeyedRow(
+            slot,
+            saveKey,
+            newRow,
+            row => TryParseSlotFlagRow(row, slot, saveKey, out _));
     }
 
     private static bool TryLoadSaveLines(out string[] rows)
     {
         rows = System.Array.Empty<string>();
-        string path = PlayerData.GetPlayerSaveCsvPath();
-        return PlayerPersistSafeIO.TryReadPlayerDataLines(path, out rows, out _);
+        return PlayerSaveCoordinator.TryReadPlayerDataLines(out rows, out _);
     }
 
     private static string FormatSlotFlagRow(int slot, string saveKey, bool completed) =>

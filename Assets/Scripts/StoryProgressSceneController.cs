@@ -245,15 +245,16 @@ public class StoryProgressSceneController : MonoBehaviour
         if (leavingForHall)
             return;
 
-        TutorialProgressState.SyncActiveSlotGraduationFromCollection();
-
         int slot = PlayerData.GetActivePlayerSlotOrDefault();
+        TutorialProgressState.EnsureSlotIntroProgressConsistent(slot);
+        HarborTrainingProgressState.EnsureSlotHarborProgressConsistent(slot);
+        StoryProgressWorldMapRuntime.RequestRefreshProgress();
         TutorialProgressState.GetAcademyIntroProgressForDisplay(slot, out bool plotComplete, out bool battleComplete);
         bool introGraduated = TutorialProgressState.IsAcademyIntroGraduated(slot);
 
         EnsureChapterMapStatusLabel();
         if (chapterMapStatusTmp != null)
-            ApplyChapterMapStatus(chapterMapStatusTmp, plotComplete, battleComplete);
+            ApplyChapterMapStatus(chapterMapStatusTmp);
 
         if (chapterMapTitleTmp != null)
             ApplyStoryProgressPlainText(chapterMapTitleTmp, ChapterTitleDefault, 28f);
@@ -330,6 +331,10 @@ public class StoryProgressSceneController : MonoBehaviour
         ApplyRightDetailPanelThemeAndLayout();
         if (chapterSummaryTmp != null)
             ApplyHarborBulletinText(chapterSummaryTmp, StoryProgressLevelCopy.BuildHarborBulletin(introGraduated));
+
+        StoryProgressFooterLayer.EnsureHarborBulletinOnTop(backButton != null ? backButton.transform : null, forceLayout: true);
+        StoryProgressSidebarResponsiveLayout.ApplyNow(SceneManager.GetActiveScene());
+        StoryProgressSidebarResponsiveLayoutDriver.EnsureExists();
     }
 
     private void ApplyRightDetailPanelThemeAndLayout()
@@ -869,6 +874,7 @@ public class StoryProgressSceneController : MonoBehaviour
     {
         if (leavingForHall || backButton == null) return;
 
+        StoryProgressFooterLayer.EnsureHarborBulletinOnTop(backButton.transform, forceLayout: true);
         BringBackButtonToFront();
         Canvas canvas = backButton.GetComponentInParent<Canvas>();
         ReturnButtonLayout.ApplyTo(backButton.GetComponent<RectTransform>(), canvas);
@@ -1215,9 +1221,19 @@ public class StoryProgressSceneController : MonoBehaviour
 
     private IEnumerator DeferredRefreshChapterMapStatus()
     {
-        yield return null;
-        AutoBindUi();
-        RefreshPresentation();
+        const int maxFrames = 10;
+        for (int frame = 0; frame < maxFrames; frame++)
+        {
+            yield return null;
+            int slot = PlayerData.GetActivePlayerSlotOrDefault();
+            TutorialProgressState.EnsureSlotIntroProgressConsistent(slot);
+            HarborTrainingProgressState.EnsureSlotHarborProgressConsistent(slot);
+            StoryProgressWorldMapRuntime.RequestRefreshProgress();
+            AutoBindUi();
+            RefreshPresentation();
+            if (UnityEngine.Object.FindFirstObjectByType<StoryProgressWorldMapRuntime>() != null)
+                break;
+        }
     }
 
     private static TMP_Text FindChapterMapTitleTmp()
@@ -1287,21 +1303,16 @@ public class StoryProgressSceneController : MonoBehaviour
         }
     }
 
-    private void ApplyChapterMapStatus(TMP_Text tmp, bool plotComplete, bool battleComplete)
+    private void ApplyChapterMapStatus(TMP_Text tmp)
     {
         if (tmp == null) return;
 
         ApplyUiFont(tmp);
 
         int slot = PlayerData.GetActivePlayerSlotOrDefault();
-        if (TutorialProgressState.IsAcademyIntroGraduated(slot))
-        {
-            plotComplete = true;
-            battleComplete = true;
-        }
-
+        string label = StoryProgressLevelCopy.ResolveMapStatusLabelForSlot(slot);
+        TutorialProgressState.GetAcademyIntroProgressForDisplay(slot, out bool plotComplete, out bool battleComplete);
         bool harborCleared = HarborTrainingProgressState.IsHarborCombatCleared(slot);
-        string label = StoryProgressLevelCopy.ResolveMapStatusLabel(plotComplete, battleComplete, harborCleared);
         tmp.richText = false;
         tmp.text = label;
         tmp.fontSize = 26f;

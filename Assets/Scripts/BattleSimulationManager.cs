@@ -14,7 +14,7 @@ public enum BattleTurnBannerKind
     EnemyTurn
 }
 
-public class BattleSimulationManager : MonoBehaviour
+public partial class BattleSimulationManager : MonoBehaviour
 {
     // MASTER INDEX (merged legacy + 2026-04-15 updates)
     // 1) Battle core (legacy):
@@ -367,9 +367,15 @@ public class BattleSimulationManager : MonoBehaviour
     /// <summary>法術結算或需重刷場上／手牌 UI 時（避免簽名溢位等漏更新）。</summary>
     public event System.Action BattleLayoutVisualRefreshRequested;
     /// <summary>初級治療成功結算後，供場上怪獸卡播放綠色回復特效（UI）。</summary>
-    public event System.Action PlayerLesserHealVisualRequested;
+    public event System.Action<LesserHealVisualRequest> PlayerLesserHealVisualRequested;
     /// <summary>敵方初級治療成功結算後，供敵方場上怪獸卡播放綠色回復特效（UI）。</summary>
-    public event System.Action EnemyLesserHealVisualRequested;
+    public event System.Action<LesserHealVisualRequest> EnemyLesserHealVisualRequested;
+    /// <summary>主教戰技（祝聖預留／綁定／首傷減傷）觸發後供 UI 播放特效。</summary>
+    public event System.Action<BishopConsecrationVisualRequest> BishopConsecrationVisualRequested;
+    /// <summary>城堡戰技「堅城駐守」首次受傷減傷觸發後供 UI 播放灰石特效。</summary>
+    public event System.Action<CastleFortressStandVisualRequest> CastleFortressStandVisualRequested;
+    /// <summary>玩家首次置場主教後，請選擇祝聖綁定對象（主教本人或下一張場怪）。</summary>
+    public event System.Action<BishopConsecrationBindChoiceRequest> BishopConsecrationBindChoiceRequested;
     /// <summary>打出法術並從手牌移除前：供 UI 記錄該手牌槽位（如火球起點）。isPlayer、手牌索引。</summary>
     public event System.Action<bool, SpellCard, int> SpellCastHandAnchorCommitted;
     /// <summary>火球術結算後：施法者是否為我方；當次是否為攻擊對方場上怪（否則為直擊英雄）。</summary>
@@ -742,14 +748,141 @@ public class BattleSimulationManager : MonoBehaviour
         enemyQueenShelterUsed = false;
         playerMilitiaFormationUsed = false;
         enemyMilitiaFormationUsed = false;
+        playerNunHolyResonanceUsed = false;
+        enemyNunHolyResonanceUsed = false;
+        playerConsecration.Reset();
+        enemyConsecration.Reset();
+        playerCastleFortressUsed = false;
+        enemyCastleFortressUsed = false;
         playerKingWasOnFieldThisBattle = false;
         enemyKingWasOnFieldThisBattle = false;
+        if (BattleLaunchContext.IsM12TrioMasteryBattle)
+            M12TrioMasteryBattleTracker.ResetForNewBattle();
     }
+
+    private bool IsPlayerBishopSkillActive() => IsPlayerMonsterSkillBattleActive(MonsterSkillIds.Bishop);
+
+    private static bool IsEnemyBishopSkillActiveForBattle() => true;
+
+    private bool IsPlayerCastleSkillActive() => IsPlayerMonsterSkillBattleActive(MonsterSkillIds.Castle);
+
+    private bool IsPlayerNunSkillActive() => IsPlayerMonsterSkillBattleActive(MonsterSkillIds.Nun);
+
+    /// <summary>
+    /// 玩家戰技是否在本局結算：御三家恆開；宗教線需 B／M-1-2 畢業，或開局牌組有帶該怪（含入門 30 張）。
+    /// </summary>
+    private bool IsPlayerMonsterSkillBattleActive(int monsterId)
+    {
+        if (!MonsterSkillRegistry.HasSkillTrack(monsterId))
+            return false;
+        if (CardSkillProficiencyService.IsStarterTrio(monsterId))
+            return true;
+        if (CardSkillProficiencyService.IsStageUnlocked(monsterId, CardSkillRevealStage.BasicB))
+            return true;
+        if (CardSkillProficiencyService.IsM12ReligiousLineMonster(monsterId) &&
+            TutorialProgressState.IsM12ReligiousLineRewardGrantedForActivePlayer())
+            return true;
+        return playerBattleSkillRosterIds.Contains(monsterId);
+    }
+
+    private void CapturePlayerBattleSkillRoster()
+    {
+        playerBattleSkillRosterIds.Clear();
+        for (int i = 0; i < playerDeck.Count; i++)
+        {
+            if (playerDeck[i] is MonsterCard monster)
+                playerBattleSkillRosterIds.Add(monster.id);
+        }
+    }
+
+    private static bool IsEnemyCastleSkillActiveForBattle() => true;
+
+    private void EnsureConsecrationBoundForField(bool isPlayer)
+    {
+        ref BishopConsecrationBattleState state = ref isPlayer ? ref playerConsecration : ref enemyConsecration;
+        if (state.awaitingPlayerBindChoice)
+            return;
+        BattleMonster field = isPlayer ? playerField : enemyField;
+        if (field == null) return;
+        TryConsecrationBindForFieldMonster(field, isPlayer);
+    }
+
+    /// <summary>祝聖預留後，將祝聖綁定至指定場怪並觸發 Toast／戰報／綁定特效。</summary>
+    private void TryConsecrationBindForFieldMonster(BattleMonster field, bool isPlayer)
+    {
+        if (field == null) return;
+        bool skillOn = isPlayer ? IsPlayerBishopSkillActive() : IsEnemyBishopSkillActiveForBattle();
+        if (!skillOn) return;
+
+        ref BishopConsecrationBattleState state = ref isPlayer ? ref playerConsecration : ref enemyConsecration;
+        if (!state.awaitingNextSummon) return;
+
+        if (!MonsterSkillRegistry.TryBindConsecrationToFieldMonster(
+                ref state, field.id, field.cardName, LogBattleHistory))
+            return;
+
+        string toast = state.holyTherapyLinkOnNun
+            ? "祝聖 · 聖療連攜：已綁定 " + field.cardName
+            : "祝聖：已綁定 " + field.cardName;
+        if (!isPlayer)
+            toast = "敵方 " + toast;
+        ShowBattleToast(toast, 2.5f);
+        RequestBishopConsecrationVisual(
+            new BishopConsecrationVisualRequest(
+                BishopConsecrationVisualKind.BoundToField,
+                isPlayer,
+                holyTherapyLinkOnNun: state.holyTherapyLinkOnNun));
+    }
+
+    private bool CanReplaceFieldMonsterForConsecration(bool isPlayer)
+    {
+        ref BishopConsecrationBattleState state = ref isPlayer ? ref playerConsecration : ref enemyConsecration;
+        if (state.awaitingPlayerBindChoice) return false;
+        if (!state.awaitingNextSummon) return false;
+        return isPlayer ? IsPlayerBishopSkillActive() : IsEnemyBishopSkillActiveForBattle();
+    }
+
+    /// <summary>祝聖待換：玩家可用手牌怪獸替換場上怪（僅此時例外於「場上有怪只能打法術」）。</summary>
+    public bool CanPlayerReplaceFieldMonsterForConsecration() =>
+        CanReplaceFieldMonsterForConsecration(true);
 
     private void ApplySummonMonsterSkills(BattleMonster field, bool isPlayer)
     {
+        if (field == null) return;
         NoteKingSummonedThisBattle(field, isPlayer);
-        if (field == null || field.id != MonsterSkillIds.Militia) return;
+
+        bool bishopSkillOn = isPlayer ? IsPlayerBishopSkillActive() : IsEnemyBishopSkillActiveForBattle();
+        ref BishopConsecrationBattleState consecration = ref isPlayer ? ref playerConsecration : ref enemyConsecration;
+        string side = isPlayer ? "我方" : "敵方";
+
+        if (field.id == MonsterSkillIds.Bishop)
+        {
+            if (!bishopSkillOn)
+            {
+                if (isPlayer)
+                    LogBattleHistory("主教戰技未結算：本局牌組未帶主教且熟練度未達 B（入門 30 張或 M-1-2 畢業可觸發）。");
+            }
+            else if (MonsterSkillRegistry.TryGrantBishopConsecrationReserve(
+                         ref consecration,
+                         LogBattleHistory,
+                         ShowBattleToast,
+                         deferBindTargetChoice: isPlayer && !BattleAutoSimPlugin.IsRunning))
+            {
+                RequestBishopConsecrationVisual(
+                    new BishopConsecrationVisualRequest(BishopConsecrationVisualKind.ReserveGranted, isPlayer));
+                if (isPlayer && !BattleAutoSimPlugin.IsRunning)
+                {
+                    BishopConsecrationBindChoiceRequested?.Invoke(
+                        new BishopConsecrationBindChoiceRequest(field.cardName));
+                }
+            }
+            else
+                TryConsecrationBindForFieldMonster(field, isPlayer);
+        }
+        else if (bishopSkillOn)
+            TryConsecrationBindForFieldMonster(field, isPlayer);
+
+        if (field.id != MonsterSkillIds.Militia) return;
         if (isPlayer)
         {
             if (playerMilitiaFormationUsed) return;
@@ -761,7 +894,8 @@ public class BattleSimulationManager : MonoBehaviour
             enemyMilitiaFormationUsed = true;
         }
         field.attack += 5;
-        string side = isPlayer ? "我方" : "敵方";
+        if (isPlayer)
+            M12TrioMasteryBattleTracker.NotifyMilitiaFormationTriggered();
         LogBattleHistory(side + " 列陣：這次攻擊力多 5 點 本局僅1次");
         ShowBattleToast(side + "民兵·列陣：攻擊力多 5 點", 2.2f);
     }
@@ -773,12 +907,52 @@ public class BattleSimulationManager : MonoBehaviour
         else enemyKingWasOnFieldThisBattle = true;
     }
 
+    private void RequestBishopConsecrationVisual(BishopConsecrationVisualRequest request)
+    {
+        if (BattleAutoSimPlugin.IsRunning) return;
+        BishopConsecrationVisualRequested?.Invoke(request);
+    }
+
+    private void RequestCastleFortressStandVisual(CastleFortressStandVisualRequest request)
+    {
+        if (BattleAutoSimPlugin.IsRunning) return;
+        CastleFortressStandVisualRequested?.Invoke(request);
+    }
+
     private int ModifyDamageToPlayerMonster(int rawDamage)
     {
         if (playerField == null || rawDamage <= 0) return rawDamage;
         int dmg = rawDamage;
         if (playerField.id == MonsterSkillIds.Queen)
             dmg = MonsterSkillRegistry.ApplyQueenShelter(ref playerQueenShelterUsed, dmg, LogBattleHistory);
+        bool consecrationPending = IsPlayerBishopSkillActive() && playerConsecration.awaitingFirstHit;
+        if (IsPlayerBishopSkillActive())
+        {
+            EnsureConsecrationBoundForField(true);
+            dmg = MonsterSkillRegistry.ApplyConsecrationFirstHit(ref playerConsecration, dmg, LogBattleHistory);
+        }
+        bool consecrationAppliedThisHit = consecrationPending && !playerConsecration.awaitingFirstHit;
+        if (consecrationAppliedThisHit)
+        {
+            int reduction = playerConsecration.religiousSynergy ? 4 : 3;
+            RequestBishopConsecrationVisual(
+                new BishopConsecrationVisualRequest(
+                    BishopConsecrationVisualKind.FirstHitReduced,
+                    true,
+                    reduction,
+                    playerConsecration.religiousSynergy));
+        }
+        if (playerField.id == MonsterSkillIds.Castle && IsPlayerCastleSkillActive() &&
+            !playerCastleFortressUsed && !consecrationAppliedThisHit)
+        {
+            int beforeFortress = dmg;
+            dmg = MonsterSkillRegistry.ApplyCastleFortressStand(ref playerCastleFortressUsed, dmg, LogBattleHistory);
+            if (playerCastleFortressUsed && dmg < beforeFortress)
+            {
+                RequestCastleFortressStandVisual(
+                    new CastleFortressStandVisualRequest(true, beforeFortress - dmg));
+            }
+        }
         if (playerField.id == MonsterSkillIds.King)
             dmg = MonsterSkillRegistry.ApplyTrainingCourtDecree(ref playerKingTrainingCharges, dmg, LogBattleHistory);
         return dmg;
@@ -790,6 +964,34 @@ public class BattleSimulationManager : MonoBehaviour
         int dmg = rawDamage;
         if (enemyField.id == MonsterSkillIds.Queen)
             dmg = MonsterSkillRegistry.ApplyQueenShelter(ref enemyQueenShelterUsed, dmg, LogBattleHistory);
+        bool consecrationPending = IsEnemyBishopSkillActiveForBattle() && enemyConsecration.awaitingFirstHit;
+        if (IsEnemyBishopSkillActiveForBattle())
+        {
+            EnsureConsecrationBoundForField(false);
+            dmg = MonsterSkillRegistry.ApplyConsecrationFirstHit(ref enemyConsecration, dmg, LogBattleHistory);
+        }
+        bool consecrationAppliedThisHit = consecrationPending && !enemyConsecration.awaitingFirstHit;
+        if (consecrationAppliedThisHit)
+        {
+            int reduction = enemyConsecration.religiousSynergy ? 4 : 3;
+            RequestBishopConsecrationVisual(
+                new BishopConsecrationVisualRequest(
+                    BishopConsecrationVisualKind.FirstHitReduced,
+                    false,
+                    reduction,
+                    enemyConsecration.religiousSynergy));
+        }
+        if (enemyField.id == MonsterSkillIds.Castle && IsEnemyCastleSkillActiveForBattle() &&
+            !enemyCastleFortressUsed && !consecrationAppliedThisHit)
+        {
+            int beforeFortress = dmg;
+            dmg = MonsterSkillRegistry.ApplyCastleFortressStand(ref enemyCastleFortressUsed, dmg, LogBattleHistory);
+            if (enemyCastleFortressUsed && dmg < beforeFortress)
+            {
+                RequestCastleFortressStandVisual(
+                    new CastleFortressStandVisualRequest(false, beforeFortress - dmg));
+            }
+        }
         if (enemyField.id == MonsterSkillIds.King)
             dmg = MonsterSkillRegistry.ApplyTrainingCourtDecree(ref enemyKingTrainingCharges, dmg, LogBattleHistory);
         return dmg;
@@ -1056,6 +1258,8 @@ public class BattleSimulationManager : MonoBehaviour
     private readonly List<Card> enemyHand = new List<Card>();
     private readonly List<Card> playerDiscardPile = new List<Card>();
     private readonly List<Card> enemyDiscardPile = new List<Card>();
+    /// <summary>開局時 30 張牌組內的怪物 id（抽牌後仍視為本局有帶入，供宗教線戰技判定）。</summary>
+    private readonly HashSet<int> playerBattleSkillRosterIds = new HashSet<int>();
 
     private BattleMonster playerField;
     private BattleMonster enemyField;
@@ -1096,6 +1300,14 @@ public class BattleSimulationManager : MonoBehaviour
     private bool enemyQueenShelterUsed;
     private bool playerMilitiaFormationUsed;
     private bool enemyMilitiaFormationUsed;
+    private bool playerNunHolyResonanceUsed;
+    private bool enemyNunHolyResonanceUsed;
+    private BishopConsecrationBattleState playerConsecration;
+    private BishopConsecrationBattleState enemyConsecration;
+    private bool playerCastleFortressUsed;
+    private bool enemyCastleFortressUsed;
+    private LesserHealVisualRequest pendingPlayerLesserHealVisual;
+    private LesserHealVisualRequest pendingEnemyLesserHealVisual;
     private bool playerKingWasOnFieldThisBattle;
     private bool enemyKingWasOnFieldThisBattle;
 
@@ -1295,7 +1507,10 @@ public class BattleSimulationManager : MonoBehaviour
         weatherRandomCycleCursor = 0;
 
         BuildPlayerDeck();
-        BattleVerbose("BattleSimulation: loaded player deck count = " + playerDeck.Count);
+        CapturePlayerBattleSkillRoster();
+        BattleVerbose(
+            "BattleSimulation: loaded player deck count = " + playerDeck.Count +
+            ", skill roster monsters = " + playerBattleSkillRosterIds.Count);
         TryApplyLaunchDifficultyFromContext();
         BuildEnemyDeck();
         CaptureBattleDifficultyForRecords();
@@ -1305,10 +1520,8 @@ public class BattleSimulationManager : MonoBehaviour
         playerHp = startHealth;
         if (BattleLaunchContext.IsIntroTutorialBattle)
             enemyHp = IntroTutorialBattleRules.EnemyStartHealth;
-        else if (HarborTrainingEasyBattleRules.IsActiveEasyBattle())
-            enemyHp = HarborTrainingEasyBattleRules.EnemyStartHealth;
-        else if (HarborTrainingNormalBattleRules.IsActiveNormalBattle())
-            enemyHp = HarborTrainingNormalBattleRules.EnemyStartHealth;
+        else if (HarborTrainingDifficultyRuntime.TryGetEnemyStartHealth(out int harborEnemyHp))
+            enemyHp = harborEnemyHp;
         else
             enemyHp = startHealth;
         int playerDice = UnityEngine.Random.Range(1, 7);
@@ -1388,6 +1601,23 @@ public class BattleSimulationManager : MonoBehaviour
         Card selected = playerHand[handIndex];
         if (playerField != null)
         {
+            if (selected is MonsterCard replaceMonster && CanReplaceFieldMonsterForConsecration(true))
+            {
+                string prevName = playerField.cardName;
+                playerHand.RemoveAt(handIndex);
+                playerField = new BattleMonster(replaceMonster);
+                LogBattleHistory("我方以 " + playerField.cardName + " 替換場上 " + prevName + "（祝聖轉移）");
+                ApplySummonMonsterSkills(playerField, true);
+                playerPlacedCardThisRound = true;
+                playerPlayedHandCardThisTurn = true;
+                BattleVerbose("Player replaced field with: " + playerField.cardName);
+                NotifyPlayerCommittedHandCardToFieldFromHandForUi();
+                BattleLayoutVisualRefreshRequested?.Invoke();
+                CheckBattleResult();
+                PrintBattleState();
+                return false;
+            }
+
             bool lesserHealExempt = selected is SpellCard spPre && spPre.SpellOrdinal == 1;
             if (!lesserHealExempt)
             {
@@ -1405,6 +1635,7 @@ public class BattleSimulationManager : MonoBehaviour
             playerPlayedHandCardThisTurn = true;
             BattleVerbose("Player summoned: " + playerField.cardName);
             NotifyPlayerCommittedHandCardToFieldFromHandForUi();
+            BattleLayoutVisualRefreshRequested?.Invoke();
         }
         else if (selected is SpellCard spell)
         {
@@ -1453,7 +1684,7 @@ public class BattleSimulationManager : MonoBehaviour
                 enemyField == null;
             BattleLayoutVisualRefreshRequested?.Invoke();
             if (resolved && spell.SpellOrdinal == 1)
-                PlayerLesserHealVisualRequested?.Invoke();
+                PlayerLesserHealVisualRequested?.Invoke(pendingPlayerLesserHealVisual);
             if (resolved && spell.SpellOrdinal == 0)
                 FireballVisualRequested?.Invoke(true, hadEnemyMonsterForFireball);
             if (resolved && spell.SpellOrdinal == 2)
@@ -1801,12 +2032,8 @@ public class BattleSimulationManager : MonoBehaviour
             return;
         }
 
-        if (HarborTrainingEasyBattleRules.IsActiveEasyBattle() &&
-            currentRound > HarborTrainingEasyBattleRules.MaxRoundsInclusive)
-        {
-            ForceHarborEasyRoundCapVictory();
-            return;
-        }
+        TryHarborEasyRoundCapVictoryAtRoundAdvance();
+        if (battleOver) return;
 
         TickPlayerLinGazeEndOfRound();
         TickEnemyLinGazeEndOfRound();
@@ -2001,9 +2228,36 @@ public class BattleSimulationManager : MonoBehaviour
             return false;
         }
         int healAmount = ApplyHolyLightHealBonusIfNeeded(ApplyWeatherSpellPowerBonus(40, true));
+        int holyTherapyBonus = 0;
+        if (IsPlayerBishopSkillActive())
+        {
+            holyTherapyBonus = MonsterSkillRegistry.TryApplyHolyTherapyHealBonus(
+                ref playerConsecration,
+                playerField.id,
+                ref healAmount,
+                LogBattleHistory,
+                ShowBattleToast);
+        }
         playerField.currentHp += healAmount;
         LogBattleHistory("我方使用了 法術牌 " + spell.cardName + " 對我方回復" + healAmount + "點生命值");
-        ShowBattleToast("初級治療：我方場上怪獸 +" + healAmount + " HP（目前 " + playerField.currentHp + "／上限 " + playerField.maxHp + "，可溢出）。", 2.8f);
+        int heroBonus = 0;
+        if (playerField.id == MonsterSkillIds.Nun && IsPlayerNunSkillActive())
+        {
+            int noOverflowHero = playerConsecration.holyTherapyLinkOnNun ? 12 : 10;
+            heroBonus = MonsterSkillRegistry.ApplyNunHolyResonance(
+                ref playerNunHolyResonanceUsed,
+                playerField.id,
+                ref playerField.currentHp,
+                playerField.maxHp,
+                ref playerHp,
+                LogBattleHistory,
+                noOverflowHero);
+        }
+        string toast = "初級治療：我方場上怪獸 +" + healAmount + " HP（目前 " + playerField.currentHp + "／上限 " + playerField.maxHp + "，可溢出）。";
+        if (heroBonus > 0)
+            toast += " 修女·聖療共鳴：英雄 +" + heroBonus + " HP。";
+        ShowBattleToast(toast, heroBonus > 0 ? 3.2f : 2.8f);
+        pendingPlayerLesserHealVisual = new LesserHealVisualRequest(true, healAmount, heroBonus, holyTherapyBonus);
         return true;
     }
 
@@ -2054,9 +2308,36 @@ public class BattleSimulationManager : MonoBehaviour
             return false;
         }
         int healAmount = ApplyHolyLightHealBonusIfNeeded(ApplyWeatherSpellPowerBonus(40, false));
+        int holyTherapyBonus = 0;
+        if (IsEnemyBishopSkillActiveForBattle())
+        {
+            holyTherapyBonus = MonsterSkillRegistry.TryApplyHolyTherapyHealBonus(
+                ref enemyConsecration,
+                enemyField.id,
+                ref healAmount,
+                LogBattleHistory,
+                ShowBattleToast);
+        }
         enemyField.currentHp += healAmount;
         LogBattleHistory("敵方使用了 法術牌 " + spell.cardName + " 對敵方回復" + healAmount + "點生命值");
-        ShowBattleToast("初級治療：敵方場上怪獸 +" + healAmount + " HP（目前 " + enemyField.currentHp + "／上限 " + enemyField.maxHp + "，可溢出）。", 2.8f);
+        int heroBonus = 0;
+        if (enemyField.id == MonsterSkillIds.Nun)
+        {
+            int noOverflowHero = enemyConsecration.holyTherapyLinkOnNun ? 12 : 10;
+            heroBonus = MonsterSkillRegistry.ApplyNunHolyResonance(
+                ref enemyNunHolyResonanceUsed,
+                enemyField.id,
+                ref enemyField.currentHp,
+                enemyField.maxHp,
+                ref enemyHp,
+                LogBattleHistory,
+                noOverflowHero);
+        }
+        string toast = "初級治療：敵方場上怪獸 +" + healAmount + " HP（目前 " + enemyField.currentHp + "／上限 " + enemyField.maxHp + "，可溢出）。";
+        if (heroBonus > 0)
+            toast += " 修女·聖療共鳴：英雄 +" + heroBonus + " HP。";
+        ShowBattleToast(toast, heroBonus > 0 ? 3.2f : 2.8f);
+        pendingEnemyLesserHealVisual = new LesserHealVisualRequest(false, healAmount, heroBonus, holyTherapyBonus);
         return true;
     }
 
@@ -2437,10 +2718,43 @@ public class BattleSimulationManager : MonoBehaviour
         }
     }
 
+    public bool IsPlayerAwaitingConsecrationBindChoice()
+    {
+        return playerConsecration.awaitingPlayerBindChoice && playerTurn && !battleOver;
+    }
+
+    /// <summary>祝聖預留後選擇：綁定當前場上主教。</summary>
+    public void PlayerChooseConsecrationBindToCurrentBishop()
+    {
+        if (!IsPlayerAwaitingConsecrationBindChoice()) return;
+        playerConsecration.awaitingPlayerBindChoice = false;
+        if (playerField == null || playerField.id != MonsterSkillIds.Bishop)
+        {
+            MonsterSkillRegistry.ApplyConsecrationBindToNextMonsterChoice(
+                ref playerConsecration, LogBattleHistory);
+            ShowBattleToast("主教已不在場：改為綁定下一張打出的場怪", 2.4f);
+            return;
+        }
+
+        playerConsecration.awaitingNextSummon = true;
+        TryConsecrationBindForFieldMonster(playerField, true);
+        BattleLayoutVisualRefreshRequested?.Invoke();
+    }
+
+    /// <summary>祝聖預留後選擇：綁定下一張打出的場怪（含祝聖待換替換場怪）。</summary>
+    public void PlayerChooseConsecrationBindToNextMonster()
+    {
+        if (!IsPlayerAwaitingConsecrationBindChoice()) return;
+        MonsterSkillRegistry.ApplyConsecrationBindToNextMonsterChoice(
+            ref playerConsecration, LogBattleHistory);
+        ShowBattleToast("已選擇：下一張打出的場怪承載祝聖", 2.3f);
+    }
+
     private bool CanPlayerAct()
     {
         if (battleOver) return false;
         if (IsEnemyDiscardPopupLockActive()) return false;
+        if (playerConsecration.awaitingPlayerBindChoice) return false;
         if (openingPresentationInProgress) return false;
         if (weatherForecastInProgress) return false;
         if (activeSpellCastPresentationCount > 0) return false;
@@ -2531,7 +2845,11 @@ public class BattleSimulationManager : MonoBehaviour
     private bool IsEnemyCardUnplayableNow(Card card)
     {
         if (card == null) return true;
-        if (card is MonsterCard) return enemyField != null;
+        if (card is MonsterCard)
+        {
+            if (enemyField == null) return false;
+            return !CanReplaceFieldMonsterForConsecration(false);
+        }
         if (card is SpellCard sp)
         {
             if (enemyField != null && sp.SpellOrdinal != 1) return true;
@@ -2553,7 +2871,12 @@ public class BattleSimulationManager : MonoBehaviour
         if (card == null) return int.MinValue;
         int rarityBonus = GetEnemyPlayRarityBonus(card.rarity);
         if (card is MonsterCard m)
-            return ApplyIntroEasyPriorityTweak(m.attack * 2 + m.healthPointMax + rarityBonus, card);
+        {
+            int baseMonster = m.attack * 2 + m.healthPointMax + rarityBonus;
+            int withSkills = ApplyEnemyReligiousLineSkillPlayBonus(baseMonster, card);
+            withSkills = ApplyEnemyStarterTrioSkillPlayBonus(withSkills, card);
+            return ApplyIntroEasyPriorityTweak(withSkills, card);
+        }
         if (card is SpellCard sp)
         {
             int spellValue;
@@ -2562,9 +2885,202 @@ public class BattleSimulationManager : MonoBehaviour
             else if (sp.SpellOrdinal == 2) spellValue = CanEnemyCastLinGazeNow() ? 62 : 10;
             else spellValue = 20;
             if (sp.SpellOrdinal == 0 && IsOpeningRoundFireballBlocked()) spellValue = int.MinValue / 4;
-            return ApplyIntroEasyPriorityTweak(spellValue + rarityBonus, card);
+            int withSkills = ApplyEnemyReligiousLineSkillPlayBonus(spellValue + rarityBonus, card);
+            withSkills = ApplyEnemyStarterTrioSkillPlayBonus(withSkills, card);
+            return ApplyIntroEasyPriorityTweak(withSkills, card);
         }
         return ApplyIntroEasyPriorityTweak(rarityBonus, card);
+    }
+
+    /// <summary>國王／王后／民兵（御三家）戰技：調整敵方出牌優先度。</summary>
+    private int ApplyEnemyStarterTrioSkillPlayBonus(int priority, Card card)
+    {
+        if (card == null || priority <= int.MinValue / 8) return priority;
+        if (card is MonsterCard m)
+            return priority + EvaluateEnemyStarterTrioMonsterPlayBonus(m);
+        if (card is SpellCard sp)
+            return priority + EvaluateEnemyStarterTrioSpellPlayBonus(sp);
+        return priority;
+    }
+
+    private static bool IsEnemyStarterTrioSkillActive(int monsterId) =>
+        CardSkillProficiencyService.IsStarterTrio(monsterId);
+
+    private int EvaluateEnemyStarterTrioMonsterPlayBonus(MonsterCard monster)
+    {
+        if (monster == null) return 0;
+        int id = monster.id;
+        if (!IsEnemyStarterTrioSkillActive(id)) return 0;
+
+        int bonus = 0;
+        bool emptyField = enemyField == null;
+        bool playerHasField = playerField != null;
+        bool playerCanDirect = playerField == null && !PlayerLinGazeActive();
+
+        if (id == MonsterSkillIds.Militia && !enemyMilitiaFormationUsed && emptyField)
+        {
+            bonus += 34;
+            if (playerHasField) bonus += 18;
+            if (playerCanDirect) bonus += 14;
+        }
+
+        if (id == MonsterSkillIds.Queen && !enemyQueenShelterUsed)
+        {
+            if (emptyField)
+            {
+                if (playerHasField) bonus += 44;
+                else bonus += 12;
+            }
+            else if (enemyField.id == MonsterSkillIds.Queen)
+                bonus += 8;
+        }
+
+        if (id == MonsterSkillIds.King && enemyKingTrainingCharges > 0)
+        {
+            if (emptyField)
+            {
+                if (playerCanDirect) bonus += 38;
+                else if (playerHasField) bonus += 22;
+                else bonus += 14;
+                if (enemyHp <= Mathf.CeilToInt(startHealth * 0.62f)) bonus += 12;
+            }
+            else if (enemyField.id == MonsterSkillIds.King)
+                bonus += 10;
+            else if (enemyKingWasOnFieldThisBattle && playerCanDirect)
+                bonus += 6;
+        }
+
+        return bonus;
+    }
+
+    private int EvaluateEnemyStarterTrioSpellPlayBonus(SpellCard spell)
+    {
+        if (spell == null || enemyField == null) return 0;
+        if (spell.SpellOrdinal != 1) return 0;
+
+        int bonus = 0;
+        if (enemyField.id == MonsterSkillIds.Queen && !enemyQueenShelterUsed)
+            bonus += 14;
+        if (enemyField.id == MonsterSkillIds.King && enemyKingTrainingCharges > 0)
+            bonus += 8;
+        if (enemyField.id == MonsterSkillIds.Militia && !enemyMilitiaFormationUsed)
+            bonus += 6;
+        return bonus;
+    }
+
+    /// <summary>修女／主教／城堡戰技：調整敵方出牌優先度。</summary>
+    private int ApplyEnemyReligiousLineSkillPlayBonus(int priority, Card card)
+    {
+        if (card == null || priority <= int.MinValue / 8) return priority;
+        if (card is MonsterCard m)
+            return priority + EvaluateEnemyReligiousMonsterPlayBonus(m);
+        if (card is SpellCard sp)
+            return priority + EvaluateEnemyReligiousSpellPlayBonus(sp);
+        return priority;
+    }
+
+    private int EvaluateEnemyReligiousMonsterPlayBonus(MonsterCard monster)
+    {
+        if (monster == null) return 0;
+        int bonus = 0;
+        int id = monster.id;
+
+        if (id == MonsterSkillIds.Bishop && IsEnemyBishopSkillActiveForBattle())
+        {
+            if (enemyField == null && !enemyConsecration.reserveGrantedThisBattle)
+                bonus += 52;
+            else if (enemyField != null && enemyField.id == MonsterSkillIds.Bishop &&
+                     enemyConsecration.awaitingNextSummon)
+                bonus -= 18;
+        }
+
+        if (id == MonsterSkillIds.Castle && IsEnemyCastleSkillActiveForBattle())
+        {
+            if (enemyField == null)
+            {
+                if (playerField != null)
+                    bonus += 44;
+                else if (playerHp <= Mathf.CeilToInt(startHealth * 0.55f))
+                    bonus += 22;
+            }
+            else if (enemyField.id == MonsterSkillIds.Castle && !enemyCastleFortressUsed)
+                bonus += 12;
+        }
+
+        if (id == MonsterSkillIds.Nun)
+        {
+            if (enemyConsecration.awaitingNextSummon && IsEnemyBishopSkillActiveForBattle())
+                bonus += 58;
+            else if (enemyField == null && enemyHandHasLesserHeal())
+                bonus += 14;
+        }
+
+        if (enemyConsecration.awaitingNextSummon && IsEnemyBishopSkillActiveForBattle() &&
+            MonsterSkillReligion.IsReligiousMonsterId(id) && id != MonsterSkillIds.Bishop)
+            bonus += 30;
+
+        if (CanReplaceFieldMonsterForConsecration(false))
+            bonus += EvaluateEnemyConsecrationBindMonsterBonus(monster);
+
+        return bonus;
+    }
+
+    private int EvaluateEnemyReligiousSpellPlayBonus(SpellCard spell)
+    {
+        if (spell == null || spell.SpellOrdinal != 1 || enemyField == null) return 0;
+        int bonus = 0;
+        float hurtRatio = enemyField.currentHp < Mathf.CeilToInt(enemyField.maxHp * 0.88f) ? 1f : 0.55f;
+        bonus += Mathf.RoundToInt(12f * hurtRatio);
+
+        if (enemyField.id == MonsterSkillIds.Nun)
+        {
+            bonus += 28;
+            if (!enemyNunHolyResonanceUsed) bonus += 18;
+            if (enemyConsecration.holyTherapyLinkOnNun) bonus += 22;
+        }
+        else if (enemyField.id == MonsterSkillIds.Castle && !enemyCastleFortressUsed)
+            bonus += 10;
+        else if (enemyField.id == MonsterSkillIds.Bishop && enemyConsecration.awaitingNextSummon)
+            bonus -= 8;
+
+        return bonus;
+    }
+
+    /// <summary>祝聖待換：選擇綁定場怪的優先度（修女 &gt; 宗教 &gt; 高血量）。</summary>
+    private static int EvaluateEnemyConsecrationBindMonsterBonus(MonsterCard monster)
+    {
+        if (monster == null) return 0;
+        if (monster.id == MonsterSkillIds.Nun) return 62;
+        if (MonsterSkillReligion.IsReligiousMonsterId(monster.id)) return 40;
+        return 12 + Mathf.Min(monster.healthPointMax, 16);
+    }
+
+    private bool enemyHandHasLesserHeal()
+    {
+        for (int i = 0; i < enemyHand.Count; i++)
+        {
+            if (enemyHand[i] is SpellCard sp && sp.SpellOrdinal == 1)
+                return true;
+        }
+        return false;
+    }
+
+    private int PickBestEnemyConsecrationBindHandIndex()
+    {
+        int chosen = -1;
+        int best = int.MinValue;
+        for (int i = 0; i < enemyHand.Count; i++)
+        {
+            if (!(enemyHand[i] is MonsterCard m)) continue;
+            if (IsEnemyCardUnplayableNow(enemyHand[i])) continue;
+            int priority = EvaluateEnemyConsecrationBindMonsterBonus(m) + GetEnemyPlayRarityBonus(m.rarity);
+            if (priority > best)
+            {
+                best = priority;
+                chosen = i;
+            }
+        }
+        return chosen;
     }
 
     private int ApplyIntroEasyPriorityTweak(int basePriority, Card card)
@@ -2582,22 +3098,16 @@ public class BattleSimulationManager : MonoBehaviour
         {
             if (card is SpellCard sp)
             {
-                int spellTweak = sp.SpellOrdinal == 1 ? -12 : -30;
-                if (HarborTrainingEasyBattleRules.IsActiveEasyBattle() && currentRound <= HarborTrainingEasyBattleRules.SoftPressureRoundsInclusive)
-                    spellTweak = sp.SpellOrdinal == 1 ? -18 : -36;
-                else if (HarborTrainingNormalBattleRules.IsActiveNormalBattle() &&
-                         currentRound <= HarborTrainingNormalBattleRules.SoftPressureRoundsInclusive)
-                    spellTweak = sp.SpellOrdinal == 1 ? -16 : -34;
+                int spellTweak = HarborTrainingDifficultyRuntime.GetFastAttackSpellTweak(
+                    currentRound,
+                    sp.SpellOrdinal,
+                    sp.SpellOrdinal == 1 ? -12 : -30);
                 return basePriority + spellTweak;
             }
 
             if (card is MonsterCard)
             {
-                int monBonus = 16;
-                if (HarborTrainingEasyBattleRules.IsActiveEasyBattle())
-                    monBonus = HarborTrainingEasyBattleRules.GetFastAttackMonsterPriorityBonus(currentRound);
-                else if (HarborTrainingNormalBattleRules.IsActiveNormalBattle())
-                    monBonus = HarborTrainingNormalBattleRules.GetFastAttackMonsterPriorityBonus(currentRound);
+                int monBonus = HarborTrainingDifficultyRuntime.GetFastAttackMonsterPriorityBonus(currentRound);
                 return basePriority + monBonus;
             }
         }
@@ -2611,10 +3121,8 @@ public class BattleSimulationManager : MonoBehaviour
     {
         if (BattleLaunchContext.IsIntroTutorialBattle)
             return IntroTutorialBattleRules.EnemyDrawPerTurn;
-        if (HarborTrainingEasyBattleRules.IsActiveEasyBattle())
-            return HarborTrainingEasyBattleRules.GetEnemyDrawPerTurn(currentRound);
-        if (HarborTrainingNormalBattleRules.IsActiveNormalBattle())
-            return HarborTrainingNormalBattleRules.GetEnemyDrawPerTurn(currentRound);
+        if (HarborTrainingDifficultyRuntime.IsHarborBattleActive)
+            return HarborTrainingDifficultyRuntime.GetEnemyDrawPerTurn(currentRound);
         return 2;
     }
 
@@ -2629,10 +3137,8 @@ public class BattleSimulationManager : MonoBehaviour
                 Mathf.RoundToInt(rawDamage * IntroTutorialBattleRules.EnemyDamageMultiplier));
         }
 
-        if (HarborTrainingEasyBattleRules.IsActiveEasyBattle())
-            return HarborTrainingEasyBattleRules.ScaleEnemyDamage(rawDamage);
-        if (HarborTrainingNormalBattleRules.IsActiveNormalBattle())
-            return HarborTrainingNormalBattleRules.ScaleEnemyDamage(rawDamage);
+        if (HarborTrainingDifficultyRuntime.IsHarborBattleActive)
+            return HarborTrainingDifficultyRuntime.ScaleEnemyDamage(rawDamage);
         return rawDamage;
     }
 
@@ -2646,17 +3152,6 @@ public class BattleSimulationManager : MonoBehaviour
         LogBattleHistory(
             "教學戰限時：第 " + IntroTutorialBattleRules.MaxRoundsInclusive + " 回合結束，判定我方獲勝。");
         CompleteBattle(1, "教學戰限時：第 " + IntroTutorialBattleRules.MaxRoundsInclusive + " 回合結束，判定我方獲勝。");
-    }
-
-    private void ForceHarborEasyRoundCapVictory()
-    {
-        if (battleOver) return;
-
-        string msg = "港灣訓練（簡單）第 " + HarborTrainingEasyBattleRules.MaxRoundsInclusive +
-                       " 回合結束，判定獲勝";
-        ShowBattleToast(msg, 3.2f);
-        LogBattleHistory(msg + "。");
-        CompleteBattle(1, msg + "。");
     }
 
     private bool UsesSchemingEnemyAi =>
@@ -2732,6 +3227,12 @@ public class BattleSimulationManager : MonoBehaviour
                 return true;
             case 1:
                 if (enemyField == null) return false;
+                if (enemyField.id == MonsterSkillIds.Nun &&
+                    (enemyConsecration.holyTherapyLinkOnNun || !enemyNunHolyResonanceUsed))
+                    return true;
+                if (enemyField.id == MonsterSkillIds.Queen && !enemyQueenShelterUsed &&
+                    playerField != null)
+                    return true;
                 float hurtRatio = strict ? 0.82f : 0.78f;
                 return enemyField.currentHp < Mathf.CeilToInt(enemyField.maxHp * hurtRatio);
             case 2:
@@ -2828,6 +3329,11 @@ public class BattleSimulationManager : MonoBehaviour
             if (monster < 0) monster = PickBestEnemyHandIndex(isMonster);
             if (monster >= 0) return monster;
         }
+        else if (CanReplaceFieldMonsterForConsecration(false))
+        {
+            int bind = PickBestEnemyConsecrationBindHandIndex();
+            if (bind >= 0) return bind;
+        }
 
         int chosen = PickBestEnemyHandIndex(notDeferred);
         if (chosen < 0) chosen = PickBestEnemyHandIndex(null);
@@ -2839,6 +3345,8 @@ public class BattleSimulationManager : MonoBehaviour
         if (card == null) return true;
         if (playerField != null)
         {
+            if (card is MonsterCard && CanReplaceFieldMonsterForConsecration(true))
+                return false;
             if (card is SpellCard spOnField) return spOnField.SpellOrdinal != 1;
             return true;
         }
@@ -2977,12 +3485,8 @@ public class BattleSimulationManager : MonoBehaviour
             return;
         }
 
-        if (HarborTrainingEasyBattleRules.IsActiveEasyBattle() &&
-            currentRound > HarborTrainingEasyBattleRules.MaxRoundsInclusive)
-        {
-            ForceHarborEasyRoundCapVictory();
-            return;
-        }
+        TryHarborEasyRoundCapVictoryAtBattleCheck();
+        if (battleOver) return;
 
         // 平手：①雙方英雄 HP≥1 且皆無牌可打 ②雙方英雄於同一次結算中皆 HP≤0
         if (playerHp >= 1 && enemyHp >= 1 && PlayerHasNoCardsToPlay() && EnemyHasNoCardsToPlay())
@@ -3673,6 +4177,24 @@ public class BattleSimulationManager : MonoBehaviour
         Card selected = enemyHand[handIndex];
         if (enemyField != null)
         {
+            if (selected is MonsterCard replaceMonster && CanReplaceFieldMonsterForConsecration(false))
+            {
+                enemyHand.RemoveAt(handIndex);
+                string prevName = enemyField.cardName;
+                enemyField = new BattleMonster(replaceMonster);
+                ApplySummonMonsterSkills(enemyField, false);
+                enemyPlacedCardThisRound = true;
+                enemyPlayedHandCardThisTurn = true;
+                BattleVerbose("Enemy replaced field with: " + enemyField.cardName);
+                LogBattleHistory("敵方以 " + enemyField.cardName + " 替換場上 " + prevName + "（祝聖轉移）");
+                ShowBattleToast(
+                    "敵方以 " + enemyField.cardName + " 替換場上 " + prevName + "（祝聖轉移）",
+                    2.8f);
+                EnemyCardPlayed?.Invoke(selected);
+                BattleLayoutVisualRefreshRequested?.Invoke();
+                return;
+            }
+
             bool lesserHealExempt = selected is SpellCard spField && spField.SpellOrdinal == 1;
             if (!lesserHealExempt)
                 return;
@@ -3703,6 +4225,7 @@ public class BattleSimulationManager : MonoBehaviour
             BattleVerbose("Enemy summoned: " + enemyField.cardName);
             NoteEnemySchemingCardPlayed(selected);
             EnemyCardPlayed?.Invoke(selected);
+            BattleLayoutVisualRefreshRequested?.Invoke();
         }
         else if (selected is SpellCard spell)
         {
@@ -3746,7 +4269,7 @@ public class BattleSimulationManager : MonoBehaviour
             if (resolved && spell.SpellOrdinal == 0)
                 FireballVisualRequested?.Invoke(false, hadPlayerMonsterForFireball);
             if (resolved && spell.SpellOrdinal == 1)
-                EnemyLesserHealVisualRequested?.Invoke();
+                EnemyLesserHealVisualRequested?.Invoke(pendingEnemyLesserHealVisual);
         }
         finally
         {
@@ -3768,6 +4291,7 @@ public class BattleSimulationManager : MonoBehaviour
             if (enemyHand[i] is MonsterCard handMonster)
             {
                 enemyField = new BattleMonster(handMonster);
+                ApplySummonMonsterSkills(enemyField, false);
                 enemyHand.RemoveAt(i);
                 BattleVerbose("Enemy start summon (hand): " + enemyField.cardName);
                 return;
