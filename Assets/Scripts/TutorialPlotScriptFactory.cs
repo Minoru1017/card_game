@@ -145,16 +145,20 @@ public static class TutorialPlotScriptFactory
         var steps = new List<MainPlotSceneController.PlotStep>(6);
         TapStep(steps, LinKeSpeaker,
             "……回來了 第一場" + StoryTextStyle.Em("教學戰") + "算你過關 出牌跟攻擊的節奏有跟上",
-            1);
+            1,
+            voiceClipId: "1-1_30");
         TapStep(steps, LinKeSpeaker,
             StoryTextStyle.Em("國王") + " " + StoryTextStyle.Em("王后") + " " + StoryTextStyle.Em("民兵") +
             " 各一張已放進背包 之後在 " + StoryTextStyle.Hi("Buildbeck") + " 或館藏都能看",
-            2);
+            2,
+            voiceClipId: "1-1_31");
         TapStep(steps, LinKeSpeaker,
             "想再練就回" + StoryTextStyle.Em("遊戲進度") + " 開入門級 熟了也能從那裡" + StoryTextStyle.Em("前往大廳") + " 自己逛",
-            3);
+            3,
+            voiceClipId: "1-1_32");
         TapStepEndPlot(steps, LinKeSpeaker,
-            "今天的引導先到這 戰況簿我會繼續幫你記 按下回到遊戲進度");
+            "今天的引導先到這 戰況簿我會繼續幫你記 按下回到遊戲進度",
+            voiceClipId: "1-1_33");
         return steps;
     }
 
@@ -205,7 +209,8 @@ public static class TutorialPlotScriptFactory
     private static void TapStepEndPlot(
         List<MainPlotSceneController.PlotStep> steps,
         string speaker,
-        string text)
+        string text,
+        string voiceClipId = null)
     {
         var step = new MainPlotSceneController.PlotStep
         {
@@ -222,6 +227,7 @@ public static class TutorialPlotScriptFactory
             choice3Next = -1
         };
         ApplySpeakerPortrait(step, speaker);
+        ApplyExplicitVoiceClipId(step, voiceClipId);
         steps.Add(step);
     }
 
@@ -243,7 +249,8 @@ public static class TutorialPlotScriptFactory
         string speaker,
         string text,
         int nextIndex,
-        bool assignIntroVoice = false)
+        bool assignIntroVoice = false,
+        string voiceClipId = null)
     {
         var step = new MainPlotSceneController.PlotStep
         {
@@ -261,7 +268,16 @@ public static class TutorialPlotScriptFactory
         ApplySpeakerPortrait(step, speaker);
         if (assignIntroVoice)
             ApplyIntroPlotVoiceClipId(steps, step, speaker);
+        ApplyExplicitVoiceClipId(step, voiceClipId);
         steps.Add(step);
+    }
+
+    private static void ApplyExplicitVoiceClipId(MainPlotSceneController.PlotStep step, string voiceClipId)
+    {
+        if (step == null || string.IsNullOrWhiteSpace(voiceClipId))
+            return;
+
+        step.npcVoiceClipId = voiceClipId.Trim();
     }
 
     private static void ChoiceStep(

@@ -48,8 +48,10 @@ public class MainPlotSceneController : MonoBehaviour
 
     private const float ChoiceButtonWidth = 366.94f;
     private const float ChoiceButtonHeight = 64.24f;
-    private const float ChoiceButtonX = 912f;
-    private static readonly float[] ChoiceButtonY = { -311.07f, -413f, -516.5f };
+    // 框內置中錨定：固定在中央 1440 安全帶的右側（右緣約 +693，距安全緣 27px），
+    // 任何比例都在 1920 框內、4:3 也不被切，且不貼螢幕實體邊。
+    private const float ChoiceButtonX = 510f;
+    private static readonly float[] ChoiceButtonY = { -181.07f, -283f, -386.5f };
     private static readonly string[] SceneChoiceButtonNames = { "玩家選擇按鈕1", "玩家選擇按鈕2", "玩家選擇按鈕3" };
     private static readonly string[] LegacyRuntimeChoiceNames = { "PlotRuntimeChoice1", "PlotRuntimeChoice2", "PlotRuntimeChoice3" };
 
@@ -407,6 +409,7 @@ public class MainPlotSceneController : MonoBehaviour
         if (button == null || layoutIndex < 0 || layoutIndex >= ChoiceButtonY.Length) return;
 
         RectTransform rt = button.GetComponent<RectTransform>();
+        // 框內置中錨定：固定在 1920 框內、中央 1440 安全帶右側，不貼螢幕邊、4:3 不被切。
         rt.anchorMin = new Vector2(0.5f, 0.5f);
         rt.anchorMax = new Vector2(0.5f, 0.5f);
         rt.pivot = new Vector2(0.5f, 0.5f);
@@ -495,10 +498,12 @@ public class MainPlotSceneController : MonoBehaviour
     {
         if (skipPlotButton == null) return;
         RectTransform rt = skipPlotButton.GetComponent<RectTransform>();
-        rt.anchorMin = new Vector2(1f, 1f);
-        rt.anchorMax = new Vector2(1f, 1f);
-        rt.pivot = new Vector2(1f, 1f);
-        rt.anchoredPosition = new Vector2(-20f, -20f);
+        // 收進中央 1440 安全帶的右上角（框內置中錨定，不貼螢幕實體邊；任何比例都完整可見）。
+        // 安全帶半寬 720、半高 540，留 20px 內距：右緣 700、上緣 520。
+        rt.anchorMin = new Vector2(0.5f, 0.5f);
+        rt.anchorMax = new Vector2(0.5f, 0.5f);
+        rt.pivot = new Vector2(0.5f, 0.5f);
+        rt.anchoredPosition = new Vector2(590f, 494f);
         rt.sizeDelta = new Vector2(220f, 52f);
     }
 

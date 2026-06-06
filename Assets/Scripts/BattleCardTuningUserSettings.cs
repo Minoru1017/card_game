@@ -6,7 +6,9 @@ using UnityEngine;
 public static class BattleCardTuningUserSettings
 {
     private const string PresetIdPrefsKey = "battle_card_tuning_preset_id";
-    private const string QualityLevelPrefsKey = "settings_quality_level";
+    private const string TargetFpsPrefsKey = "settings_target_fps";
+    private const int Fps30 = 30;
+    private const int Fps60 = 60;
 
     public static string GetSelectedPresetId() =>
         PlayerPrefs.GetString(PresetIdPrefsKey, BattleCardTuningPresetLibrary.Preset1Id);
@@ -21,25 +23,23 @@ public static class BattleCardTuningUserSettings
     public static bool TryApplySelectedPreset(BattleSimulationManager manager) =>
         manager != null && BattleCardTuningPresetLibrary.TryApplyPreset(manager, GetSelectedPresetId());
 
-    public static int GetSavedQualityLevel()
+    public static int GetSavedTargetFps()
     {
-        int saved = PlayerPrefs.GetInt(QualityLevelPrefsKey, QualitySettings.GetQualityLevel());
-        return Mathf.Clamp(saved, 0, Mathf.Max(0, QualitySettings.names.Length - 1));
+        int saved = PlayerPrefs.GetInt(TargetFpsPrefsKey, Fps60);
+        return saved <= Fps30 ? Fps30 : Fps60;
     }
 
-    public static void SetQualityLevel(int level)
+    public static void SetTargetFps(int fps)
     {
-        int clamped = Mathf.Clamp(level, 0, Mathf.Max(0, QualitySettings.names.Length - 1));
-        QualitySettings.SetQualityLevel(clamped, true);
-        MobilePerformanceBootstrap.ApplyMobileFramePacing();
-        PlayerPrefs.SetInt(QualityLevelPrefsKey, clamped);
+        int clamped = fps <= Fps30 ? Fps30 : Fps60;
+        QualitySettings.vSyncCount = 0;
+        Application.targetFrameRate = clamped;
+        PlayerPrefs.SetInt(TargetFpsPrefsKey, clamped);
         PlayerPrefs.Save();
     }
 
-    public static void ApplySavedQualityLevel()
+    public static void ApplySavedTargetFps()
     {
-        if (QualitySettings.names == null || QualitySettings.names.Length == 0) return;
-        QualitySettings.SetQualityLevel(GetSavedQualityLevel(), true);
-        MobilePerformanceBootstrap.ApplyMobileFramePacing();
+        SetTargetFps(GetSavedTargetFps());
     }
 }

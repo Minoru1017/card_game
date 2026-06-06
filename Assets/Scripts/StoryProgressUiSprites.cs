@@ -1,10 +1,8 @@
 using UnityEngine;
 
-/// <summary>Story progress 場景用 UI 圖（<c>Assets/UI/return.png</c> 執行期自 Resources 載入）。</summary>
+/// <summary>Story progress 場景用 UI 圖（返回鍵，自 UiSpriteLibrary 直接引用取得）。</summary>
 public static class StoryProgressUiSprites
 {
-    private const string ReturnButtonResourcesPath = "UI/return";
-
     private static Sprite cachedReturnButton;
 
     public static Sprite GetReturnButtonSprite()
@@ -12,31 +10,16 @@ public static class StoryProgressUiSprites
         if (cachedReturnButton != null)
             return cachedReturnButton;
 
-        cachedReturnButton = Resources.Load<Sprite>(ReturnButtonResourcesPath);
-        if (cachedReturnButton != null)
-            return cachedReturnButton;
-
-        Sprite[] slices = Resources.LoadAll<Sprite>(ReturnButtonResourcesPath);
-        if (slices != null)
+        UiSpriteLibrary library = UiSpriteLibrary.Instance;
+        if (library != null && library.ReturnButton != null)
         {
-            for (int i = 0; i < slices.Length; i++)
-            {
-                Sprite s = slices[i];
-                if (s == null) continue;
-                if (s.name == "return_0" || s.name == "return")
-                {
-                    cachedReturnButton = s;
-                    return cachedReturnButton;
-                }
-            }
-
-            if (slices.Length > 0 && slices[0] != null)
-            {
-                cachedReturnButton = slices[0];
-                return cachedReturnButton;
-            }
+            cachedReturnButton = library.ReturnButton;
+            return cachedReturnButton;
         }
 
+        Debug.LogWarning(
+            "StoryProgressUiSprites: 返回鍵不在 UiSpriteLibrary，" +
+            "請重跑 Tools/UI/Create or Refresh UI Sprite Library。");
         return null;
     }
 }

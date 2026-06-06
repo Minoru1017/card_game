@@ -38,22 +38,30 @@ public class StoryProgressSceneController : MonoBehaviour
     private const float DetailTextPad = 36f;
     private const float DetailTitleMinY = 0.86f;
     private const float DetailTitleMaxY = 0.97f;
-    private const float DetailIntroMinY = 0.30f;
-    private const float DetailIntroMaxY = 0.855f;
-    private const float DetailRewardsMinY = 0.11f;
-    private const float DetailRewardsMaxY = 0.28f;
+    private const float DetailIntroMinY = 0.35f;
+    private const float DetailIntroMaxY = 0.84f;
+    private const float DetailRewardsMinY = 0.08f;
+    private const float DetailRewardsMaxY = 0.31f;
     private const string ScenarioPreviewPanelObjectName = "Scenario Preview";
     private const string FooterPanelObjectName = "Panel";
     private const string FooterButtonRowObjectName = "StoryProgressFooterButtonRow";
-    private const float FooterButtonRowInsetRight = 72f;
-    private const float FooterButtonRowInsetBottom = 20f;
+    private const float FooterButtonRowInsetRight = 96f;
+    private const float FooterButtonRowInsetBottom = 24f;
     private const float FooterButtonSpacing = 14f;
     private const float FooterButtonWidth = 280f;
     private const float FooterButtonHeight = 64f;
     private RectTransform footerButtonRowRt;
-    private const float HarborBulletinPadLeft = 248f;
-    private const float HarborBulletinBreathingLeft = 192f;
-    private const float HarborBulletinTextMarginLeft = 52f;
+    private const float HarborBulletinPadLeft = 24f;
+    private const float HarborBulletinBreathingLeft = 24f;
+    private const float HarborBulletinTextMarginLeft = 18f;
+    private const float HarborBulletinReserveRight = 660f;
+    private const float RightDockBaseWidth = 1035.7983f;
+    private const float RightDockWidthAt18By9 = 860f;
+    private const float RightDockWidthAt22By9 = 940f;
+    private const float RightDockBaseHeight = 1119f;
+    private const float RightDockCenterYOffset = 82.5f;
+    private const float RightDockAbsoluteMinScale = 0.35f;
+    private const float RightDockTextScaleAt20By9 = 0.86f;
 
     private TMP_Text chapterMapStatusTmp;
     private TMP_Text chapterMapTitleTmp;
@@ -328,13 +336,86 @@ public class StoryProgressSceneController : MonoBehaviour
 
         ApplyFooterActionButtonLayout(introGraduated);
 
+        ApplyResponsiveRightDockLayout();
         ApplyRightDetailPanelThemeAndLayout();
+        ApplyResponsiveRightDockTextScale();
         if (chapterSummaryTmp != null)
             ApplyHarborBulletinText(chapterSummaryTmp, StoryProgressLevelCopy.BuildHarborBulletin(introGraduated));
 
-        StoryProgressFooterLayer.EnsureHarborBulletinOnTop(backButton != null ? backButton.transform : null, forceLayout: true);
-        StoryProgressSidebarResponsiveLayout.ApplyNow(SceneManager.GetActiveScene());
-        StoryProgressSidebarResponsiveLayoutDriver.EnsureExists();
+    }
+
+    private void ApplyResponsiveRightDockLayout()
+    {
+        if (viewLevelFlowRt == null)
+            return;
+
+        float h = Mathf.Max(1f, Screen.height);
+        float aspect = Screen.width / h;
+        float t18 = Mathf.InverseLerp(16f / 9f, 18f / 9f, aspect);
+        float t22 = Mathf.InverseLerp(18f / 9f, 22f / 9f, aspect);
+        // 18:9→22:9：在高度受限縮小後，橫向給補償加寬，避免面板內容過度擠壓。
+        float widthByAspect = aspect <= 18f / 9f
+            ? Mathf.Lerp(RightDockBaseWidth, RightDockWidthAt18By9, t18)
+            : Mathf.Lerp(RightDockWidthAt18By9, RightDockWidthAt22By9, t22);
+
+        // 20:9 進一步約束：綠色底板底邊不可超過青色底板上緣。
+        // 做法：在寬螢幕下再套一層等比縮放，直到 bottom == cyanTop（或更上方）。
+        float fitScale = 1f;
+        RectTransform footerRt = ResolveFooterPanelTransform() as RectTransform;
+        RectTransform parentRt = viewLevelFlowRt.parent as RectTransform;
+        if (footerRt != null && parentRt != null)
+        {
+            Canvas.ForceUpdateCanvases();
+            Vector3[] footerCorners = new Vector3[4];
+            footerRt.GetWorldCorners(footerCorners);
+            float cyanTopLocalY = parentRt.InverseTransformPoint(footerCorners[1]).y;
+            float maxHeight = (RightDockCenterYOffset - cyanTopLocalY) * 2f;
+            if (maxHeight > 1f)
+                fitScale = Mathf.Clamp(maxHeight / RightDockBaseHeight, RightDockAbsoluteMinScale, 1f);
+            else
+                fitScale = RightDockAbsoluteMinScale;
+        }
+
+        float width = widthByAspect * fitScale;
+        float height = RightDockBaseHeight * fitScale;
+
+        // 右側綠色底板：永遠貼齊右緣；20:9 逐步縮窄，子容器/文字會隨父層一起跟隨。
+        viewLevelFlowRt.anchorMin = new Vector2(1f, 0.5f);
+        viewLevelFlowRt.anchorMax = new Vector2(1f, 0.5f);
+        viewLevelFlowRt.pivot = new Vector2(1f, 0.5f);
+        viewLevelFlowRt.anchoredPosition = new Vector2(0f, RightDockCenterYOffset);
+        viewLevelFlowRt.sizeDelta = new Vector2(width, height);
+        viewLevelFlowRt.localScale = Vector3.one;
+    }
+
+    private static float ResolveRightDockTextScale()
+    {
+        float h = Mathf.Max(1f, Screen.height);
+        float aspect = Screen.width / h;
+        float t = Mathf.InverseLerp(16f / 9f, 20f / 9f, aspect);
+        return Mathf.Lerp(1f, RightDockTextScaleAt20By9, t);
+    }
+
+    private void ApplyResponsiveRightDockTextScale()
+    {
+        float scale = ResolveRightDockTextScale();
+
+        if (levelPanelTitleTmp != null)
+            levelPanelTitleTmp.fontSize = 52f * scale;
+
+        if (scenarioPreviewTmp != null)
+        {
+            scenarioPreviewTmp.fontSize = 28f * scale;
+            scenarioPreviewTmp.lineSpacing = 8f * scale;
+            scenarioPreviewTmp.paragraphSpacing = 14f * scale;
+        }
+
+        if (scenarioRewardsTmp != null)
+        {
+            scenarioRewardsTmp.fontSize = 28f * scale;
+            scenarioRewardsTmp.lineSpacing = 8f * scale;
+            scenarioRewardsTmp.paragraphSpacing = 14f * scale;
+        }
     }
 
     private void ApplyRightDetailPanelThemeAndLayout()
@@ -874,7 +955,6 @@ public class StoryProgressSceneController : MonoBehaviour
     {
         if (leavingForHall || backButton == null) return;
 
-        StoryProgressFooterLayer.EnsureHarborBulletinOnTop(backButton.transform, forceLayout: true);
         BringBackButtonToFront();
         Canvas canvas = backButton.GetComponentInParent<Canvas>();
         ReturnButtonLayout.ApplyTo(backButton.GetComponent<RectTransform>(), canvas);
@@ -1443,10 +1523,10 @@ public class StoryProgressSceneController : MonoBehaviour
 
         float leftInset = HarborBulletinPadLeft + HarborBulletinBreathingLeft;
         rt.anchorMin = new Vector2(0f, 0f);
-        rt.anchorMax = new Vector2(0.76f, 1f);
+        rt.anchorMax = new Vector2(1f, 1f);
         rt.pivot = new Vector2(0f, 0.5f);
-        rt.offsetMin = new Vector2(leftInset, 10f);
-        rt.offsetMax = new Vector2(-20f, -10f);
+        rt.offsetMin = new Vector2(leftInset, 12f);
+        rt.offsetMax = new Vector2(-HarborBulletinReserveRight, -12f);
         rt.anchoredPosition = Vector2.zero;
         rt.localScale = Vector3.one;
     }

@@ -1,21 +1,12 @@
 using UnityEngine;
 using UnityEngine.UI;
 
-#if UNITY_EDITOR
-using UnityEditor;
-#endif
-
 /// <summary>
-/// 港灣訓練場（1-1 實戰）對戰場景背景：將 <c>戰鬥背景</c> 換為 <c>bay.png</c>；其餘對戰維持場景預設。
+/// 港灣訓練場（1-1 實戰）對戰場景背景：將 <c>戰鬥背景</c> 換為 bay 圖（自 UiSpriteLibrary 直接引用）；其餘對戰維持場景預設。
 /// </summary>
 public static class HarborTrainingBattleBackground
 {
     public const string BattleBackgroundObjectName = "戰鬥背景";
-    public const string HarborBayResourcesPath = "UI/Level background/bay";
-
-#if UNITY_EDITOR
-    public const string HarborBayAssetPath = "Assets/UI/Level background/bay.png";
-#endif
 
     private static Sprite cachedDefaultSprite;
     private static Sprite cachedHarborSprite;
@@ -92,13 +83,17 @@ public static class HarborTrainingBattleBackground
 
     private static Sprite ResolveHarborSprite()
     {
-        // 每次解析，避免編輯器內更換 bay.png 後仍沿用舊的靜態快取。
-        Sprite loaded = Resources.Load<Sprite>(HarborBayResourcesPath);
-#if UNITY_EDITOR
-        if (loaded == null)
-            loaded = AssetDatabase.LoadAssetAtPath<Sprite>(HarborBayAssetPath);
-#endif
-        cachedHarborSprite = loaded;
+        UiSpriteLibrary library = UiSpriteLibrary.Instance;
+        if (library != null && library.HarborBayBackground != null)
+        {
+            cachedHarborSprite = library.HarborBayBackground;
+            return cachedHarborSprite;
+        }
+
+        Debug.LogWarning(
+            "HarborTrainingBattleBackground: bay 不在 UiSpriteLibrary，" +
+            "請重跑 Tools/UI/Create or Refresh UI Sprite Library。");
+        cachedHarborSprite = null;
         return cachedHarborSprite;
     }
 

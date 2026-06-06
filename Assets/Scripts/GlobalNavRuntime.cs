@@ -71,11 +71,6 @@ public class GlobalNavRuntime : MonoBehaviour
     private const float PlayerInfoLineGap = 10f;
     private const float PlayerInfoHeaderHeight = 76f;
     private const float PlayerInfoFooterHeight = 60f;
-    /// <summary>玩家資訊主面板寬高（參考解析度比例 + 上限）。</summary>
-    private const float PlayerInfoPanelWidthRatio = 0.9f;
-    private const float PlayerInfoPanelMaxWidthPx = 1320f;
-    private const float PlayerInfoPanelHeightRatio = 0.9f;
-    private const float PlayerInfoPanelMaxHeightPx = 900f;
     private static readonly Color PlayerInfoTextPrimary = new Color(0.2f, 0.16f, 0.12f, 1f);
     private static readonly Color PlayerInfoTextMuted = new Color(0.48f, 0.42f, 0.36f, 1f);
     private static readonly Color PlayerInfoSectionBg = new Color(0.98f, 0.96f, 0.92f, 0.98f);
@@ -152,7 +147,10 @@ public class GlobalNavRuntime : MonoBehaviour
         canvas.sortingOrder = 6000;
 
         CanvasScaler scaler = canvasObj.GetComponent<CanvasScaler>();
-        MobileUiLayoutPolicy.ApplyCanvasScaler(scaler);
+        scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+        scaler.referenceResolution = new Vector2(1920f, 1080f);
+        scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
+        scaler.matchWidthOrHeight = 0.5f;
 
         GameObject trigger = CreateButton(
             canvasObj.transform,
@@ -832,8 +830,8 @@ public class GlobalNavRuntime : MonoBehaviour
         dim.color = new Color(0.1f, 0.08f, 0.06f, 0.72f);
         dim.raycastTarget = true;
 
-        float panelWidth = MobileUiLayoutPolicy.PanelWidthInReferenceUnits(PlayerInfoPanelWidthRatio, PlayerInfoPanelMaxWidthPx);
-        float panelHeight = MobileUiLayoutPolicy.PanelHeightInReferenceUnits(PlayerInfoPanelHeightRatio, PlayerInfoPanelMaxHeightPx);
+        float panelWidth = Mathf.Min(Screen.width * 0.8f, 1160f);
+        float panelHeight = Mathf.Min(Screen.height * 0.82f, 780f);
 
         GameObject panel = new GameObject("ProfilePanel", typeof(RectTransform), typeof(Image));
         panel.transform.SetParent(root.transform, false);

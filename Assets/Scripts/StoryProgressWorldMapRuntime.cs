@@ -59,8 +59,6 @@ public sealed class StoryProgressWorldMapRuntime : MonoBehaviour
     private float lastFocusToggleUnscaledTime = -999f;
     private float blockM11PointerToggleUntilUnscaledTime = -999f;
     private int lastBracketZoomAppliedFrame = -1;
-    private Rect lastLayoutSafeArea;
-    private Vector2Int lastLayoutScreenSize;
     private const float FocusToggleDebounceSeconds = 0.22f;
     private const float M11PointerToggleBlockSeconds = 0.12f;
     private readonly List<UiVisibilityRecord> hiddenUiRecords = new List<UiVisibilityRecord>(16);
@@ -134,7 +132,6 @@ public sealed class StoryProgressWorldMapRuntime : MonoBehaviour
         nodeDb = StoryProgressNodeDatabaseLibrary.Load();
         BuildNodeGraphVisuals();
         FocusInitialNode();
-        StoryProgressFooterLayer.ApplyIfNeeded(force: true);
         return true;
     }
 
@@ -192,9 +189,10 @@ public sealed class StoryProgressWorldMapRuntime : MonoBehaviour
         viewportRt.anchorMin = Vector2.zero;
         viewportRt.anchorMax = Vector2.one;
         viewportRt.pivot = new Vector2(0.5f, 0.5f);
+        viewportRt.offsetMin = Vector2.zero;
+        viewportRt.offsetMax = Vector2.zero;
         viewportRt.anchoredPosition = Vector2.zero;
         viewportRt.localScale = Vector3.one;
-        ApplyMapViewportResponsiveInsets();
 
         Image viewportImage = viewportObj.GetComponent<Image>();
         viewportImage.color = new Color(0f, 0f, 0f, 0.01f);
@@ -258,7 +256,7 @@ public sealed class StoryProgressWorldMapRuntime : MonoBehaviour
 
     private void LateUpdate()
     {
-        if (mapFocusMode && viewportRt != null)
+        if (mapFocusMode && viewportRt != null && viewportRt.GetSiblingIndex() != viewportRt.parent.childCount - 1)
             viewportRt.SetAsLastSibling();
         if (viewportRt != null && viewportSiblingIndex >= 0 && viewportRt.GetSiblingIndex() != viewportSiblingIndex)
         {
@@ -268,22 +266,6 @@ public sealed class StoryProgressWorldMapRuntime : MonoBehaviour
 
         if (viewportRt != null && viewportRt.localScale != Vector3.one)
             viewportRt.localScale = Vector3.one;
-
-        if (viewportRt != null)
-            TryRefreshMapViewportResponsiveInsets();
-    }
-
-    private void TryRefreshMapViewportResponsiveInsets()
-    {
-        Rect safe = Screen.safeArea;
-        Vector2Int size = new Vector2Int(Screen.width, Screen.height);
-        if (safe == lastLayoutSafeArea && size == lastLayoutScreenSize)
-            return;
-
-        lastLayoutSafeArea = safe;
-        lastLayoutScreenSize = size;
-        ApplyMapViewportResponsiveInsets();
-        ApplyMapCoverFillLayout();
     }
 
     /// <summary>等比放大至填滿 viewport（cover）；超出部分靠 ScrollRect 滑動。</summary>
@@ -314,17 +296,6 @@ public sealed class StoryProgressWorldMapRuntime : MonoBehaviour
             SetMapZoom(MapCoverMinZoom);
         ClampContentAnchoredPosition();
         ReapplyDefaultMapFocusOnNode();
-    }
-
-    private void ApplyMapViewportResponsiveInsets()
-    {
-        if (viewportRt == null)
-            return;
-
-        Canvas canvas = viewportRt.GetComponentInParent<Canvas>();
-        MobileUiLayoutPolicy.CanvasSafeInsets safe = MobileUiLayoutPolicy.GetCanvasSafeInsets(canvas);
-        viewportRt.offsetMin = new Vector2(safe.Left, safe.Bottom);
-        viewportRt.offsetMax = new Vector2(-safe.Right, -safe.Top);
     }
 
     private void Update()
@@ -928,7 +899,7 @@ public sealed class StoryProgressWorldMapRuntime : MonoBehaviour
             return;
         }
         string stateText = state == NodeState.Cleared ? "已通關" : (state == NodeState.Available ? "可挑戰" : "未解鎖");
-        Debug.Log("Story map node selected: " + node.nodeId + " " + node.title + " (" + stateText + ")");
+        GameDevLog.Log("Story map node selected: " + node.nodeId + " " + node.title + " (" + stateText + ")");
     }
 
     private void TryToggleMapFocusMode()
@@ -982,8 +953,6 @@ public sealed class StoryProgressWorldMapRuntime : MonoBehaviour
         ApplyMapFocusInteractivity();
         if (viewportRt != null && viewportSiblingIndex >= 0)
             viewportRt.SetSiblingIndex(viewportSiblingIndex);
-        StoryProgressFooterLayer.ApplyIfNeeded(force: true);
-        StoryProgressSidebarResponsiveLayout.ApplyNow(SceneManager.GetActiveScene());
     }
 
     private void ApplyMapFocusInteractivity()

@@ -29,7 +29,7 @@ public partial class SceneLoader
     private Button battlePreviewGiveUpButton;
     private TMP_FontAsset battlePreviewFontAsset;
     [Header("Battle Preview Panel Art")]
-    [Tooltip("戰前預覽主面板底圖（建議拖入 Assets/Resources/UI/pre-war preview）。留空則從 Resources 載入；仍無則退回程式色塊。")]
+    [Tooltip("戰前預覽主面板底圖（本元件專用覆寫）。留空則改用 UiSpriteLibrary.BattlePreviewPanel（Tools/UI/Create or Refresh UI Sprite Library）。")]
     [SerializeField] private Sprite battlePreviewPanelSprite;
     [Tooltip("可選：按鈕用 9-slice 圓角底；留空則按鈕為純色矩形。")]
     [SerializeField] private Sprite runtimeRoundedUiSprite;
@@ -39,12 +39,10 @@ public partial class SceneLoader
     [SerializeField] private Sprite difficultySpriteNormal;
     [SerializeField] private Sprite difficultySpriteHard;
     [SerializeField] private Sprite difficultySpriteBoss;
-    private const string DefaultBattlePreviewPanelResourcePath = "UI/pre-war preview";
     private static Sprite _cachedDefaultBattlePreviewPanelSprite;
     private static readonly Dictionary<BattleDifficultyTier, Sprite> CachedDifficultyTierSprites =
         new Dictionary<BattleDifficultyTier, Sprite>();
-    private const int BattlePreviewLayoutVersion = 26;
-    private const string DifficultyLevelResourceRoot = "UI/Difficulty level";
+    private const int BattlePreviewLayoutVersion = 25;
     private static readonly Color BattlePreviewInk = new Color(0.2f, 0.17f, 0.12f, 1f);
     private static readonly Color BattlePreviewInkMuted = new Color(0.35f, 0.30f, 0.22f, 1f);
     private const float AcSelectScalePeak = 1.045f;
@@ -141,9 +139,6 @@ public partial class SceneLoader
     private TextMeshProUGUI battlePreviewAuthoredRightDetailText;
     private GameObject battlePreviewArchRowRoot;
     private float battlePreviewAuthoredLayoutSy = 1f;
-    private float battlePreviewAuthoredLayoutSx = 1f;
-    private Vector2Int battlePreviewBuiltScreenSize;
-    private Rect battlePreviewBuiltSafeArea;
     private TextMeshProUGUI battlePreviewAuthoredPuzzleTitleText;
     private TextMeshProUGUI battlePreviewAuthoredPuzzleHintText;
 
@@ -334,8 +329,12 @@ public partial class SceneLoader
     {
         if (battlePreviewOverlayRoot != null)
         {
-            if (IsBattlePreviewLayoutStillValid())
-                return;
+            bool layoutCurrent = battlePreviewLayoutBuilt == BattlePreviewLayoutVersion
+                && string.Equals(
+                    battlePreviewLayoutBuiltPuzzleId,
+                    battlePreviewActivePuzzleId,
+                    StringComparison.Ordinal);
+            if (layoutCurrent) return;
             DestroyBattlePreviewUi();
         }
 
@@ -374,10 +373,14 @@ public partial class SceneLoader
         Image panelBg = panelObj.GetComponent<Image>();
         Sprite panelSprite = ResolveBattlePreviewPanelSprite();
         bool authoredPanel = panelSprite != null;
-        TryComputeBattlePreviewPanelFitSize(parentCanvas, panelSprite, out float panelW, out float panelH);
-        panelRt.sizeDelta = new Vector2(panelW, panelH);
         if (authoredPanel)
         {
+            float artW = panelSprite.rect.width;
+            float artH = panelSprite.rect.height;
+            float maxW = Screen.width * 0.8f;
+            float maxH = Screen.height * 0.8f;
+            float fitScale = Mathf.Min(maxW / artW, maxH / artH);
+            panelRt.sizeDelta = new Vector2(artW * fitScale, artH * fitScale);
             panelBg.sprite = panelSprite;
             panelBg.color = Color.white;
             panelBg.type = Image.Type.Simple;
@@ -385,6 +388,7 @@ public partial class SceneLoader
         }
         else
         {
+            panelRt.sizeDelta = new Vector2(Screen.width * 0.8f, Screen.height * 0.8f);
             panelBg.color = new Color(0.96f, 0.92f, 0.84f, 1f);
             panelBg.type = Image.Type.Simple;
         }
@@ -464,6 +468,8 @@ public partial class SceneLoader
         else
             chipRowObj.SetActive(false);
 
+        float panelW = panelRt.sizeDelta.x;
+        float panelH = panelRt.sizeDelta.y;
         float authoredArtW = AuthoredArtWidth;
         float authoredArtH = AuthoredArtHeight;
         if (authoredPanel && panelSprite != null)
@@ -473,8 +479,6 @@ public partial class SceneLoader
         }
         float layoutSx = authoredPanel ? panelW / authoredArtW : 1f;
         float layoutSy = authoredPanel ? panelH / authoredArtH : 1f;
-        battlePreviewAuthoredLayoutSx = layoutSx;
-        battlePreviewAuthoredLayoutSy = layoutSy;
 
         const float previewFooterHeight = 100f;
         float previewContentBottom = authoredPanel ? 0f : previewFooterHeight + 12f;
@@ -581,7 +585,7 @@ public partial class SceneLoader
             diffRailRt.anchorMax = new Vector2(0f, 1f);
             diffRailRt.pivot = new Vector2(0f, 0.5f);
             diffRailRt.anchoredPosition = Vector2.zero;
-            diffRailRt.sizeDelta = new Vector2(BattlePreviewDifficultyRailWidthPx * layoutSx, 0f);
+            diffRailRt.sizeDelta = new Vector2(BattlePreviewDifficultyRailWidthPx, 0f);
         }
 
         Image diffRailBg = diffRailObj.GetComponent<Image>();
@@ -712,63 +716,7 @@ public partial class SceneLoader
         battlePreviewOverlayRoot = overlay;
         battlePreviewLayoutBuilt = BattlePreviewLayoutVersion;
         battlePreviewLayoutBuiltPuzzleId = battlePreviewActivePuzzleId;
-        battlePreviewBuiltScreenSize = new Vector2Int(Screen.width, Screen.height);
-        battlePreviewBuiltSafeArea = Screen.safeArea;
         battlePreviewOverlayRoot.SetActive(false);
-    }
-
-    private bool IsBattlePreviewLayoutStillValid()
-    {
-        if (battlePreviewOverlayRoot == null)
-            return false;
-        if (battlePreviewLayoutBuilt != BattlePreviewLayoutVersion)
-            return false;
-        if (!string.Equals(battlePreviewLayoutBuiltPuzzleId, battlePreviewActivePuzzleId, StringComparison.Ordinal))
-            return false;
-        if (battlePreviewBuiltScreenSize.x != Screen.width || battlePreviewBuiltScreenSize.y != Screen.height)
-            return false;
-        return battlePreviewBuiltSafeArea == Screen.safeArea;
-    }
-
-    /// <summary>
-    /// 依 Canvas 可視區（含 Safe Area）等比縮放預覽面板，維持美術稿寬高比。
-    /// </summary>
-    private static void TryComputeBattlePreviewPanelFitSize(
-        Canvas parentCanvas,
-        Sprite panelSprite,
-        out float panelWidth,
-        out float panelHeight)
-    {
-        float artW = AuthoredArtWidth;
-        float artH = AuthoredArtHeight;
-        if (panelSprite != null)
-        {
-            artW = panelSprite.rect.width;
-            artH = panelSprite.rect.height;
-        }
-
-        RectTransform canvasRt = parentCanvas != null ? parentCanvas.transform as RectTransform : null;
-        float canvasW = canvasRt != null && canvasRt.rect.width > 1f
-            ? canvasRt.rect.width
-            : MobileUiLayoutPolicy.ReferenceResolution.x;
-        float canvasH = canvasRt != null && canvasRt.rect.height > 1f
-            ? canvasRt.rect.height
-            : MobileUiLayoutPolicy.ReferenceResolution.y;
-
-        MobileUiLayoutPolicy.CanvasSafeInsets safe = parentCanvas != null
-            ? MobileUiLayoutPolicy.GetCanvasSafeInsets(parentCanvas)
-            : default;
-
-        float availW = Mathf.Max(320f, canvasW - safe.Left - safe.Right);
-        float availH = Mathf.Max(320f, canvasH - safe.Top - safe.Bottom);
-
-        const float widthFillRatio = 0.92f;
-        const float heightFillRatio = 0.9f;
-        float fitScale = Mathf.Min(
-            availW * widthFillRatio / artW,
-            availH * heightFillRatio / artH);
-        panelWidth = artW * fitScale;
-        panelHeight = artH * fitScale;
     }
 
     private void DestroyBattlePreviewUi()
@@ -915,21 +863,21 @@ public partial class SceneLoader
         if (CachedDifficultyTierSprites.TryGetValue(tier, out Sprite cached) && cached != null)
             return cached;
 
-        string resourceName = GetDifficultyTierResourceName(tier);
-        if (string.IsNullOrEmpty(resourceName)) return null;
-
-        string path = DifficultyLevelResourceRoot + "/" + resourceName;
-        Sprite loaded = Resources.Load<Sprite>(path);
-        if (loaded == null)
+        UiSpriteLibrary library = UiSpriteLibrary.Instance;
+        if (library != null)
         {
-            Sprite[] sprites = Resources.LoadAll<Sprite>(path);
-            if (sprites != null && sprites.Length > 0)
-                loaded = sprites[0];
+            Sprite fromLibrary = library.GetDifficultyTier(tier);
+            if (fromLibrary != null)
+            {
+                CachedDifficultyTierSprites[tier] = fromLibrary;
+                return fromLibrary;
+            }
         }
 
-        if (loaded != null)
-            CachedDifficultyTierSprites[tier] = loaded;
-        return loaded;
+        Debug.LogWarning(
+            $"SceneLoader: 難度圖 '{tier}' 不在 UiSpriteLibrary，" +
+            "請重跑 Tools/UI/Create or Refresh UI Sprite Library。");
+        return null;
     }
 
     private Sprite GetAssignedDifficultyTierSprite(BattleDifficultyTier tier)
@@ -945,45 +893,22 @@ public partial class SceneLoader
         }
     }
 
-    private static string GetDifficultyTierResourceName(BattleDifficultyTier tier)
-    {
-        switch (tier)
-        {
-            case BattleDifficultyTier.Intro: return "Basics";
-            case BattleDifficultyTier.Easy: return "Easy";
-            case BattleDifficultyTier.Normal: return "Normal";
-            case BattleDifficultyTier.Hard: return "Hard";
-            case BattleDifficultyTier.Boss: return "Boss";
-            default: return null;
-        }
-    }
-
     private Sprite ResolveBattlePreviewPanelSprite()
     {
         if (battlePreviewPanelSprite != null) return battlePreviewPanelSprite;
         if (_cachedDefaultBattlePreviewPanelSprite != null) return _cachedDefaultBattlePreviewPanelSprite;
 
-        _cachedDefaultBattlePreviewPanelSprite = Resources.Load<Sprite>(DefaultBattlePreviewPanelResourcePath);
-        if (_cachedDefaultBattlePreviewPanelSprite != null)
-            return _cachedDefaultBattlePreviewPanelSprite;
-
-        Sprite[] sprites = Resources.LoadAll<Sprite>(DefaultBattlePreviewPanelResourcePath);
-        if (sprites == null || sprites.Length == 0)
-            return null;
-
-        for (int i = 0; i < sprites.Length; i++)
+        UiSpriteLibrary library = UiSpriteLibrary.Instance;
+        if (library != null && library.BattlePreviewPanel != null)
         {
-            Sprite s = sprites[i];
-            if (s == null) continue;
-            if (s.name.IndexOf("pre-war", StringComparison.OrdinalIgnoreCase) >= 0)
-            {
-                _cachedDefaultBattlePreviewPanelSprite = s;
-                return _cachedDefaultBattlePreviewPanelSprite;
-            }
+            _cachedDefaultBattlePreviewPanelSprite = library.BattlePreviewPanel;
+            return _cachedDefaultBattlePreviewPanelSprite;
         }
 
-        _cachedDefaultBattlePreviewPanelSprite = sprites[0];
-        return _cachedDefaultBattlePreviewPanelSprite;
+        Debug.LogWarning(
+            "SceneLoader: 對戰預覽面板底圖不在 UiSpriteLibrary，" +
+            "請重跑 Tools/UI/Create or Refresh UI Sprite Library。");
+        return null;
     }
 
     private TextMeshProUGUI CreatePreviewBlockText(Transform parent, string objName, bool asScrollChild = false)

@@ -1,0 +1,93 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 894d25f5c1629394d9306b5abe5c4793, type: 3}
+  m_Name: CardArtLibrary
+  m_EditorClassIdentifier: 
+  entries:
+  - id: -3
+    artwork: {fileID: -8881082873504947782, guid: 14b738eb6fcf0a54cbfdfd022d493223, type: 3}
+    deckThumb: {fileID: -8881082873504947782, guid: 65e69f598955d99428d7310de9cecdce, type: 3}
+  - id: -2
+    artwork: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+    deckThumb: {fileID: 0}
+  - id: -1
+    artwork: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+    deckThumb: {fileID: 0}
+  - id: 0
+    artwork: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+    deckThumb: {fileID: 0}
+  - id: 1
+    artwork: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+    deckThumb: {fileID: 0}
+  - id: 2
+    artwork: {fileID: -1594932792720625945, guid: 58bcba648277b4f4abe4b786587091b8, type: 3}
+    deckThumb: {fileID: 0}
+  - id: 3
+    artwork: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+    deckThumb: {fileID: 0}
+  - id: 4
+    artwork: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+    deckThumb: {fileID: 0}
+  - id: 5
+    artwork: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+    deckThumb: {fileID: 0}
+  - id: 6
+    artwork: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+    deckThumb: {fileID: 0}
+  - id: 7
+    artwork: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+    deckThumb: {fileID: 0}
+  - id: 8
+    artwork: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+    deckThumb: {fileID: 0}
+  - id: 9
+    artwork: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+    deckThumb: {fileID: 0}
+  - id: 10
+    artwork: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+    deckThumb: {fileID: 0}
+  - id: 11
+    artwork: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+    deckThumb: {fileID: 0}
+  - id: 12
+    artwork: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+    deckThumb: {fileID: 0}
+  - id: 13
+    artwork: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+    deckThumb: {fileID: 0}
+  - id: 14
+    artwork: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+    deckThumb: {fileID: 0}
+  - id: 15
+    artwork: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+    deckThumb: {fileID: 0}
+  - id: 16
+    artwork: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+    deckThumb: {fileID: 0}
+  - id: 17
+    artwork: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+    deckThumb: {fileID: 0}
+  - id: 18
+    artwork: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+    deckThumb: {fileID: 0}
+  - id: 19
+    artwork: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+    deckThumb: {fileID: 0}
+  - id: 20
+    artwork: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+    deckThumb: {fileID: 0}
+  - id: 21
+    artwork: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+    deckThumb: {fileID: 0}
+  - id: 22
+    artwork: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+    deckThumb: {fileID: 0}

@@ -16,15 +16,15 @@ public class CardDisplay : MonoBehaviour
     public Card card;
 
     [Header("CardArt 稀有度框（僅 CardArt 脈絡顯示；組牌 DeckThumb 不顯示）")]
-    [Tooltip("選填。未指定時嘗試 Resources.Load(\"UI/Rarity/稀有度N\")（需將圖放於 Assets/Resources/UI/Rarity/）。")]
+    [Tooltip("選填。此處為本 Prefab 專用覆寫；留空時改用 UiSpriteLibrary 的稀有度框（Tools/UI/Create or Refresh UI Sprite Library）。")]
     [SerializeField] private Sprite cardArtRarityFrameN;
-    [Tooltip("選填。未指定時嘗試 Resources.Load(\"UI/Rarity/稀有度R\")（檔於 Assets/Resources/UI/Rarity/）；其次 UI/Rarity/R。")]
+    [Tooltip("選填。留空時改用 UiSpriteLibrary 的稀有度框。")]
     [SerializeField] private Sprite cardArtRarityFrameR;
-    [Tooltip("選填。未指定時嘗試 Resources.Load(\"UI/Rarity/稀有度SR\")（檔於 Assets/Resources/UI/Rarity/）。")]
+    [Tooltip("選填。留空時改用 UiSpriteLibrary 的稀有度框。")]
     [SerializeField] private Sprite cardArtRarityFrameSr;
-    [Tooltip("選填。未指定時嘗試 Resources.Load(\"UI/Rarity/稀有度SSR\")（檔於 Assets/Resources/UI/Rarity/）。")]
+    [Tooltip("選填。留空時改用 UiSpriteLibrary 的稀有度框。")]
     [SerializeField] private Sprite cardArtRarityFrameSsr;
-    [Tooltip("選填。未指定時嘗試 Resources.Load(\"UI/Rarity/稀有度UR\")；其次 UI/Rarity/UR。")]
+    [Tooltip("選填。留空時改用 UiSpriteLibrary 的稀有度框。")]
     [SerializeField] private Sprite cardArtRarityFrameUr;
 
     /// <summary>執行期共用 N 框 Sprite（由任一 CardDisplay 指定或 Resources 載入）。</summary>
@@ -217,37 +217,35 @@ public class CardDisplay : MonoBehaviour
                IsTransformUnderNamedAncestor(cardDisplayTransform, "EnemySpellFieldArea");
     }
 
-    /// <summary>
-    /// 多 Slice 的稀有度圖在部分 Unity 版本下 <c>Resources.Load&lt;Sprite&gt;</c> 會為 null，改以 <c>LoadAll</c> 取第一個 Sprite。
-    /// </summary>
-    private static Sprite LoadRaritySpriteFromResources(ref Sprite cacheField, string resourcesPath)
+    private static void WarnRarityFrameMissing(CardRarity rarity)
     {
-        if (cacheField != null)
-            return cacheField;
-        cacheField = Resources.Load<Sprite>(resourcesPath);
-        if (cacheField == null)
-        {
-            Sprite[] slices = Resources.LoadAll<Sprite>(resourcesPath);
-            if (slices != null)
-            {
-                for (int i = 0; i < slices.Length; i++)
-                {
-                    if (slices[i] != null)
-                    {
-                        cacheField = slices[i];
-                        break;
-                    }
-                }
-            }
-        }
-        return cacheField;
+        Debug.LogWarning(
+            $"CardDisplay: 稀有度框 '{rarity}' 不在 UiSpriteLibrary，" +
+            "請重跑 Tools/UI/Create or Refresh UI Sprite Library。");
+    }
+
+    /// <summary>直接引用優先：UiSpriteLibrary 稀有度框註冊表；找不到才回 null 走 Resources 後備。</summary>
+    private static Sprite ResolveRarityFrameFromLibrary(CardRarity rarity)
+    {
+        UiSpriteLibrary library = UiSpriteLibrary.Instance;
+        return library != null ? library.GetRarityFrame(rarity) : null;
     }
 
     private Sprite ResolveCardArtRarityNFrameSprite()
     {
         if (cardArtRarityFrameN != null)
             return cardArtRarityFrameN;
-        LoadRaritySpriteFromResources(ref s_sharedCardArtRarityFrameN, "UI/Rarity/稀有度N");
+        return ResolveSharedCardArtRarityNFrameSprite();
+    }
+
+    /// <summary>主檔 <c>Resources/UI/Rarity/稀有度N</c>（直接引用優先：UiSpriteLibrary）。</summary>
+    private static Sprite ResolveSharedCardArtRarityNFrameSprite()
+    {
+        if (s_sharedCardArtRarityFrameN != null)
+            return s_sharedCardArtRarityFrameN;
+        s_sharedCardArtRarityFrameN = ResolveRarityFrameFromLibrary(CardRarity.N);
+        if (s_sharedCardArtRarityFrameN == null)
+            WarnRarityFrameMissing(CardRarity.N);
         return s_sharedCardArtRarityFrameN;
     }
 
@@ -258,14 +256,13 @@ public class CardDisplay : MonoBehaviour
         return ResolveSharedCardArtRarityRFrameSprite();
     }
 
-    /// <summary>與 N 框相同規則：主檔 <c>Resources/UI/Rarity/稀有度R</c>；無則嘗試 <c>UI/Rarity/R</c>。</summary>
     private static Sprite ResolveSharedCardArtRarityRFrameSprite()
     {
         if (s_sharedCardArtRarityFrameR != null)
             return s_sharedCardArtRarityFrameR;
-        LoadRaritySpriteFromResources(ref s_sharedCardArtRarityFrameR, "UI/Rarity/稀有度R");
+        s_sharedCardArtRarityFrameR = ResolveRarityFrameFromLibrary(CardRarity.R);
         if (s_sharedCardArtRarityFrameR == null)
-            LoadRaritySpriteFromResources(ref s_sharedCardArtRarityFrameR, "UI/Rarity/R");
+            WarnRarityFrameMissing(CardRarity.R);
         return s_sharedCardArtRarityFrameR;
     }
 
@@ -276,12 +273,13 @@ public class CardDisplay : MonoBehaviour
         return ResolveSharedCardArtRaritySrFrameSprite();
     }
 
-    /// <summary>主檔 <c>Resources/UI/Rarity/稀有度SR</c>。</summary>
     private static Sprite ResolveSharedCardArtRaritySrFrameSprite()
     {
         if (s_sharedCardArtRarityFrameSr != null)
             return s_sharedCardArtRarityFrameSr;
-        LoadRaritySpriteFromResources(ref s_sharedCardArtRarityFrameSr, "UI/Rarity/稀有度SR");
+        s_sharedCardArtRarityFrameSr = ResolveRarityFrameFromLibrary(CardRarity.SR);
+        if (s_sharedCardArtRarityFrameSr == null)
+            WarnRarityFrameMissing(CardRarity.SR);
         return s_sharedCardArtRarityFrameSr;
     }
 
@@ -292,14 +290,13 @@ public class CardDisplay : MonoBehaviour
         return ResolveSharedCardArtRaritySsrFrameSprite();
     }
 
-    /// <summary>主檔 <c>Resources/UI/Rarity/稀有度SSR</c>。</summary>
     private static Sprite ResolveSharedCardArtRaritySsrFrameSprite()
     {
         if (s_sharedCardArtRarityFrameSsr != null)
             return s_sharedCardArtRarityFrameSsr;
-        LoadRaritySpriteFromResources(ref s_sharedCardArtRarityFrameSsr, "UI/Rarity/稀有度SSR");
+        s_sharedCardArtRarityFrameSsr = ResolveRarityFrameFromLibrary(CardRarity.SSR);
         if (s_sharedCardArtRarityFrameSsr == null)
-            LoadRaritySpriteFromResources(ref s_sharedCardArtRarityFrameSsr, "UI/Rarity/SSR");
+            WarnRarityFrameMissing(CardRarity.SSR);
         return s_sharedCardArtRarityFrameSsr;
     }
 
@@ -310,14 +307,13 @@ public class CardDisplay : MonoBehaviour
         return ResolveSharedCardArtRarityUrFrameSprite();
     }
 
-    /// <summary>主檔 <c>Resources/UI/Rarity/稀有度UR</c>；備援 <c>UI/Rarity/UR</c>。</summary>
     private static Sprite ResolveSharedCardArtRarityUrFrameSprite()
     {
         if (s_sharedCardArtRarityFrameUr != null)
             return s_sharedCardArtRarityFrameUr;
-        LoadRaritySpriteFromResources(ref s_sharedCardArtRarityFrameUr, "UI/Rarity/稀有度UR");
+        s_sharedCardArtRarityFrameUr = ResolveRarityFrameFromLibrary(CardRarity.UR);
         if (s_sharedCardArtRarityFrameUr == null)
-            LoadRaritySpriteFromResources(ref s_sharedCardArtRarityFrameUr, "UI/Rarity/UR");
+            WarnRarityFrameMissing(CardRarity.UR);
         return s_sharedCardArtRarityFrameUr;
     }
 
@@ -329,8 +325,7 @@ public class CardDisplay : MonoBehaviour
             case CardRarity.N:
                 if (hostCd != null)
                     return hostCd.ResolveCardArtRarityNFrameSprite();
-                LoadRaritySpriteFromResources(ref s_sharedCardArtRarityFrameN, "UI/Rarity/稀有度N");
-                return s_sharedCardArtRarityFrameN;
+                return ResolveSharedCardArtRarityNFrameSprite();
             case CardRarity.R:
                 if (hostCd != null)
                     return hostCd.ResolveCardArtRarityRFrameSprite();

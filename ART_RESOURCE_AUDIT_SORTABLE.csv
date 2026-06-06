@@ -1,0 +1,23 @@
+source_system,entry_key,usage_context,asset_path,guid,sprite_width,sprite_height,max_texture_default,max_texture_android,max_texture_ios,est_rgba32_mib,library_ref_count,risk_level,recommendation
+UiSpriteLibrary,returnButton,global nav/story progress back button,Assets/Resources/UI/return.png,cdfc494c6c52f6e4ea68f7181aaf981d,148,94,2048,2048,2048,0.05,1,Low,Keep as is
+UiSpriteLibrary,harborBayBackground,harbor training battle background,Assets/Resources/UI/Level background/bay.png,98d475c23bdfa884692c1197a89fa39e,1844,853,2048,2048,2048,6.00,1,High,Set Android/iOS maxTextureSize to 1024
+UiSpriteLibrary,battlePreviewPanel,battle preview panel background,Assets/Resources/UI/pre-war preview.png,0264243783b371346b79b739c14d58a1,1524,883,2048,2048,2048,5.13,1,High,Set Android/iOS maxTextureSize to 1024
+UiSpriteLibrary,difficultyIntro,difficulty badge intro,Assets/Resources/UI/Difficulty level/Basics.png,a4d7782115db81341916a073e5c41300,258,397,2048,2048,2048,0.39,1,Low,Consider maxTextureSize 512 for mobile
+UiSpriteLibrary,difficultyEasy,difficulty badge easy,Assets/Resources/UI/Difficulty level/Easy.png,cf8392f4793cec44e99465dd5af2a505,258,397,2048,2048,2048,0.39,1,Low,Consider maxTextureSize 512 for mobile
+UiSpriteLibrary,difficultyNormal,difficulty badge normal,Assets/Resources/UI/Difficulty level/Normal.png,cd8b5e8b560a0c04aba53cd42032686a,258,397,2048,2048,2048,0.39,1,Low,Consider maxTextureSize 512 for mobile
+UiSpriteLibrary,difficultyHard,difficulty badge hard,Assets/Resources/UI/Difficulty level/Hard.png,81c33120dc4aaf248965c009c806d1d2,258,397,2048,2048,2048,0.39,1,Low,Consider maxTextureSize 512 for mobile
+UiSpriteLibrary,difficultyBoss,difficulty badge boss,Assets/Resources/UI/Difficulty level/Boss.png,de6b242dbb2ea7d4a8493c84a00deb22,1055,396,2048,2048,2048,1.59,1,Medium,Consider maxTextureSize 1024 for mobile
+UiSpriteLibrary,rarityFrameN,card rarity frame N,Assets/Resources/UI/Rarity/稀有度N.png,4cddd42e360bc81448992bd3b53f5318,354,507,2048,2048,2048,0.68,1,Low,Consider maxTextureSize 512 for mobile
+UiSpriteLibrary,rarityFrameR,card rarity frame R,Assets/Resources/UI/Rarity/稀有度R.png,c7a21bef90404dea942233445566772b,354,507,2048,2048,2048,0.68,1,Low,Consider maxTextureSize 512 for mobile
+UiSpriteLibrary,rarityFrameSr,card rarity frame SR,Assets/Resources/UI/Rarity/稀有度SR.png,d8b32cef90515dfb9533445566778899,354,507,2048,2048,2048,0.68,1,Low,Consider maxTextureSize 512 for mobile
+UiSpriteLibrary,rarityFrameSsr,card rarity frame SSR,Assets/Resources/UI/Rarity/稀有度SSR.png,e9c43df90626ecf06445566788990001,354,507,2048,2048,2048,0.68,1,Low,Consider maxTextureSize 512 for mobile
+UiSpriteLibrary,rarityFrameUr,card rarity frame UR,Assets/Resources/UI/Rarity/稀有度UR.png,a903bc714deb46389133445566778899,354,507,2048,2048,2048,0.68,1,Low,Consider maxTextureSize 512 for mobile
+CardArtLibrary,artwork(id=-3),card full art direct ref,Assets/UI/CardArt/林可的凝視.jpg,14b738eb6fcf0a54cbfdfd022d493223,1009,1675,2048,2048,2048,6.45,1,High,Set Android/iOS maxTextureSize to 1024 and verify visual quality
+CardArtLibrary,deckThumb(id=-3),deck thumbnail direct ref,Assets/UI/DeckThumb/林可的凝視.png,65e69f598955d99428d7310de9cecdce,129,133,2048,2048,2048,0.07,1,Low,Set maxTextureSize 256 for mobile
+CardArtLibrary,artwork(id=-2..22),shared preset artwork for 24 entries,Assets/UI/CardArt/Card preset images.png,a30ccccd471f05d479677cdc11689fa9,337,491,2048,2048,2048,0.63,24,Medium,Keep shared texture but set maxTextureSize 512 for mobile
+CardArtLibrary,artwork(id=2),single card full art direct ref,Assets/UI/CardArt/e9a50f70-f02c-4e03-9b51-ff34a0de2dec.png,58bcba648277b4f4abe4b786587091b8,1038,1516,2048,2048,2048,6.00,1,High,Set Android/iOS maxTextureSize to 1024 and verify visual quality
+TutorialPlotScriptFactory,linKePortraitFallback,fallback Resources.Load Sprite(CardArt/林可的凝視),Assets/Resources/CardArt/林可的凝視.jpg,c4d8e2a91b5f6470a3c1d9e8f7b2a401,1009,1675,2048,2048,2048,6.45,1,High,If fallback needed on mobile set maxTextureSize 1024
+UiSpriteLibrary,coachNeutral,harbor coach expression,UNASSIGNED,,0,0,0,0,0,0.00,0,Missing,Assign sprite or keep intentionally null
+UiSpriteLibrary,coachAlert,harbor coach expression,UNASSIGNED,,0,0,0,0,0,0.00,0,Missing,Assign sprite or keep intentionally null
+UiSpriteLibrary,coachSerious,harbor coach expression,UNASSIGNED,,0,0,0,0,0,0.00,0,Missing,Assign sprite or keep intentionally null
+UiSpriteLibrary,coachEncourage,harbor coach expression,UNASSIGNED,,0,0,0,0,0,0.00,0,Missing,Assign sprite or keep intentionally null

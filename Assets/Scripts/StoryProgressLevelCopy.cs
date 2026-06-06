@@ -69,12 +69,6 @@ public static class StoryProgressLevelCopy
                    "可選" + FormatEmphasis("簡單") + " " + FormatEmphasis("普通") + " " + FormatEmphasis("困難") + " " +
                    "敵方" + FormatEmphasis("快攻型") + " " +
                    "請用" + FormatEmphasis("防守牌") + "與" + FormatEmphasis("法術") + "應對" +
-                   "</line-height>\n\n" +
-                   FormatSectionTag("操作") + "\n" +
-                   "<line-height=128%>" +
-                   FormatEmphasis("挑戰港灣訓練場") + "選難度開戰 " +
-                   FormatEmphasis("前往大廳") + "繼續旅程 " +
-                   FormatEmphasis("重溫入門課") + "複習劇情教學戰" +
                    "</line-height>";
         }
 

@@ -26,6 +26,7 @@
 | [`README.md`](README.md) | 玩家向功能說明、執行環境 |
 | [`PLANNING_MASTER_TABLE.md`](PLANNING_MASTER_TABLE.md) | **企劃總表**（領域 × 狀態 × 主文件） |
 | [`PLANNING_OPEN_ITEMS.md`](PLANNING_OPEN_ITEMS.md) | **待定／未定義**集中清單 |
+| [`企劃發想.md`](企劃發想.md) | **體驗發想**（不改規則提升爽感、任天堂式主動探索感） |
 | [`ARCHITECTURE_OVERVIEW.md`](ARCHITECTURE_OVERVIEW.md) | 場景流程、存檔、DataManager（英文架構圖） |
 
 ---
@@ -114,4 +115,5 @@
 
 | 日期 | 說明 |
 |------|------|
+| 2026-06-07 | 新增 `企劃發想.md`：整理不改規則提升爽感與主動探索感方向 |
 | 2026-05-30 | 初版：建立企劃索引，串接總表與待定文件；補主線 1-1 閱讀路徑 |

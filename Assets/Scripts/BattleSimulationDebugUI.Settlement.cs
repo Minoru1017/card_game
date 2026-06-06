@@ -25,9 +25,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
     /// 結算面板整棵 UI 樹版本。已凍結為 6：僅在必須整批重建結算面板時才 +1；
     /// 日常調字級／間距請改 <see cref="EndBattleProficiencyColumnCount"/> 等常數，避免玩家結算閃爍。
     /// </summary>
-    private const int EndBattlePanelLayoutVersion = 10;
-    private const float EndBattlePanelRefWidthPx = 1080f;
-    private const float EndBattlePanelRefHeightPx = 820f;
+    private const int EndBattlePanelLayoutVersion = 9;
     private const int EndBattleProficiencyColumnCount = 5;
     private const float EndBattleProficiencyGridPaddingH = 24f;
     private const float EndBattleProficiencyGridSpacingX = 10f;
@@ -38,7 +36,13 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
     private const float EndBattleHeaderStatsFontSize = 26f;
     private const float EndBattleProficiencyBannerHeightPx = 76f;
     private const float EndBattleFooterHeightPx = 108f;
-    private const float EndBattlePanelMinWidthPx = 800f;
+    /// <summary>結算面板設計基準（1920×1080），實際尺寸不超過此解析度的 94%。</summary>
+    private const float EndBattleDesignWidthPx = 1920f;
+    private const float EndBattleDesignHeightPx = 1080f;
+    private const float EndBattlePanelFillRatio = 0.94f;
+    private static readonly float EndBattlePanelMaxWidthPx = EndBattleDesignWidthPx * EndBattlePanelFillRatio;
+    private static readonly float EndBattlePanelMaxHeightPx = EndBattleDesignHeightPx * EndBattlePanelFillRatio;
+    private const float EndBattlePanelMinWidthPx = 720f;
     private const float EndBattlePanelMinHeightPx = 640f;
     private const float EndBattleProficiencyBarAnimDuration = 0.85f;
     private const float EndBattleProficiencyBarStagger = 0.1f;
@@ -442,55 +446,91 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         if (playerHeroHpText != null) playerHeroHpText.color = baseColor;
     }
 
-    private float EndBattlePx(float value) => value * endBattlePanelLayoutScale;
+    private float EndBattlePx(float designPx) => designPx * endBattlePanelLayoutScale;
 
-    /// <summary>依 Canvas 可視區（含 Safe Area）等比縮放通關面板，並寫入 <see cref="endBattlePanelLayoutScale"/>。</summary>
-    private void TryComputeEndBattlePanelFitSize(out float panelW, out float panelH)
+    private bool TryGetEndBattleCanvasAvailSize(out float availW, out float availH)
     {
-        Canvas parentCanvas = uiRoot != null ? uiRoot.GetComponentInParent<Canvas>() : null;
-        RectTransform canvasRt = parentCanvas != null ? parentCanvas.transform as RectTransform : null;
-        float canvasW = canvasRt != null && canvasRt.rect.width > 1f
-            ? canvasRt.rect.width
-            : MobileUiLayoutPolicy.ReferenceResolution.x;
-        float canvasH = canvasRt != null && canvasRt.rect.height > 1f
-            ? canvasRt.rect.height
-            : MobileUiLayoutPolicy.ReferenceResolution.y;
+        availW = Screen.width;
+        availH = Screen.height;
+        if (uiRoot == null) return availW > 1f && availH > 1f;
 
-        MobileUiLayoutPolicy.CanvasSafeInsets safe = parentCanvas != null
-            ? MobileUiLayoutPolicy.GetCanvasSafeInsets(parentCanvas)
-            : default;
+        Canvas canvas = uiRoot.GetComponentInParent<Canvas>();
+        if (canvas == null || canvas.transform is not RectTransform canvasRt)
+            return availW > 1f && availH > 1f;
 
-        float availW = Mathf.Max(EndBattlePanelMinWidthPx, canvasW - safe.Left - safe.Right);
-        float availH = Mathf.Max(EndBattlePanelMinHeightPx, canvasH - safe.Top - safe.Bottom);
+        availW = Mathf.Abs(canvasRt.rect.width);
+        availH = Mathf.Abs(canvasRt.rect.height);
+        if (Screen.width <= 0 || Screen.height <= 0)
+            return availW > 1f && availH > 1f;
 
-        // 寬高分開貼齊可用區，避免直屏時高度先限縮導致面板過窄。
-        const float widthFillRatio = 0.97f;
-        const float heightFillRatio = 0.88f;
-        float maxW = availW * widthFillRatio;
-        float maxH = availH * heightFillRatio;
-        float scaleW = maxW / EndBattlePanelRefWidthPx;
-        float scaleH = maxH / EndBattlePanelRefHeightPx;
+        float scaleX = availW / Screen.width;
+        float scaleY = availH / Screen.height;
+        Rect safe = Screen.safeArea;
+        availW = safe.width * scaleX;
+        availH = safe.height * scaleY;
+        return availW > 1f && availH > 1f;
+    }
 
-        panelW = Mathf.Max(EndBattlePanelMinWidthPx, EndBattlePanelRefWidthPx * scaleW);
-        panelH = Mathf.Max(EndBattlePanelMinHeightPx, EndBattlePanelRefHeightPx * scaleH);
-        panelW = Mathf.Min(panelW, maxW);
-        panelH = Mathf.Min(panelH, maxH);
+    private bool TryComputeEndBattlePanelFitSize(out float panelW, out float panelH)
+    {
+        if (!TryGetEndBattleCanvasAvailSize(out float availW, out float availH))
+        {
+            panelW = Mathf.Max(EndBattlePanelMinWidthPx,
+                Mathf.Min(Screen.width * EndBattlePanelFillRatio, EndBattlePanelMaxWidthPx));
+            panelH = Mathf.Max(EndBattlePanelMinHeightPx,
+                Mathf.Min(Screen.height * EndBattlePanelFillRatio, EndBattlePanelMaxHeightPx));
+        }
+        else
+        {
+            panelW = Mathf.Min(availW * EndBattlePanelFillRatio, EndBattlePanelMaxWidthPx);
+            panelH = Mathf.Min(availH * EndBattlePanelFillRatio, EndBattlePanelMaxHeightPx);
+            panelW = Mathf.Max(EndBattlePanelMinWidthPx, panelW);
+            panelH = Mathf.Max(EndBattlePanelMinHeightPx, panelH);
+        }
 
         endBattlePanelLayoutScale = Mathf.Clamp(
-            Mathf.Min(panelW / EndBattlePanelRefWidthPx, panelH / EndBattlePanelRefHeightPx),
-            0.72f,
-            1.35f);
+            Mathf.Min(panelW / EndBattleDesignWidthPx, panelH / EndBattleDesignHeightPx),
+            0.35f,
+            1f);
+        return panelW > 0f && panelH > 0f;
+    }
+
+    private void ResolveEndBattlePanelSize(out float panelW, out float panelH)
+    {
+        TryComputeEndBattlePanelFitSize(out panelW, out panelH);
     }
 
     private bool IsEndBattlePanelLayoutStillValid()
     {
-        if (endBattlePanel == null)
+        if (endBattlePanel == null || endBattlePanelLayoutBuilt != EndBattlePanelLayoutVersion)
             return false;
-        if (endBattlePanelLayoutBuilt != EndBattlePanelLayoutVersion)
+
+        Vector2Int screenNow = new Vector2Int(Screen.width, Screen.height);
+        if (screenNow != endBattlePanelBuiltScreenSize)
             return false;
-        if (endBattlePanelBuiltScreenSize.x != Screen.width || endBattlePanelBuiltScreenSize.y != Screen.height)
+
+        Rect safeNow = Screen.safeArea;
+        if (Mathf.Abs(safeNow.x - endBattlePanelBuiltSafeArea.x) > 0.5f
+            || Mathf.Abs(safeNow.y - endBattlePanelBuiltSafeArea.y) > 0.5f
+            || Mathf.Abs(safeNow.width - endBattlePanelBuiltSafeArea.width) > 0.5f
+            || Mathf.Abs(safeNow.height - endBattlePanelBuiltSafeArea.height) > 0.5f)
             return false;
-        return endBattlePanelBuiltSafeArea == Screen.safeArea;
+
+        TryComputeEndBattlePanelFitSize(out float wantW, out float wantH);
+        RectTransform panelRt = endBattlePanel.GetComponent<RectTransform>();
+        if (panelRt == null) return false;
+        return Mathf.Abs(panelRt.sizeDelta.x - wantW) <= 1f
+            && Mathf.Abs(panelRt.sizeDelta.y - wantH) <= 1f;
+    }
+
+    private void ApplyEndBattlePanelSize(RectTransform panelRect)
+    {
+        if (panelRect == null) return;
+        TryComputeEndBattlePanelFitSize(out float panelW, out float panelH);
+        panelRect.sizeDelta = new Vector2(panelW, panelH);
+        panelRect.localScale = Vector3.one;
+        endBattlePanelBuiltScreenSize = new Vector2Int(Screen.width, Screen.height);
+        endBattlePanelBuiltSafeArea = Screen.safeArea;
     }
 
     private void DestroyEndBattlePanelUi()
@@ -513,9 +553,22 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
 
     private void EnsureEndBattlePanel()
     {
-        if (endBattlePanel != null && !IsEndBattlePanelLayoutStillValid())
+        if (endBattlePanel != null &&
+            (endBattleProficiencySection == null || endBattlePanelLayoutBuilt != EndBattlePanelLayoutVersion))
             DestroyEndBattlePanelUi();
-        if (endBattlePanel != null || uiRoot == null) return;
+
+        if (endBattlePanel != null)
+        {
+            if (!IsEndBattlePanelLayoutStillValid())
+            {
+                ApplyEndBattlePanelSize(endBattlePanel.GetComponent<RectTransform>());
+                ConfigureEndBattleProficiencySectionLayout(
+                    endBattleProficiencyUpdateBanner != null && endBattleProficiencyUpdateBanner.activeSelf);
+            }
+            return;
+        }
+
+        if (uiRoot == null) return;
 
         endBattlePanel = new GameObject("EndBattlePanel", typeof(RectTransform), typeof(Image), typeof(Outline));
         endBattlePanel.transform.SetParent(uiRoot, false);
@@ -524,16 +577,18 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         panelRect.anchorMax = new Vector2(0.5f, 0.5f);
         panelRect.pivot = new Vector2(0.5f, 0.5f);
         panelRect.anchoredPosition = Vector2.zero;
-        TryComputeEndBattlePanelFitSize(out float panelW, out float panelH);
+        ResolveEndBattlePanelSize(out float panelW, out float panelH);
         panelRect.sizeDelta = new Vector2(panelW, panelH);
         panelRect.localScale = Vector3.one;
+        endBattlePanelBuiltScreenSize = new Vector2Int(Screen.width, Screen.height);
+        endBattlePanelBuiltSafeArea = Screen.safeArea;
         Image bg = endBattlePanel.GetComponent<Image>();
         bg.sprite = GetUnitWhiteSprite();
         bg.type = Image.Type.Simple;
         bg.color = BattleUiColors.PanelCream96;
         Outline panelOutline = endBattlePanel.GetComponent<Outline>();
         panelOutline.effectColor = BattleUiColors.PanelEdge35;
-        panelOutline.effectDistance = new Vector2(EndBattlePx(3f), -EndBattlePx(3f));
+        panelOutline.effectDistance = new Vector2(3f, -3f);
 
         CreateEndBattleHeaderStrip(endBattlePanel.transform, panelW);
         CreateEndBattleProficiencyUpdateBanner(endBattlePanel.transform, panelW);
@@ -558,8 +613,6 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         endBattlePanelGroup.alpha = 1f;
         endBattlePanel.SetActive(false);
         endBattlePanelLayoutBuilt = EndBattlePanelLayoutVersion;
-        endBattlePanelBuiltScreenSize = new Vector2Int(Screen.width, Screen.height);
-        endBattlePanelBuiltSafeArea = Screen.safeArea;
     }
 
     private void OnClickBattleHistory()
@@ -919,9 +972,8 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         RectTransform vpRt = viewport.GetComponent<RectTransform>();
         vpRt.anchorMin = Vector2.zero;
         vpRt.anchorMax = Vector2.one;
-        float scrollPad = EndBattlePx(10f);
-        vpRt.offsetMin = new Vector2(scrollPad, scrollPad);
-        vpRt.offsetMax = new Vector2(-scrollPad, -scrollPad);
+        vpRt.offsetMin = new Vector2(10f, 10f);
+        vpRt.offsetMax = new Vector2(-10f, -10f);
         viewport.GetComponent<Image>().color = BattleUiColors.PanelMilk985;
 
         GameObject content = new GameObject("Content", typeof(RectTransform), typeof(GridLayoutGroup), typeof(ContentSizeFitter));
@@ -931,13 +983,12 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         endBattleProficiencyContentRt.anchorMax = new Vector2(1f, 1f);
         endBattleProficiencyContentRt.pivot = new Vector2(0.5f, 1f);
         endBattleProficiencyContentRt.anchoredPosition = Vector2.zero;
-        endBattleProficiencyContentRt.sizeDelta = new Vector2(0f, EndBattlePx(400f));
+        endBattleProficiencyContentRt.sizeDelta = new Vector2(0f, 400f);
         GridLayoutGroup glg = content.GetComponent<GridLayoutGroup>();
         glg.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
         glg.constraintCount = EndBattleProficiencyColumnCount;
-        glg.spacing = new Vector2(EndBattlePx(EndBattleProficiencyGridSpacingX), EndBattlePx(EndBattleProficiencyGridSpacingY));
-        int gridPad = Mathf.RoundToInt(EndBattlePx(12f));
-        glg.padding = new RectOffset(gridPad, gridPad, gridPad, gridPad);
+        glg.spacing = new Vector2(EndBattleProficiencyGridSpacingX, EndBattleProficiencyGridSpacingY);
+        glg.padding = new RectOffset(12, 12, 12, 12);
         glg.childAlignment = TextAnchor.UpperCenter;
         ContentSizeFitter csf = content.GetComponent<ContentSizeFitter>();
         csf.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
@@ -961,8 +1012,8 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         out int statusFontSize,
         out float barHeight)
     {
-        float viewportW = EndBattlePx(EndBattlePanelMinWidthPx) - EndBattlePx(80f);
-        float viewportH = EndBattlePx(260f);
+        float viewportW = EndBattlePanelMinWidthPx - 80f;
+        float viewportH = 260f;
         if (endBattleProficiencyScroll != null && endBattleProficiencyScroll.viewport != null)
         {
             Canvas.ForceUpdateCanvases();
@@ -975,26 +1026,24 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         }
         else if (endBattlePanel != null)
         {
-            RectTransform panelRt = endBattlePanel.GetComponent<RectTransform>();
-            float panelW = panelRt.rect.width;
-            float panelH = panelRt.rect.height;
-            viewportW = Mathf.Max(EndBattlePx(480f), panelW - EndBattlePx(80f));
-            viewportH = Mathf.Max(EndBattlePx(200f), panelH - EndBattlePx(230f));
+            ResolveEndBattlePanelSize(out float panelW, out float panelH);
+            viewportW = Mathf.Max(480f, panelW - 80f);
+            viewportH = Mathf.Max(200f, panelH - 230f);
         }
 
-        float spacingTotal = (EndBattleProficiencyColumnCount - 1) * EndBattlePx(EndBattleProficiencyGridSpacingX);
+        float spacingTotal = (EndBattleProficiencyColumnCount - 1) * EndBattleProficiencyGridSpacingX;
         rowWidth = Mathf.Floor(
-            Mathf.Max(EndBattlePx(96f), (viewportW - EndBattlePx(EndBattleProficiencyGridPaddingH) - spacingTotal) / EndBattleProficiencyColumnCount));
+            Mathf.Max(96f, (viewportW - EndBattleProficiencyGridPaddingH - spacingTotal) / EndBattleProficiencyColumnCount));
 
-        float footerBlock = EndBattlePx(88f);
+        const float footerBlock = 88f;
         float handH = GetBattleHandDisplayedHeight(1f);
         float handW = GetBattleHandDisplayedWidth(1f);
         if (handH < 1f) handH = 210f;
         if (handW < 1f) handW = 140f;
 
-        float innerCardW = Mathf.Max(EndBattlePx(64f), rowWidth - EndBattlePx(6f));
+        float innerCardW = Mathf.Max(64f, rowWidth - 6f);
         float scaleFromWidth = innerCardW / handW;
-        float targetCardH = Mathf.Max(EndBattlePx(88f), (viewportH - footerBlock - EndBattlePx(12f)) * 0.88f);
+        float targetCardH = Mathf.Max(88f, (viewportH - footerBlock - 12f) * 0.88f);
         float scaleFromHeight = targetCardH / handH;
         cardScaleMul = Mathf.Clamp(Mathf.Min(scaleFromWidth, scaleFromHeight), 0.38f, 0.92f);
         float scaleT = Mathf.InverseLerp(0.38f, 0.92f, cardScaleMul);
@@ -1387,9 +1436,10 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         sectionRt.pivot = new Vector2(0.5f, 0.5f);
         sectionRt.anchoredPosition = Vector2.zero;
         sectionRt.sizeDelta = Vector2.zero;
-        float topInset = EndBattlePx(EndBattleHeaderHeightPx + (showBanner ? EndBattleProficiencyBannerHeightPx + 10f : 8f));
+        float topInset = EndBattlePx(EndBattleHeaderHeightPx)
+            + (showBanner ? EndBattlePx(EndBattleProficiencyBannerHeightPx + 10f) : EndBattlePx(8f));
         sectionRt.offsetMin = new Vector2(EndBattlePx(24f), EndBattlePx(EndBattleFooterHeightPx + 14f));
-        sectionRt.offsetMax = new Vector2(-EndBattlePx(24f), -topInset);
+        sectionRt.offsetMax = new Vector2(EndBattlePx(-24f), -topInset);
     }
 
     private void CreateEndBattleHeaderStrip(Transform panel, float panelW)
@@ -1412,8 +1462,8 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         RectTransform titleRect = titleObj.GetComponent<RectTransform>();
         titleRect.anchorMin = new Vector2(0f, 0.76f);
         titleRect.anchorMax = new Vector2(1f, 1f);
-        titleRect.offsetMin = new Vector2(EndBattlePx(24f), 0f);
-        titleRect.offsetMax = new Vector2(-EndBattlePx(24f), -EndBattlePx(4f));
+        titleRect.offsetMin = new Vector2(24f, 0f);
+        titleRect.offsetMax = new Vector2(-24f, -4f);
         endBattleTitleText = titleObj.GetComponent<Text>();
         endBattleTitleText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
         endBattleTitleText.fontSize = Mathf.RoundToInt(EndBattlePx(64f));
@@ -1427,8 +1477,8 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         RectTransform subRect = subObj.GetComponent<RectTransform>();
         subRect.anchorMin = new Vector2(0f, 0.44f);
         subRect.anchorMax = new Vector2(1f, 0.76f);
-        subRect.offsetMin = new Vector2(EndBattlePx(28f), 0f);
-        subRect.offsetMax = new Vector2(-EndBattlePx(28f), 0f);
+        subRect.offsetMin = new Vector2(28f, 0f);
+        subRect.offsetMax = new Vector2(-28f, 0f);
         endBattleSubtitleText = subObj.GetComponent<TextMeshProUGUI>();
         ApplyEndBattleHeaderTmp(
             endBattleSubtitleText,
@@ -1436,7 +1486,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
             FontStyles.Normal,
             BattleUiColors.Ink,
             TextAlignmentOptions.Center);
-        endBattleSubtitleText.lineSpacing = -EndBattlePx(4f);
+        endBattleSubtitleText.lineSpacing = -4f;
         endBattleSubtitleText.text = "熟練度與戰績已記錄";
 
         GameObject statsObj = new GameObject("EndBattleHeaderStats", typeof(RectTransform), typeof(TextMeshProUGUI));
@@ -1444,8 +1494,8 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         RectTransform statsRect = statsObj.GetComponent<RectTransform>();
         statsRect.anchorMin = new Vector2(0f, 0.08f);
         statsRect.anchorMax = new Vector2(1f, 0.42f);
-        statsRect.offsetMin = new Vector2(EndBattlePx(28f), 0f);
-        statsRect.offsetMax = new Vector2(-EndBattlePx(28f), 0f);
+        statsRect.offsetMin = new Vector2(28f, 0f);
+        statsRect.offsetMax = new Vector2(-28f, 0f);
         endBattleHeaderStatsText = statsObj.GetComponent<TextMeshProUGUI>();
         ApplyEndBattleHeaderTmp(
             endBattleHeaderStatsText,
@@ -1490,7 +1540,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         bannerRt.anchorMax = new Vector2(1f, 1f);
         bannerRt.pivot = new Vector2(0.5f, 1f);
         bannerRt.anchoredPosition = new Vector2(0f, y);
-        bannerRt.sizeDelta = new Vector2(-EndBattlePx(48f), EndBattlePx(EndBattleProficiencyBannerHeightPx));
+        bannerRt.sizeDelta = new Vector2(EndBattlePx(-48f), EndBattlePx(EndBattleProficiencyBannerHeightPx));
         Image bannerBg = endBattleProficiencyUpdateBanner.GetComponent<Image>();
         bannerBg.sprite = GetUnitWhiteSprite();
         bannerBg.type = Image.Type.Simple;
@@ -1502,9 +1552,9 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         accentRt.anchorMin = new Vector2(0f, 0f);
         accentRt.anchorMax = new Vector2(0f, 1f);
         accentRt.pivot = new Vector2(0f, 0.5f);
-        accentRt.sizeDelta = new Vector2(EndBattlePx(6f), 0f);
-        accentRt.offsetMin = new Vector2(0f, EndBattlePx(6f));
-        accentRt.offsetMax = new Vector2(EndBattlePx(6f), -EndBattlePx(6f));
+        accentRt.sizeDelta = new Vector2(6f, 0f);
+        accentRt.offsetMin = new Vector2(0f, 6f);
+        accentRt.offsetMax = new Vector2(6f, -6f);
         accent.GetComponent<Image>().sprite = GetUnitWhiteSprite();
         accent.GetComponent<Image>().color = BattleUiColors.AllyHp;
 
@@ -1513,8 +1563,8 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         RectTransform titleRt = titleObj.GetComponent<RectTransform>();
         titleRt.anchorMin = new Vector2(0f, 0.5f);
         titleRt.anchorMax = new Vector2(1f, 1f);
-        titleRt.offsetMin = new Vector2(EndBattlePx(18f), 0f);
-        titleRt.offsetMax = new Vector2(-EndBattlePx(12f), -EndBattlePx(4f));
+        titleRt.offsetMin = new Vector2(18f, 0f);
+        titleRt.offsetMax = new Vector2(-12f, -4f);
         Text titleTxt = titleObj.GetComponent<Text>();
         titleTxt.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
         titleTxt.fontSize = Mathf.RoundToInt(EndBattlePx(36f));
@@ -1528,8 +1578,8 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         RectTransform hintRt = hintObj.GetComponent<RectTransform>();
         hintRt.anchorMin = new Vector2(0f, 0f);
         hintRt.anchorMax = new Vector2(1f, 0.5f);
-        hintRt.offsetMin = new Vector2(EndBattlePx(18f), EndBattlePx(4f));
-        hintRt.offsetMax = new Vector2(-EndBattlePx(12f), 0f);
+        hintRt.offsetMin = new Vector2(18f, 4f);
+        hintRt.offsetMax = new Vector2(-12f, 0f);
         Text hintTxt = hintObj.GetComponent<Text>();
         hintTxt.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
         hintTxt.fontSize = Mathf.RoundToInt(EndBattlePx(30f));
@@ -1550,11 +1600,10 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         footerRt.anchorMax = new Vector2(1f, 0f);
         footerRt.pivot = new Vector2(0.5f, 0f);
         footerRt.anchoredPosition = new Vector2(0f, EndBattlePx(14f));
-        footerRt.sizeDelta = new Vector2(-EndBattlePx(48f), EndBattlePx(EndBattleFooterHeightPx));
+        footerRt.sizeDelta = new Vector2(EndBattlePx(-48f), EndBattlePx(EndBattleFooterHeightPx));
         HorizontalLayoutGroup hlg = footer.GetComponent<HorizontalLayoutGroup>();
-        hlg.spacing = EndBattlePx(14f);
-        int pad = Mathf.RoundToInt(EndBattlePx(4f));
-        hlg.padding = new RectOffset(pad, pad, pad, pad);
+        hlg.spacing = 14f;
+        hlg.padding = new RectOffset(4, 4, 4, 4);
         hlg.childAlignment = TextAnchor.MiddleCenter;
         hlg.childControlWidth = true;
         hlg.childControlHeight = true;

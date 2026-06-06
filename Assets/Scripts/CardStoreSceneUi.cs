@@ -4,12 +4,10 @@ using UnityEngine.EventSystems;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
-/// <summary>CardStore 場景：修正開包按鈕觸控（TMP 擋 raycast、層級、Safe Area）。</summary>
+/// <summary>CardStore 場景：修正開包按鈕觸控（TMP 擋 raycast、層級）。</summary>
 public static class CardStoreSceneUi
 {
     private const string OpenButtonObjectName = "Open";
-    private const float OpenButtonDesignBottomY = 118.89f;
-
     public static void ApplyNow(Scene scene = default)
     {
         Scene target = scene.IsValid() ? scene : SceneManager.GetActiveScene();
@@ -62,25 +60,6 @@ public static class CardStoreSceneUi
         if (screen == null || !screen.activeInHierarchy)
             openGo.transform.SetAsLastSibling();
 
-        ApplyOpenButtonSafeArea(openGo);
-    }
-
-    private static void ApplyOpenButtonSafeArea(GameObject openGo)
-    {
-        RectTransform openRt = openGo.GetComponent<RectTransform>();
-        if (openRt == null)
-            return;
-
-        Canvas canvas = openRt.GetComponentInParent<Canvas>();
-        if (canvas == null)
-            return;
-
-        MobileUiLayoutPolicy.CanvasSafeInsets safe = MobileUiLayoutPolicy.GetCanvasSafeInsets(canvas);
-        Vector2 pos = openRt.anchoredPosition;
-        pos.y = OpenButtonDesignBottomY + Mathf.Max(0f, safe.Bottom);
-        if (MobileUiLayoutPolicy.UseMobileLayout)
-            pos.x = 0f;
-        openRt.anchoredPosition = pos;
     }
 
     private static void DisableVideoScreenRaycastsOnly()

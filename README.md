@@ -17,7 +17,7 @@
 3. 確認 Scenes 第 0 格為 **login** → **Build**（測試選 APK，可勾 Development Build）。
 4. 若仍報 non-ASCII path，代表 Hub 開錯資料夾，請確認不是 `...\2024畢業專題\card game\`。
 5. **螢幕方向**：橫向預設 **Landscape Left**（與 PC Editor 一致）；可左右橫向互轉。若畫面倒過來，請勿用 Landscape Right。
-6. **UI 縮放**：1920×1080 + `MobileUiCanvasBootstrap`；**Editor 與手機**進 Play 後皆依 Game 視窗／Safe Area **自動 match**（完整放入、不裁切）。手機另略縮 UI（`MobileReferenceResolutionScale`≈1.12）。Game 視窗建議 **16:9 橫向**。
+6. **UI 基準**：場景 Canvas 以 **1920×1080** 為設計解析度（`CanvasScaler` 固定參考）。Editor Game 視窗建議 **16:9 橫向** 對齊手機橫屏預覽；動態 Safe Area／多場景響應式排版程式已移除，後續改以新方案處理適配。
 
 ---
 

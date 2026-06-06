@@ -100,12 +100,25 @@ public sealed class PlotNpcVoicePlayer : MonoBehaviour
 
     private static AudioClip ResolveClip(string clipId)
     {
-        if (ClipCache.TryGetValue(clipId, out AudioClip cached))
+        // 編輯器內不吃 static 快取，讓 Inspector 即時修改（例如清空 Library 欄位）可立刻反映。
+        bool useCache = !Application.isEditor;
+        if (useCache && ClipCache.TryGetValue(clipId, out AudioClip cached))
             return cached;
 
-        string path = VoiceResourcesFolder + "/" + clipId;
-        AudioClip clip = Resources.Load<AudioClip>(path);
-        if (clip != null)
+        AudioClip clip = null;
+
+        AudioLibrary library = AudioLibrary.Instance;
+        if (library != null)
+            clip = library.GetVoice(clipId);
+
+        if (clip == null)
+        {
+            Debug.LogWarning(
+                "PlotNpcVoicePlayer: '" + clipId + "' 不在 AudioLibrary，" +
+                "請重跑 Tools/Audio/Create or Refresh Audio Library 補進註冊表。");
+        }
+
+        if (clip != null && useCache)
             ClipCache[clipId] = clip;
         return clip;
     }

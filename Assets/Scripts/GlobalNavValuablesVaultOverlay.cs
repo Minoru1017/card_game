@@ -83,8 +83,8 @@ public sealed class GlobalNavValuablesVaultOverlay
         dim.color = DimColor;
         dim.raycastTarget = true;
 
-        float panelWidth = MobileUiLayoutPolicy.PanelWidthInReferenceUnits(0.88f, 1080f);
-        float panelHeight = MobileUiLayoutPolicy.PanelHeightInReferenceUnits(0.86f, 820f);
+        float panelWidth = Mathf.Min(Screen.width * 0.88f, 1080f);
+        float panelHeight = Mathf.Min(Screen.height * 0.86f, 820f);
 
         GameObject panel = new GameObject("VaultPanel", typeof(RectTransform), typeof(Image));
         panel.transform.SetParent(root.transform, false);

@@ -50,6 +50,13 @@ Thumbs.db
 # Local bake / tool logs
 bake_log.txt
 debug-*.log
+*.log
+
+# Build / IDE / tooling artifacts (not source)
+/.utmp/
+/.vs/
+/CardGame-debug_BurstDebugInformation_DoNotShip/
+UpgradeLog*.htm
 
 # Local playtest snapshots (do not commit personal save data)
 Assets/PlayerDataSnapshots/*.csv

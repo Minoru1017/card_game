@@ -5458,11 +5458,11 @@ MonoBehaviour:
   battleCardPrefab: {fileID: 7214545359648620762, guid: c8cb3fb8fe9c36c4a8867e34cd48d546, type: 3}
   fieldMonsterPrefab: {fileID: 7214545359648620762, guid: c8cb3fb8fe9c36c4a8867e34cd48d546, type: 3}
   cardLayout:
-    handCardSizeMultiplier: 1.8
+    handCardSizeMultiplier: 1.3
     handCardSpacing: 0
-    handAreaAnchoredYCanPlay: -100
+    handAreaAnchoredYCanPlay: 5
     handAreaAnchoredYCantPlay: -100
-    enemyHandAreaAnchoredYCanPlay: 100
+    enemyHandAreaAnchoredYCanPlay: 79
     enemyHandAreaAnchoredYCantPlay: 100
   cardText:
     handCardTextScale: 1.5
@@ -5471,7 +5471,7 @@ MonoBehaviour:
   cardField:
     fieldMonsterCardSizeMultiplier: 2
     fieldSpellCardSizeMultiplier: 2
-    enemyFieldSizeMultiplier: 0.95
+    enemyFieldSizeMultiplier: 0.686
     fieldAreaOffsetY: 10
     playerMonsterFieldX: -230
     enemyMonsterFieldX: 260

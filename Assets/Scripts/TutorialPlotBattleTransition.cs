@@ -305,6 +305,15 @@ public static class TutorialPlotBattleTransition
                 yield break;
             }
 
+            // 劇情→對戰：用 shader 光圈把「凍結快照」縮成真圓（_Aspect 校正、與打開段一致、明確在最上層 overlay），
+            // 全黑底圖留在後面遮住仍在渲染的 Main Plot，避免實時場景透出圓圈造成「被場景蓋住」。
+            // shader 不可用時退回快照遮罩圓；連快照都沒有才淡黑。
+            if (irisGraphic != null && hasVisibleSnapshot)
+            {
+                yield return PlayIrisSnapshotClose(duration);
+                yield break;
+            }
+
             if (!hasVisibleSnapshot || snapshotPortal == null)
             {
                 yield return FadeSolidBlack(0f, 1f, Mathf.Max(0.2f, duration * 0.5f));
@@ -340,6 +349,30 @@ public static class TutorialPlotBattleTransition
             }
 
             snapshotPortal.localScale = Vector3.one * TutorialIrisTransitionTiming.MinSnapshotPortalScale;
+        }
+
+        /// <summary>shader 光圈把凍結快照縮成真圓；黑底留在後面遮住仍在渲染的來源場景。</summary>
+        private IEnumerator PlayIrisSnapshotClose(float duration)
+        {
+            HideSnapshotPortal();
+            solidBlackImage.gameObject.SetActive(true);
+            solidBlackImage.color = Color.black;
+            solidBlackImage.transform.SetAsFirstSibling();
+
+            irisGraphic.gameObject.SetActive(true);
+            irisGraphic.transform.SetAsLastSibling();
+            irisGraphic.Aspect = cachedAspect;
+            irisGraphic.EdgeSoftness = TutorialIrisTransitionTiming.IrisEdgeSoftness;
+            irisGraphic.SetSnapshot(plotSnapshot);
+            irisGraphic.Radius = cachedMaxRadius;
+            irisGraphic.SetAllDirty();
+            Canvas.ForceUpdateCanvases();
+            yield return null;
+
+            yield return AnimateIrisRadiusTimed(cachedMaxRadius, 0f, duration, EaseInOutSine);
+
+            irisGraphic.ClearSnapshot();
+            irisGraphic.gameObject.SetActive(false);
         }
 
         /// <summary>光圈縮小，洞內透出底下仍渲染中的場景（不依賴截圖）。</summary>

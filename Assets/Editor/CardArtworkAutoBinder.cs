@@ -28,7 +28,7 @@ public sealed class CardArtworkAutoBinder : AssetPostprocessor
     private const string DataManagerPrefabPath = "Assets/prefabs/DataManager.prefab";
     private const string CardStoreScenePath = "Assets/Scenes/CardStore.unity";
     // 刪除卡圖後自動綁定的預設圖（可自行改成你想要的圖檔路徑）。
-    private const string DefaultFallbackArtPath = "Assets/UI/Card preset images.png";
+    private const string DefaultFallbackArtPath = "Assets/UI/CardArt/Card preset images.png";
     private const string LogPrefix = "CardArt AutoBinder";
     private const string ColorInfo = "#7ED957";
     private const string ColorWarn = "#FFB347";

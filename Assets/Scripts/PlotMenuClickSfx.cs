@@ -1,18 +1,13 @@
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-#if UNITY_EDITOR
-using UnityEditor;
-#endif
-
 /// <summary>
 /// Main Plot 1-1 劇情選單／按鈕點擊音效（選項、略過、點擊繼續）。
 /// </summary>
 public class PlotMenuClickSfx : MonoBehaviour
 {
-    public const string MenuClickClipResourcesPath = "Music/lhzrw-t5u2p";
-
 #if UNITY_EDITOR
+    // 僅供 AudioLibrary 填表工具定位實體檔（檔案在 Assets/Music/，不在 Resources）。
     public const string MenuClickClipAssetPath = "Assets/Music/lhzrw-t5u2p.mp3";
 #endif
 
@@ -103,10 +98,15 @@ public class PlotMenuClickSfx : MonoBehaviour
         if (menuClickClip != null)
             return;
 
-        menuClickClip = Resources.Load<AudioClip>(MenuClickClipResourcesPath);
-#if UNITY_EDITOR
+        AudioLibrary library = AudioLibrary.Instance;
+        if (library != null)
+            menuClickClip = library.MenuClickSfx;
+
         if (menuClickClip == null)
-            menuClickClip = AssetDatabase.LoadAssetAtPath<AudioClip>(MenuClickClipAssetPath);
-#endif
+        {
+            Debug.LogWarning(
+                "PlotMenuClickSfx: 找不到選單點擊音，請在場景指定 menuClickClip，" +
+                "或重跑 Tools/Audio/Create or Refresh Audio Library 補進 AudioLibrary。");
+        }
     }
 }

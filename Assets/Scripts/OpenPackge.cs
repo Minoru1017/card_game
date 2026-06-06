@@ -80,6 +80,7 @@ public class OpenPackge : MonoBehaviour
         {
             Debug.LogWarning(
                 "OpenPackge: not enough coins (need " + packCost + ", have " + playerData.playerCoins + ").");
+            SceneToast.Show($"金幣不足，開包需要 {packCost} 金幣（目前 {playerData.playerCoins}）");
             return;
         }
 

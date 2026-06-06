@@ -151,41 +151,36 @@ public class CardStore : MonoBehaviour
     {
         if (card == null) return;
         string cardArtPath = string.IsNullOrWhiteSpace(csvArtPath) ? string.Empty : csvArtPath.Trim();
-        Sprite cardArtSprite = LoadSpriteByPath(cardArtPath);
         string thumbPath = string.Empty;
+        Sprite cardArtSprite = null;
         Sprite thumbSprite = null;
 
-        // Inspector override has higher priority and can replace CSV setting.
+        // 直接引用註冊表（取代 CSV 字串載入）。
+        CardArtLibrary library = CardArtLibrary.Instance;
+        if (library != null)
+        {
+            cardArtSprite = library.GetArtwork(card.id);
+            thumbSprite = library.GetDeckThumb(card.id);
+        }
+
+        // Inspector override（最高優先；直接 Sprite 引用）。CSV/override 的路徑字串僅保留作為資料記錄，不再執行期載入。
         for (int i = 0; i < artworkOverrides.Count; i++)
         {
             CardArtworkOverride entry = artworkOverrides[i];
             if (entry == null || entry.id != card.id) continue;
-            if (!string.IsNullOrWhiteSpace(entry.artworkResourcePath))
-            {
-                cardArtPath = entry.artworkResourcePath.Trim();
-                cardArtSprite = LoadSpriteByPath(cardArtPath);
-            }
             if (entry.artworkSprite != null)
                 cardArtSprite = entry.artworkSprite;
-
-            if (!string.IsNullOrWhiteSpace(entry.deckThumbResourcePath))
-            {
-                thumbPath = entry.deckThumbResourcePath.Trim();
-                thumbSprite = LoadSpriteByPath(thumbPath);
-            }
             if (entry.deckThumbSprite != null)
                 thumbSprite = entry.deckThumbSprite;
+            if (!string.IsNullOrWhiteSpace(entry.artworkResourcePath))
+                cardArtPath = entry.artworkResourcePath.Trim();
+            if (!string.IsNullOrWhiteSpace(entry.deckThumbResourcePath))
+                thumbPath = entry.deckThumbResourcePath.Trim();
             break;
         }
 
         card.SetArtwork(cardArtPath, cardArtSprite);
         card.SetDeckThumb(thumbPath, thumbSprite);
-    }
-
-    private static Sprite LoadSpriteByPath(string path)
-    {
-        if (string.IsNullOrWhiteSpace(path)) return null;
-        return Resources.Load<Sprite>(path.Trim());
     }
 
     public void TestLoad()

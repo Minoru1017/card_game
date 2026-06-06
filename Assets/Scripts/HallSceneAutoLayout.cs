@@ -33,7 +33,10 @@ public class HallSceneAutoLayout : MonoBehaviour
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
             canvas.sortingOrder = 100;
             CanvasScaler scaler = autoCanvasObj.GetComponent<CanvasScaler>();
-            MobileUiLayoutPolicy.ApplyCanvasScaler(scaler);
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            scaler.referenceResolution = new Vector2(1920f, 1080f);
+            scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
+            scaler.matchWidthOrHeight = 0.5f;
         }
 
         GameObject rootObj = new GameObject(RootName, typeof(RectTransform));

@@ -166,6 +166,10 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
     private float nextRefreshTime;
     private int lastHandSignature = int.MinValue;
     private int lastFieldSignature = int.MinValue;
+    // 因素3：快取上次寫入的字串，內容沒變就跳過 TMP 賦值，省去每次刷新的 mesh 重建。
+    private string lastStatusStr;
+    private string lastDeckStr;
+    private string lastFieldStr;
     private const float BattleHandLayoutWidthPx = 170f;
     private const float BattleHandLayoutHeightPx = 210f;
     private Vector2 prefabCardSize = new Vector2(BattleHandLayoutWidthPx, BattleHandLayoutHeightPx);
@@ -227,6 +231,8 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
     private bool debugChordLatched;
     private bool battleResultTextUsesDebugPanelLayout;
     private const float DebugUiChromeMul = 1.55f;
+    private const float DesktopRefreshInterval = 0.2f;
+    private const float MobileRefreshInterval = 0.33f;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void AutoSpawn()
@@ -401,7 +407,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
 
     private void Update()
     {
-        if (debugPanelHotkeyEnabled && debugUiRoot != null)
+        if (!Application.isMobilePlatform && debugPanelHotkeyEnabled && debugUiRoot != null)
         {
             KeyCode k1 = debugPanelHotkeyKey1;
             KeyCode k2 = debugPanelHotkeyKey2;
@@ -431,7 +437,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
 
         RefreshHeroHpHud();
 
-        if (Input.GetKeyDown(KeyCode.Escape))
+        if (!Application.isMobilePlatform && Input.GetKeyDown(KeyCode.Escape))
         {
             TogglePause();
         }
@@ -472,18 +478,29 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
 
         if (Time.unscaledTime < nextRefreshTime) return;
 
-        nextRefreshTime = Time.unscaledTime + 0.2f;
+        float refreshInterval = Application.isMobilePlatform ? MobileRefreshInterval : DesktopRefreshInterval;
+        nextRefreshTime = Time.unscaledTime + refreshInterval;
 
         if (debugPanelVisible)
         {
-            statusText.text = battleManager.GetBattleStateText();
+            string statusStr = battleManager.GetBattleStateText();
+            if (statusStr != lastStatusStr)
+            {
+                statusText.text = statusStr;
+                lastStatusStr = statusStr;
+            }
             if (deckText != null)
             {
-                deckText.text =
+                string deckStr =
                     "Player deck: " + battleManager.GetPlayerDeckCount() +
                     "  Enemy deck: " + battleManager.GetEnemyDeckCount() +
                     "\nPlayer discard: " + battleManager.GetPlayerDiscardCount() + "（" + battleManager.GetPlayerDiscardTopName() + "）" +
                     "  Enemy discard: " + battleManager.GetEnemyDiscardCount() + "（" + battleManager.GetEnemyDiscardTopName() + "）";
+                if (deckStr != lastDeckStr)
+                {
+                    deckText.text = deckStr;
+                    lastDeckStr = deckStr;
+                }
             }
             if (fieldText != null)
             {
@@ -493,11 +510,16 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
                     : "\n<color=#AAFFCC>▶ " + toast + "</color>";
                 string aiQuantLine =
                     "\n<color=#FFD580>" + battleManager.GetEnemyAiQuantifiedTextForPlayerView() + "</color>";
-                fieldText.text =
+                string fieldStr =
                     battleManager.GetPlayerFieldText() + "\n" +
                     battleManager.GetEnemyFieldText() +
                     aiQuantLine +
                     toastLine;
+                if (fieldStr != lastFieldStr)
+                {
+                    fieldText.text = fieldStr;
+                    lastFieldStr = fieldStr;
+                }
             }
         }
         TickDiscardSelectionUi();

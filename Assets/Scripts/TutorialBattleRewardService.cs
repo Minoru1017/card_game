@@ -181,41 +181,27 @@ public static class TutorialBattleRewardService
 
             if (art != null) return art;
 
-            if (!string.IsNullOrWhiteSpace(card.artworkResourcePath))
-
-            {
-
-                art = Resources.Load<Sprite>(card.artworkResourcePath.Trim());
-
-                if (art != null) return art;
-
-            }
-
-            if (!string.IsNullOrWhiteSpace(card.deckThumbResourcePath))
-
-            {
-
-                art = Resources.Load<Sprite>(card.deckThumbResourcePath.Trim());
-
-                if (art != null) return art;
-
-            }
-
         }
 
 
 
-        int id = card != null ? card.id : cardId;
+            int id = card != null ? card.id : cardId;
 
-        if (id >= 0)
+            CardArtLibrary library = CardArtLibrary.Instance;
 
-        {
+            if (library != null && id >= 0)
 
-            Sprite byId = Resources.Load<Sprite>("CardArt/" + id);
+            {
 
-            if (byId != null) return byId;
+                Sprite libArt = library.GetArtwork(id);
 
-        }
+                if (libArt != null) return libArt;
+
+                libArt = library.GetDeckThumb(id);
+
+                if (libArt != null) return libArt;
+
+            }
 
 
 

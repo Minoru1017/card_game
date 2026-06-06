@@ -1,18 +1,13 @@
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-#if UNITY_EDITOR
-using UnityEditor;
-#endif
-
 /// <summary>
 /// Main Plot 1-1 劇情逐字顯示打字音效：動畫開始播一次，動畫結束（含快轉）即切斷。
 /// </summary>
 public class PlotDialogueTypewriterSfx : MonoBehaviour
 {
-    public const string TypingClipResourcesPath = "Music/typewriter-typing-";
-
 #if UNITY_EDITOR
+    // 僅供 AudioLibrary 填表工具定位實體檔（檔案在 Assets/Music/，不在 Resources）。
     public const string TypingClipAssetPath = "Assets/Music/typewriter-typing-.mp3";
 #endif
 
@@ -117,10 +112,15 @@ public class PlotDialogueTypewriterSfx : MonoBehaviour
         if (typingClip != null)
             return;
 
-        typingClip = Resources.Load<AudioClip>(TypingClipResourcesPath);
-#if UNITY_EDITOR
+        AudioLibrary library = AudioLibrary.Instance;
+        if (library != null)
+            typingClip = library.TypingSfx;
+
         if (typingClip == null)
-            typingClip = AssetDatabase.LoadAssetAtPath<AudioClip>(TypingClipAssetPath);
-#endif
+        {
+            Debug.LogWarning(
+                "PlotDialogueTypewriterSfx: 找不到打字音效，請在場景指定 typingClip，" +
+                "或重跑 Tools/Audio/Create or Refresh Audio Library 補進 AudioLibrary。");
+        }
     }
 }

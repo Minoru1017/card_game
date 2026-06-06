@@ -12,6 +12,14 @@ public static class BuildbeckUiFonts
         if (cachedBuildbeckFont != null && FontSupportsText(cachedBuildbeckFont, required))
             return cachedBuildbeckFont;
 
+        // 直接引用優先：UiFontLibrary 註冊表的 CJK 主字型。
+        UiFontLibrary library = UiFontLibrary.Instance;
+        if (library != null && library.CjkFont != null && FontSupportsText(library.CjkFont, required))
+        {
+            cachedBuildbeckFont = library.CjkFont;
+            return cachedBuildbeckFont;
+        }
+
         TMP_FontAsset[] fonts = Resources.FindObjectsOfTypeAll<TMP_FontAsset>();
         for (int i = 0; i < fonts.Length; i++)
         {

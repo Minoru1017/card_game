@@ -1,0 +1,31 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9b5191a319710214f8fbbdc6aad49b87, type: 3}
+  m_Name: UiSpriteLibrary
+  m_EditorClassIdentifier: 
+  coachNeutral: {fileID: 0}
+  coachAlert: {fileID: 0}
+  coachSerious: {fileID: 0}
+  coachEncourage: {fileID: 0}
+  returnButton: {fileID: -995779289211046693, guid: cdfc494c6c52f6e4ea68f7181aaf981d, type: 3}
+  harborBayBackground: {fileID: 7635544513007904724, guid: 98d475c23bdfa884692c1197a89fa39e, type: 3}
+  battlePreviewPanel: {fileID: 7725769104599324719, guid: 0264243783b371346b79b739c14d58a1, type: 3}
+  difficultyIntro: {fileID: 7523385733433441043, guid: a4d7782115db81341916a073e5c41300, type: 3}
+  difficultyEasy: {fileID: -5798597686317507224, guid: cf8392f4793cec44e99465dd5af2a505, type: 3}
+  difficultyNormal: {fileID: 9095853184155359625, guid: cd8b5e8b560a0c04aba53cd42032686a, type: 3}
+  difficultyHard: {fileID: 5412257750835826718, guid: 81c33120dc4aaf248965c009c806d1d2, type: 3}
+  difficultyBoss: {fileID: -6248741079362886434, guid: de6b242dbb2ea7d4a8493c84a00deb22, type: 3}
+  rarityFrameN: {fileID: 8416655360359829403, guid: 4cddd42e360bc81448992bd3b53f5318, type: 3}
+  rarityFrameR: {fileID: -5767712334750880813, guid: c7a21bef90404dea942233445566772b, type: 3}
+  rarityFrameSr: {fileID: -7324653253327430671, guid: d8b32cef90515dfb9533445566778899, type: 3}
+  rarityFrameSsr: {fileID: 1014833402724443373, guid: e9c43df90626ecf06445566788990001, type: 3}
+  rarityFrameUr: {fileID: 1460595860699020046, guid: a903bc714deb46389133445566778899, type: 3}

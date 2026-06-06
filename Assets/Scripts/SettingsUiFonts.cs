@@ -61,6 +61,11 @@ public static class SettingsUiFonts
 
     private static TMP_FontAsset FindNotoSansTcFont()
     {
+        // 直接引用優先：UiFontLibrary 註冊表的 CJK 主字型。
+        UiFontLibrary library = UiFontLibrary.Instance;
+        if (library != null && library.CjkFont != null && SupportsCjk(library.CjkFont))
+            return library.CjkFont;
+
         TMP_FontAsset[] fonts = Resources.FindObjectsOfTypeAll<TMP_FontAsset>();
         for (int i = 0; i < fonts.Length; i++)
         {

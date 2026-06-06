@@ -42,8 +42,6 @@ public class HallSceneFeatureBinder : MonoBehaviour
         TryBindSceneButton("設定", "Settings");
 
         RefreshResourceDisplay();
-        HallSceneResponsiveLayout.ApplyNow(scene);
-        HallSceneResponsiveLayoutDriver.EnsureExists();
     }
 
     private static void TryBindSceneButton(string objName, string targetSceneName)
@@ -80,7 +78,7 @@ public class HallSceneFeatureBinder : MonoBehaviour
         if (resourceArea == null) return;
 
         PlayerData playerData = ResolvePlayerData();
-        if (playerData != null) playerData.LoadPlayerData();
+        // Hall entry should not block on disk I/O. Use in-memory data; fallback to save only if needed.
         string coinsText = playerData != null
             ? playerData.GetCoinsDisplayText()
             : (PlayerData.TryGetActiveSlotCoinsFromSave(out int coinsFromSave) ? coinsFromSave.ToString() : "0");

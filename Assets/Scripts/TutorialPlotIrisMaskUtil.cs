@@ -109,8 +109,18 @@ public static class TutorialPlotIrisMaskUtil
     /// <summary>須在 <see cref="WaitForEndOfFrame"/> 剛結束的同一 continuation 內呼叫。</summary>
     public static Texture2D CaptureScreenToTexture()
     {
-        int w = Mathf.Max(1, Screen.width);
-        int h = Mathf.Max(1, Screen.height);
+        int rawW = Screen.width;
+        int rawH = Screen.height;
+        if (rawW <= 1 || rawH <= 1)
+        {
+            GameDevLog.LogWarning(
+                "TutorialPlotIrisMaskUtil: skip capture because screen size is not ready (" +
+                rawW + "x" + rawH + ").");
+            return null;
+        }
+
+        int w = Mathf.Max(1, rawW);
+        int h = Mathf.Max(1, rawH);
 
         Texture2D fromScreenCapture = TryScreenCaptureAsTexture();
         if (fromScreenCapture != null)
@@ -180,7 +190,23 @@ public static class TutorialPlotIrisMaskUtil
     {
         try
         {
-            return ScreenCapture.CaptureScreenshotAsTexture();
+            if (Screen.width <= 1 || Screen.height <= 1)
+                return null;
+
+            Texture2D tex = ScreenCapture.CaptureScreenshotAsTexture();
+            if (tex == null || tex.width <= 1 || tex.height <= 1)
+            {
+                if (tex != null)
+                {
+                    if (Application.isPlaying)
+                        UnityEngine.Object.Destroy(tex);
+                    else
+                        UnityEngine.Object.DestroyImmediate(tex);
+                }
+                return null;
+            }
+
+            return tex;
         }
         catch (Exception ex)
         {

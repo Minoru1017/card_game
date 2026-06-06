@@ -10,7 +10,7 @@ using UnityEngine.UI;
 [DisallowMultipleComponent]
 public class BackpackCardInspectPanel : MonoBehaviour
 {
-    private const int UiBuildGeneration = 19;
+    private const int UiBuildGeneration = 20;
 
     private const float ArtAnchorMax = 0.58f;
     private const float HeaderLeftAnchorMax = 0.54f;
@@ -506,18 +506,16 @@ public class BackpackCardInspectPanel : MonoBehaviour
         art = card.ResolveDeckThumbSprite();
         if (art != null) return art;
 
-        if (!string.IsNullOrWhiteSpace(card.artworkResourcePath))
+        CardArtLibrary library = CardArtLibrary.Instance;
+        if (library != null)
         {
-            art = Resources.Load<Sprite>(card.artworkResourcePath.Trim());
+            art = library.GetArtwork(card.id);
             if (art != null) return art;
-        }
-        if (!string.IsNullOrWhiteSpace(card.deckThumbResourcePath))
-        {
-            art = Resources.Load<Sprite>(card.deckThumbResourcePath.Trim());
+            art = library.GetDeckThumb(card.id);
             if (art != null) return art;
         }
 
-        return Resources.Load<Sprite>($"CardArt/{card.id}");
+        return null;
     }
 
     private void RefreshPageHint()
@@ -896,14 +894,15 @@ public class BackpackCardInspectPanel : MonoBehaviour
             CardSkillRevealStage.FullC
         };
         string[] labels = { "A 階段", "B 階段", "C 階段" };
-        float[] anchors = { 0.02f, 0.35f, 0.68f };
+        const float tabWidth = 0.30f;
+        float[] anchors = { 0.0f, 0.34f, 0.68f };
 
         for (int i = 0; i < 3; i++)
         {
             Image tabBg = CreateChild(parent, $"StageTab{i}", true);
             RectTransform tabRt = tabBg.rectTransform;
             tabRt.anchorMin = new Vector2(anchors[i], 0.5f);
-            tabRt.anchorMax = new Vector2(anchors[i] + 0.28f, 0.5f);
+            tabRt.anchorMax = new Vector2(anchors[i] + tabWidth, 0.5f);
             tabRt.pivot = new Vector2(0f, 0.5f);
             tabRt.sizeDelta = new Vector2(0f, 76f);
             tabBg.color = BackpackInspectUiColors.TabIdleBg;
@@ -916,7 +915,14 @@ public class BackpackCardInspectPanel : MonoBehaviour
 
             stageTabLabelTmps[i] = CreateText(tabRt, labels[i], font, BackpackInspectVisualStyle.Typography.BodySize,
                 FontStyles.Bold, BackpackInspectUiColors.TabIdleText, TextAlignmentOptions.Center);
-            Stretch(stageTabLabelTmps[i].rectTransform, 4, 4, 4, 4);
+            // 階段標籤強制單行：關閉換行，必要時自動縮字，避免「A 階段」被擠成兩行或溢出按鈕。
+            TextMeshProUGUI tabLabel = stageTabLabelTmps[i];
+            tabLabel.enableWordWrapping = false;
+            tabLabel.overflowMode = TextOverflowModes.Overflow;
+            tabLabel.enableAutoSizing = true;
+            tabLabel.fontSizeMax = BackpackInspectVisualStyle.Typography.BodySize;
+            tabLabel.fontSizeMin = 12f;
+            Stretch(tabLabel.rectTransform, 2, 2, 2, 2);
         }
     }
 

@@ -96,6 +96,18 @@ flowchart TD
 - **出發！**：`choice1Next = -1`，三顆按鈕皆隱藏後劇情結束；請在場景外由按鈕／`SceneLoader` 跳轉大廳或 Buildbeck（見 §六）。
 - **再看一次組牌說明**：跳回步驟 18（Buildbeck 組牌），給想複習的玩家。
 
+### 4.1 教學戰勝利後結尾劇情（`BuildTutorialPlotEpilogueSteps`）
+
+> 接在 `TutorialBattleSettlementUi` 勝利結算的「繼續」之後；BGM／打字／點擊音與開場劇情相同。  
+> 語音命名接續 1-1 主線：`1-1_30`～`1-1_33`。
+
+| # | 語音 ID | 說話者 | 台詞 | 選1 | → | 備註 |
+|---|---------|--------|------|-----|---|------|
+| E0 | `1-1_30` | 林可姐 | ……回來了 第一場**教學戰**算你過關 出牌跟攻擊的節奏有跟上 | 繼續 | E1 | `tapNextStepIndex = 1` |
+| E1 | `1-1_31` | 林可姐 | **國王** **王后** **民兵** 各一張已放進背包 之後在 **Buildbeck** 或館藏都能看 | 繼續 | E2 | `tapNextStepIndex = 2` |
+| E2 | `1-1_32` | 林可姐 | 想再練就回**遊戲進度** 開入門級 熟了也能從那裡**前往大廳** 自己逛 | 繼續 | E3 | `tapNextStepIndex = 3` |
+| E3 | `1-1_33` | 林可姐 | 今天的引導先到這 戰況簿我會繼續幫你記 按下回到遊戲進度 | 繼續 | 結束 | `tapEndsPlot = true` |
+
 ---
 
 ## 五、教學對戰內提示文案（林可姐教戰面板）
@@ -137,7 +149,7 @@ flowchart TD
 |------|------|
 | **Story progress** | `Assets/Scenes/Story progress.unity`；`StoryProgressSceneController` 自動生成並綁定「進入關卡」按鈕；左上 **返回** 使用 `Assets/UI/return.png`（執行期 `Resources/UI/return`）。 |
 | **返回按鈕** | 僅 Story progress 場景；點選一律載入 `hall`。 |
-| **劇情場景** | `Assets/Scenes/Main Plot.unity`；由 `TutorialPlotScriptFactory` 注入 26 步，不需手填 Inspector。 |
+| **劇情場景** | `Assets/Scenes/Main Plot.unity`；由 `TutorialPlotScriptFactory` 注入開場 30 步與勝利後結尾 4 步，不需手填 Inspector。 |
 | **結束後跳轉** | 步驟 25「出發」或「略過本段劇情」→ 標記劇情完成 → **直接**載入教學對戰（`LaunchTutorialBattleAfterPlot`）。 |
 | **教學對戰** | `TutorialDeckApplicator` + `SceneLoader.LaunchIntroTutorialBattleDirect`（入門級、無天氣）；不論是否通關過，**進入關卡** 都從劇情重新開始。 |
 | **對戰結束** | 勝利：結算「繼續」→ 發放御三家 → `BuildTutorialPlotEpilogueSteps` 結尾劇情 → Story progress；戰敗：再試一次或返回劇情（重播開場劇情）。 |
@@ -158,3 +170,4 @@ flowchart TD
 | 2026-05-27 | `TutorialBattleCoachUi`：教學戰內林可姐即時引導；點面板展開／收起。 |
 | 2026-05-30 | 棄牌階段教戰文案、建議棄牌手牌高亮；規則細節見 `ENEMY_AI_DECISION_TREE.md` §5.2。 |
 | 2026-05-27 | `TutorialBattleSettlementUi`：教學戰勝敗結算；勝利贈國王／王后／民兵。 |
+| 2026-06-06 | 補入教學戰勝利後結尾劇情 4 步，語音 ID 接續 `1-1_30`～`1-1_33`。 |

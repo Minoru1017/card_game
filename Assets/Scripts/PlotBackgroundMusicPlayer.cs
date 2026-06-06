@@ -14,9 +14,8 @@ using UnityEditor;
 [RequireComponent(typeof(AudioSource))]
 public class PlotBackgroundMusicPlayer : MonoBehaviour
 {
-    public const string EnchantedValleyResourcesPath = "Music/Roie Shpigler - Enchanted Valley";
-
 #if UNITY_EDITOR
+    // 僅供 AudioLibrary 填表工具定位實體檔（檔案在 Assets/Music/，不在 Resources）。
     public const string EnchantedValleyAssetPath = "Assets/Music/Roie Shpigler - Enchanted Valley.mp3";
 #endif
 
@@ -221,11 +220,16 @@ public class PlotBackgroundMusicPlayer : MonoBehaviour
         if (plotBgmClip != null)
             return;
 
-        plotBgmClip = Resources.Load<AudioClip>(EnchantedValleyResourcesPath);
-#if UNITY_EDITOR
+        AudioLibrary library = AudioLibrary.Instance;
+        if (library != null)
+            plotBgmClip = library.PlotBgm;
+
         if (plotBgmClip == null)
-            plotBgmClip = AssetDatabase.LoadAssetAtPath<AudioClip>(EnchantedValleyAssetPath);
-#endif
+        {
+            Debug.LogWarning(
+                "PlotBackgroundMusicPlayer: 找不到劇情 BGM，請在場景指定 plotBgmClip，" +
+                "或重跑 Tools/Audio/Create or Refresh Audio Library 補進 AudioLibrary。");
+        }
     }
 
     private static void ConfigureAudioSource(AudioSource source)

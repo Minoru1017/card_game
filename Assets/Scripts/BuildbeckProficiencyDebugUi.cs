@@ -153,6 +153,14 @@ public class BuildbeckProficiencyDebugUi : MonoBehaviour
 
     private static TMP_FontAsset ResolveFont()
     {
+        // 直接引用優先：UiFontLibrary 註冊表。
+        UiFontLibrary library = UiFontLibrary.Instance;
+        if (library != null)
+        {
+            if (library.DefaultUiFont != null) return library.DefaultUiFont;
+            if (library.CjkFont != null) return library.CjkFont;
+        }
+
         TMP_FontAsset font = Resources.Load<TMP_FontAsset>("Fonts & Materials/LiberationSans SDF");
         if (font != null) return font;
         return TMP_Settings.defaultFontAsset;

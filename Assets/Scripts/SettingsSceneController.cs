@@ -14,11 +14,12 @@ public class SettingsSceneController : MonoBehaviour
     private const string HallSceneName = "hall";
 
     private const string DisplayRatioName = "display ratio";
-    private const string ImageQualityName = "Image quality settings";
+    private const string ImageQualityName = "FPS settings";
     private const string LeaveButtonName = "leave";
     private const string PresetSetName = "preset set";
     private const string PresetNestedPanelName = "Preset nested panel";
     private const string QualityButtonRowName = "QualityButtonRow";
+    private const string FpsNavLabel = "FPS 設定";
     private const string ParameterDetailsName = "Parameter details";
     private const string AboutRootName = "about";
     private const string AboutBgChildName = "BG";
@@ -104,7 +105,8 @@ public class SettingsSceneController : MonoBehaviour
         BuildQualityButtons();
         WireNavigationButtons();
         ApplyTierVisibility();
-        BattleCardTuningUserSettings.ApplySavedQualityLevel();
+        BattleCardTuningUserSettings.ApplySavedTargetFps();
+        RewriteQualitySectionAsFps();
         EnsureAboutSaveInfoUi();
         DisableTmpRaycastsUnderPanelSelection();
     }
@@ -330,20 +332,19 @@ public class SettingsSceneController : MonoBehaviour
         }
 
         qualityButtons.Clear();
-        string[] names = QualitySettings.names;
-        if (names == null || names.Length == 0) return;
+        int[] fpsOptions = { 30, 60 };
 
         float buttonHeight = 72f;
         float gap = 12f;
-        float totalHeight = names.Length * buttonHeight + (names.Length - 1) * gap;
+        float totalHeight = fpsOptions.Length * buttonHeight + (fpsOptions.Length - 1) * gap;
         float startY = totalHeight * 0.5f - buttonHeight * 0.5f;
 
-        for (int i = 0; i < names.Length; i++)
+        for (int i = 0; i < fpsOptions.Length; i++)
         {
-            int level = i;
+            int fps = fpsOptions[i];
             float y = startY - i * (buttonHeight + gap);
-            Button btn = CreateQualityButton(row, names[i], y, buttonHeight, settingsUiFont);
-            btn.onClick.AddListener(() => OnQualityChosen(level));
+            Button btn = CreateQualityButton(row, fps + " FPS", y, buttonHeight, settingsUiFont);
+            btn.onClick.AddListener(() => OnQualityChosen(fps));
             qualityButtons.Add(btn);
         }
 
@@ -488,7 +489,7 @@ public class SettingsSceneController : MonoBehaviour
 
     private void OnQualityChosen(int level)
     {
-        BattleCardTuningUserSettings.SetQualityLevel(level);
+        BattleCardTuningUserSettings.SetTargetFps(level);
         RefreshQualityButtonHighlights();
     }
 
@@ -963,16 +964,34 @@ public class SettingsSceneController : MonoBehaviour
 
     private void RefreshQualityButtonHighlights()
     {
-        int selected = BattleCardTuningUserSettings.GetSavedQualityLevel();
+        int selected = BattleCardTuningUserSettings.GetSavedTargetFps();
         for (int i = 0; i < qualityButtons.Count; i++)
         {
             Button btn = qualityButtons[i];
             if (btn == null) continue;
             Image img = btn.targetGraphic as Image;
             if (img == null) continue;
-            img.color = i == selected
+            TextMeshProUGUI label = btn.GetComponentInChildren<TextMeshProUGUI>(true);
+            bool isSelected = label != null && label.text.Contains(selected.ToString());
+            img.color = isSelected
                 ? new Color(0.2f, 0.75f, 0.45f, 1f)
                 : new Color(0.28f, 0.62f, 0.88f, 1f);
+        }
+    }
+
+    private void RewriteQualitySectionAsFps()
+    {
+        GameObject imageQualityRoot = GameObject.Find(ImageQualityName);
+        if (imageQualityRoot == null) return;
+        TextMeshProUGUI[] labels = imageQualityRoot.GetComponentsInChildren<TextMeshProUGUI>(true);
+        for (int i = 0; i < labels.Length; i++)
+        {
+            TextMeshProUGUI tmp = labels[i];
+            if (tmp == null) continue;
+            string text = tmp.text;
+            if (string.IsNullOrWhiteSpace(text)) continue;
+            if (text.Contains("畫質") || text.Contains("品質") || text.Contains("quality") || text.Contains("Quality"))
+                tmp.text = FpsNavLabel;
         }
     }
 

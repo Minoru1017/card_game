@@ -13,8 +13,6 @@ public enum HarborCoachExpression
 
 public static class HarborCombatCoachExpressionCatalog
 {
-    private const string ResourcePrefix = "UI/LinKeCoach/linke_";
-
     private static readonly Dictionary<HarborCoachExpression, Sprite> CachedSprites =
         new Dictionary<HarborCoachExpression, Sprite>();
 
@@ -63,15 +61,17 @@ public static class HarborCombatCoachExpressionCatalog
         if (CachedSprites.TryGetValue(expression, out Sprite cached) && cached != null)
             return cached;
 
-        string fileName = expression switch
-        {
-            HarborCoachExpression.Alert => "alert",
-            HarborCoachExpression.Serious => "serious",
-            HarborCoachExpression.Encourage => "encourage",
-            _ => "neutral"
-        };
+        Sprite loaded = null;
 
-        Sprite loaded = Resources.Load<Sprite>(ResourcePrefix + fileName);
+        UiSpriteLibrary library = UiSpriteLibrary.Instance;
+        if (library != null)
+            loaded = library.GetCoachExpression(expression);
+
+        if (loaded == null)
+            Debug.LogWarning(
+                $"HarborCombatCoachExpressionCatalog: 教練表情 '{expression}' 不在 UiSpriteLibrary，" +
+                "請重跑 Tools/UI/Create or Refresh UI Sprite Library。");
+
         CachedSprites[expression] = loaded;
         return loaded;
     }
