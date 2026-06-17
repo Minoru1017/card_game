@@ -32,6 +32,7 @@ public sealed class AudioLibrary : ScriptableObject
     [SerializeField] private AudioClip hallBgm;
     [SerializeField] private AudioClip buildbeckBgm;
     [SerializeField] private AudioClip cardStoreBgm;
+    [SerializeField] private AudioClip birdDuelBgm;
     [SerializeField] private AudioClip menuClickSfx;
     [SerializeField] private AudioClip typingSfx;
 
@@ -39,6 +40,7 @@ public sealed class AudioLibrary : ScriptableObject
     public AudioClip HallBgm => hallBgm;
     public AudioClip BuildbeckBgm => buildbeckBgm;
     public AudioClip CardStoreBgm => cardStoreBgm;
+    public AudioClip BirdDuelBgm => birdDuelBgm;
     public AudioClip MenuClickSfx => menuClickSfx;
     public AudioClip TypingSfx => typingSfx;
 
@@ -132,6 +134,12 @@ public sealed class AudioLibrary : ScriptableObject
     public void EditorSetCardStoreBgm(AudioClip bgm)
     {
         cardStoreBgm = bgm;
+    }
+
+    /// <summary>供 Editor 自動填表工具使用，請勿在執行期呼叫。</summary>
+    public void EditorSetBirdDuelBgm(AudioClip bgm)
+    {
+        birdDuelBgm = bgm;
     }
 #endif
 }

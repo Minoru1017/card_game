@@ -5,6 +5,10 @@ public static class HarborTrainingProgressState
 {
     private const string CombatClearKey = "harbor_combat_clear";
     private const string HardRewardKey = "harbor_hard_reward";
+    private const string HotBloodMetKey = "harbor_hot_blood_met";
+    private const string GemEasyKey = "harbor_gem_easy";
+    private const string GemNormalKey = "harbor_gem_normal";
+    private const string GemHardKey = "harbor_gem_hard";
 
     /// <summary>港灣實戰（簡單／普通／困難）在標準難度索引中的區間。</summary>
     private const int HarborCombatDifficultyIndexMin = 1;
@@ -26,6 +30,55 @@ public static class HarborTrainingProgressState
 
     public static void SetHarborHardGraduationRewardGranted(int slot, bool granted = true) =>
         TutorialProgressState.WriteSlotFlag(slot, HardRewardKey, granted);
+
+    /// <summary>是否已在港灣實戰流程中遇過熱血同學（立繪橋接再戰台詞用）。</summary>
+    public static bool HasMetHotBloodClassmate(int slot) =>
+        TutorialProgressState.ReadSlotFlag(slot, HotBloodMetKey);
+
+    public static bool HasMetHotBloodClassmateForActivePlayer() =>
+        HasMetHotBloodClassmate(PlayerData.GetActivePlayerSlotOrDefault());
+
+    public static void MarkHotBloodClassmateMet(int slot) =>
+        TutorialProgressState.WriteSlotFlag(slot, HotBloodMetKey, true);
+
+    public static int GetHarborFirstClearGemAmount(BattleDifficultyTier tier)
+    {
+        switch (tier)
+        {
+            case BattleDifficultyTier.Normal: return 60;
+            case BattleDifficultyTier.Hard: return 80;
+            default: return 40;
+        }
+    }
+
+    public static bool IsHarborGemRewardGranted(int slot, BattleDifficultyTier tier)
+    {
+        switch (tier)
+        {
+            case BattleDifficultyTier.Normal:
+                return TutorialProgressState.ReadSlotFlag(slot, GemNormalKey);
+            case BattleDifficultyTier.Hard:
+                return TutorialProgressState.ReadSlotFlag(slot, GemHardKey);
+            default:
+                return TutorialProgressState.ReadSlotFlag(slot, GemEasyKey);
+        }
+    }
+
+    public static void SetHarborGemRewardGranted(int slot, BattleDifficultyTier tier, bool granted = true)
+    {
+        switch (tier)
+        {
+            case BattleDifficultyTier.Normal:
+                TutorialProgressState.WriteSlotFlag(slot, GemNormalKey, granted);
+                break;
+            case BattleDifficultyTier.Hard:
+                TutorialProgressState.WriteSlotFlag(slot, GemHardKey, granted);
+                break;
+            default:
+                TutorialProgressState.WriteSlotFlag(slot, GemEasyKey, granted);
+                break;
+        }
+    }
 
     /// <summary>
     /// 依港灣旗標、戰績列、M-1-2 進度等修復 <c>harbor_combat_clear</c>（記錄點遺失旗標時仍顯示 Clear）。
@@ -96,5 +149,9 @@ public static class HarborTrainingProgressState
     {
         SetHarborCombatCleared(slot, false);
         SetHarborHardGraduationRewardGranted(slot, false);
+        TutorialProgressState.WriteSlotFlag(slot, HotBloodMetKey, false);
+        TutorialProgressState.WriteSlotFlag(slot, GemEasyKey, false);
+        TutorialProgressState.WriteSlotFlag(slot, GemNormalKey, false);
+        TutorialProgressState.WriteSlotFlag(slot, GemHardKey, false);
     }
 }

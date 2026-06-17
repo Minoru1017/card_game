@@ -18,12 +18,14 @@ public static class BattlePreviewPuzzleIndex
         Pz02FindHardDifficulty
     };
 
-    /// <summary>以 <see cref="RandomPreviewPuzzlePz01Weight"/> 抽 PZ01，否則 PZ02。</summary>
+    /// <summary>
+    /// 戰前謎題已由「鬥鳥暖身賽」取代（見 <c>Docs/鬥鳥手勢小遊戲企劃.md</c>）。
+    /// 不再隨機抽謎題；固定回傳 PZ01 版面（入門／簡單／普通／困難四拱門，全部可直接選取，無點擊解鎖）。
+    /// 隱藏難度（魔王級）改由鬥鳥勝出解鎖。
+    /// </summary>
     public static string RollRandomPreviewPuzzleId()
     {
-        return UnityEngine.Random.value < RandomPreviewPuzzlePz01Weight
-            ? Pz01TrainingGroundBossUnlock
-            : Pz02FindHardDifficulty;
+        return Pz01TrainingGroundBossUnlock;
     }
 
     public const string TagTrainingGround = "#訓練場";
@@ -99,9 +101,9 @@ public static class BattlePreviewPuzzleIndex
         BattleDifficultyTier.Hard
     };
 
-    // PZ01 文案
-    public const string Pz01PuzzleTitleLockedRich = "<b>謎題</b> <color=#8A6B3A>#訓練場</color>";
-    public const string Pz01PuzzleHintLocked = "請找出魔王級並通關一次";
+    // PZ01 文案（戰前謎題已由鬥鳥暖身賽取代）
+    public const string Pz01PuzzleTitleLockedRich = "<b>戰前</b> <color=#8A6B3A>#鬥鳥暖身賽</color>";
+    public const string Pz01PuzzleHintLocked = "勝出鬥鳥可挑戰魔王級";
     public const string Pz01PuzzleTitleUnlockedRich = "<size=110%><b>魔王級</b></size>";
 
     // PZ02 文案
@@ -153,8 +155,11 @@ public static class BattlePreviewPuzzleIndex
         return BossUnlockClickSequence;
     }
 
-    public static bool UsesUnlockClickSequence(string puzzleId) =>
-        puzzleId == Pz01TrainingGroundBossUnlock || puzzleId == Pz02FindHardDifficulty;
+    /// <summary>
+    /// 已由鬥鳥取代：戰前預覽不再以點擊序解鎖隱藏難度，難度拱門皆為單純難度選擇。
+    /// 一律回傳 false，使 <c>SceneLoader.BattlePreview</c> 的難度鈕只做選取／取消。
+    /// </summary>
+    public static bool UsesUnlockClickSequence(string puzzleId) => false;
 
     /// <summary>PZ02 解鎖後困難級出現於第 4 欄拱門（非揭示區大按鈕）。</summary>
     public static bool RevealsHiddenTierInFourthArchSlot(string puzzleId) =>

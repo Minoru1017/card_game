@@ -74,8 +74,6 @@ public static class PlayerSaveCoordinator
     public static void FlushDebouncedThenSavePlayerData()
     {
         PlayerSaveDebouncer.CancelPending();
-        PlayerData pd = PlayerData.ResolveCanonical();
-        if (pd != null)
-            pd.SavePlayerData();
+        PlayerData.ResolveForSaveWrite().SavePlayerData();
     }
 }

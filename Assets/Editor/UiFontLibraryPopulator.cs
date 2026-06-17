@@ -26,8 +26,8 @@ public static class UiFontLibraryPopulator
         }
 
         TMP_FontAsset cjk = FindFontAsset("noto", "sourcehan", "cjk");
-        TMP_FontAsset defaultUi = FindFontAsset("liberationsans");
-        library.EditorSetFonts(cjk, defaultUi);
+        Font legacySource = AssetDatabase.LoadAssetAtPath<Font>("Assets/NotoSansTC-VariableFont_wght.ttf");
+        library.EditorSetFonts(cjk, cjk, legacySource);
 
         EditorUtility.SetDirty(library);
         AssetDatabase.SaveAssets();
@@ -35,7 +35,7 @@ public static class UiFontLibraryPopulator
 
         Debug.Log(
             $"UiFontLibraryPopulator: cjk={(cjk != null ? cjk.name : "<null>")}, " +
-            $"defaultUi={(defaultUi != null ? defaultUi.name : "<null>")} → {LibraryAssetPath}");
+            $"legacy={(legacySource != null ? legacySource.name : "<null>")} → {LibraryAssetPath}");
     }
 
     // 依名稱關鍵字找 TMP_FontAsset；優先非 "fallback" 的主檔。

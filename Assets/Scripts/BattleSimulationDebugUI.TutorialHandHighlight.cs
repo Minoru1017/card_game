@@ -69,6 +69,16 @@ public partial class BattleSimulationDebugUI
             return;
         }
 
+        if (!battleManager.IsPlayerTurn()
+            || !battleManager.CanPlayerActNow()
+            || battleManager.IsTurnSequenceInProgress()
+            || battleManager.IsSpellCastPresentationActive()
+            || isPlayingCardAnimation)
+        {
+            ApplyTutorialHandPlayHighlightVisuals(null);
+            return;
+        }
+
         // 教學戰：林可姐建議出牌時直接高亮，不依賴「你的回合」橫幅（該橫幅每回合僅閒置顯示一次；
         // 場上怪被擊殺後同一回合需再出牌時，橫幅不會重現會導致高亮永遠不出現）。
         bool requireYourTurnBanner = !TutorialBattleCoachUi.IsActiveForCurrentBattle;
@@ -86,7 +96,17 @@ public partial class BattleSimulationDebugUI
 
         tutorialHandHintIndexSet.Clear();
         for (int i = 0; i < tutorialHandHintIndices.Count; i++)
-            tutorialHandHintIndexSet.Add(tutorialHandHintIndices[i]);
+        {
+            int idx = tutorialHandHintIndices[i];
+            if (battleManager.IsPlayerHandCardPlayableNow(idx))
+                tutorialHandHintIndexSet.Add(idx);
+        }
+
+        if (tutorialHandHintIndexSet.Count == 0)
+        {
+            ApplyTutorialHandPlayHighlightVisuals(null);
+            return;
+        }
 
         ApplyTutorialHandPlayHighlightVisuals(tutorialHandHintIndexSet);
     }

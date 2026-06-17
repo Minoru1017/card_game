@@ -128,6 +128,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
     private Vector2Int endBattlePanelBuiltScreenSize;
     private Rect endBattlePanelBuiltSafeArea;
     private GameObject battleHistoryOverlayRoot;
+    private RectTransform battleHistoryDialogRt;
     private TextMeshProUGUI battleHistoryContentTmp;
     private ScrollRect battleHistoryScrollRect;
     /// <summary>結算時全螢幕凍結層（截圖 RawImage + 半透明黑），其下為停用中的戰鬥 UI。</summary>
@@ -851,8 +852,9 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         }
         if (enemyHeroHpText != null)
         {
+            string enemyLabel = BattleLaunchContext.ResolveEnemyHeroHudLabel();
             enemyHeroHpText.text =
-                "<size=" + t + "><color=#E0AA90>敵方英雄</color></size>\n<b>" + e + "</b>";
+                "<size=" + t + "><color=#E0AA90>" + enemyLabel + "</color></size>\n<b>" + e + "</b>";
         }
 
         if (playerHeroDamaged && playerHeroDamagedFxRoutine == null && !BattleAutoSimPlugin.IsRunning)
@@ -1320,7 +1322,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         roundRect.offsetMin = new Vector2(10f, -58f);
         roundRect.offsetMax = new Vector2(-10f, -8f);
         roundText = roundObj.GetComponent<Text>();
-        roundText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        roundText.font = UiFontResolver.ResolveLegacyUiFont();
         roundText.fontSize = Mathf.RoundToInt(32 * m);
         roundText.alignment = TextAnchor.MiddleCenter;
         roundText.color = new Color(0.98f, 0.9f, 0.62f, 1f);
@@ -3705,7 +3707,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         legacyRt.offsetMax = new Vector2(-16f, -14f);
         tooltipText = legacyTxt.GetComponent<Text>();
         tooltipText.supportRichText = true;
-        tooltipText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        tooltipText.font = UiFontResolver.ResolveLegacyUiFont();
         tooltipText.fontSize = HandTooltipFontSize;
         tooltipText.gameObject.SetActive(false);
 
@@ -4435,7 +4437,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
             floatTmp.enableAutoSizing = false;
             floatTmp.fontSize = 34f;
             floatTmp.alignment = TextAlignmentOptions.TopRight;
-            floatTmp.font = sharedUIFont != null ? sharedUIFont : TMP_Settings.defaultFontAsset;
+            floatTmp.font = sharedUIFont != null ? sharedUIFont : UiFontResolver.ResolveUiFont();
             floatTmp.text = "+" + fieldHeal;
             floatTmp.color = BattleFxColors.HealFloat;
             CanvasGroup fCg = floatObj.AddComponent<CanvasGroup>();
@@ -4462,7 +4464,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
                 htTmp.raycastTarget = false;
                 htTmp.fontSize = 22f;
                 htTmp.alignment = TextAlignmentOptions.TopLeft;
-                htTmp.font = sharedUIFont != null ? sharedUIFont : TMP_Settings.defaultFontAsset;
+                htTmp.font = sharedUIFont != null ? sharedUIFont : UiFontResolver.ResolveUiFont();
                 htTmp.text = "聖療連攜 +" + request.holyTherapyBonus;
                 htTmp.color = BattleFxColors.HolyTherapyLabelText;
                 holyTherapyTagCg = holyTherapyTag.AddComponent<CanvasGroup>();
@@ -4484,7 +4486,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
                 tagTmp.raycastTarget = false;
                 tagTmp.fontSize = 22f;
                 tagTmp.alignment = TextAlignmentOptions.Center;
-                tagTmp.font = sharedUIFont != null ? sharedUIFont : TMP_Settings.defaultFontAsset;
+                tagTmp.font = sharedUIFont != null ? sharedUIFont : UiFontResolver.ResolveUiFont();
                 tagTmp.text = "聖療共鳴";
                 tagTmp.color = BattleFxColors.ResonanceLabelText;
                 resonanceTagCg = resonanceTag.AddComponent<CanvasGroup>();
@@ -4702,7 +4704,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         floatTmp.raycastTarget = false;
         floatTmp.fontSize = Mathf.Clamp(heroTmp.fontSize * 0.42f, 36f, 56f);
         floatTmp.alignment = TextAlignmentOptions.MidlineLeft;
-        floatTmp.font = sharedUIFont != null ? sharedUIFont : TMP_Settings.defaultFontAsset;
+        floatTmp.font = sharedUIFont != null ? sharedUIFont : UiFontResolver.ResolveUiFont();
         floatTmp.text = "+" + healAmount;
         floatTmp.color = BattleFxColors.HeroHealFloat;
         CanvasGroup fCg = floatObj.AddComponent<CanvasGroup>();
@@ -4771,7 +4773,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
 
         Text text = labelObj.GetComponent<Text>();
         text.text = label;
-        text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        text.font = UiFontResolver.ResolveLegacyUiFont();
         text.fontSize = 20;
         text.alignment = TextAnchor.MiddleCenter;
         text.color = BattleUiColors.BtnPrimaryText;
@@ -4835,7 +4837,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         if (sharedUIFont != null && BuildbeckUiFonts.FontSupportsText(sharedUIFont, punctuationProbe))
             return sharedUIFont;
         if (noto != null) return noto;
-        return sharedUIFont != null ? sharedUIFont : TMP_Settings.defaultFontAsset;
+        return sharedUIFont != null ? sharedUIFont : UiFontResolver.ResolveUiFont();
     }
 
     private void ApplyBattleRichTextTmpFont(TextMeshProUGUI tmp)
@@ -4874,7 +4876,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         if (firstAny != null) return firstAny;
 
         // 3) Last fallback: TMP default font.
-        return TMP_Settings.defaultFontAsset;
+        return UiFontResolver.ResolveUiFont();
     }
 
     private static bool FontNameLikelySupportsCjk(string fontAssetName)

@@ -37,12 +37,14 @@ public static class AudioLibraryPopulator
         AudioClip hallBgm = AssetDatabase.LoadAssetAtPath<AudioClip>(HallBackgroundMusicPlayer.WhatFloorAssetPath);
         AudioClip buildbeckBgm = AssetDatabase.LoadAssetAtPath<AudioClip>(BuildbeckBackgroundMusicPlayer.EtherealDreamsAssetPath);
         AudioClip cardStoreBgm = AssetDatabase.LoadAssetAtPath<AudioClip>(CardStoreBackgroundMusicPlayer.AdventuryMoodyAssetPath);
+        AudioClip birdDuelBgm = AssetDatabase.LoadAssetAtPath<AudioClip>(FightingBirdGameSceneController.ComeAgainAssetPath);
         AudioClip menuClick = AssetDatabase.LoadAssetAtPath<AudioClip>(PlotMenuClickSfx.MenuClickClipAssetPath);
         AudioClip typing = AssetDatabase.LoadAssetAtPath<AudioClip>(PlotDialogueTypewriterSfx.TypingClipAssetPath);
         library.EditorSetSingletons(bgm, menuClick, typing);
         library.EditorSetHallBgm(hallBgm);
         library.EditorSetBuildbeckBgm(buildbeckBgm);
         library.EditorSetCardStoreBgm(cardStoreBgm);
+        library.EditorSetBirdDuelBgm(birdDuelBgm);
 
         EditorUtility.SetDirty(library);
         AssetDatabase.SaveAssets();
@@ -51,17 +53,22 @@ public static class AudioLibraryPopulator
         Debug.Log(
             $"AudioLibraryPopulator: 填入 {voices.Length} 個 NPC 語音；" +
             $"BGM={(bgm != null)}, HallBGM={(hallBgm != null)}, BuildbeckBGM={(buildbeckBgm != null)}, " +
-            $"CardStoreBGM={(cardStoreBgm != null)}, " +
+            $"CardStoreBGM={(cardStoreBgm != null)}, BirdDuelBGM={(birdDuelBgm != null)}, " +
             $"MenuClick={(menuClick != null)}, Typing={(typing != null)} → {LibraryAssetPath}");
 
-        if (bgm == null || hallBgm == null || buildbeckBgm == null || cardStoreBgm == null || menuClick == null || typing == null)
+        if (bgm == null || hallBgm == null || buildbeckBgm == null || cardStoreBgm == null || birdDuelBgm == null || menuClick == null || typing == null)
             Debug.LogWarning("AudioLibraryPopulator: 有單一音軌找不到，請確認對應 Resources 路徑常數是否正確。");
     }
 
     private static AudioLibrary.NamedAudioClip[] CollectNpcVoices()
     {
-        var voices = new List<AudioLibrary.NamedAudioClip>();
-        string folderToken = "/Resources/" + NpcVoiceResourcesFolder + "/";
+        // 掃描任何 NPC voice 資料夾（含 Resources 與工作資料夾），避免只放在非 Resources 的語音漏登記。
+        // AudioLibrary 以直接資產參考序列化，毋須位於 Resources 即可在執行期取用。
+        string folderToken = "/" + NpcVoiceResourcesFolder + "/";
+        string resourcesToken = "/Resources/" + NpcVoiceResourcesFolder + "/";
+
+        var clipById = new Dictionary<string, AudioClip>();
+        var idIsFromResources = new Dictionary<string, bool>();
 
         foreach (string guid in AssetDatabase.FindAssets("t:AudioClip"))
         {
@@ -73,12 +80,21 @@ public static class AudioLibraryPopulator
             if (clip == null)
                 continue;
 
-            voices.Add(new AudioLibrary.NamedAudioClip
+            string id = Path.GetFileNameWithoutExtension(path);
+            bool isResources = path.IndexOf(resourcesToken, StringComparison.OrdinalIgnoreCase) >= 0;
+
+            // 同一 id 有重複時優先採用 Resources 副本；否則沿用先找到的。
+            bool exists = clipById.TryGetValue(id, out _);
+            if (!exists || (isResources && !idIsFromResources[id]))
             {
-                id = Path.GetFileNameWithoutExtension(path),
-                clip = clip,
-            });
+                clipById[id] = clip;
+                idIsFromResources[id] = isResources;
+            }
         }
+
+        var voices = new List<AudioLibrary.NamedAudioClip>(clipById.Count);
+        foreach (KeyValuePair<string, AudioClip> entry in clipById)
+            voices.Add(new AudioLibrary.NamedAudioClip { id = entry.Key, clip = entry.Value });
 
         return voices
             .OrderBy(v => v.id, StringComparer.OrdinalIgnoreCase)

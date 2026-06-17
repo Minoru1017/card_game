@@ -1,5 +1,9 @@
 # 戰前預覽謎題索引
 
+> ⚠️ **已停用（由鬥鳥暖身賽取代）**：自「鬥鳥取代戰前謎題」更新起，所有戰前流程一律先進入 `Fighting bird game` 場景（鬥鳥暖身賽），勝出鬥鳥即可挑戰隱藏難度（魔王級）。
+> 戰前預覽不再有點擊解鎖謎題；難度拱門僅作單純難度選擇。`RollRandomPreviewPuzzleId()` 固定回傳 PZ01 版面、`UsesUnlockClickSequence()` 一律 false。
+> 鬥鳥設計見 [Docs/鬥鳥手勢小遊戲企劃.md](./Docs/鬥鳥手勢小遊戲企劃.md)。以下謎題內容保留作歷史紀錄。
+
 > **企劃索引**：[PLANNING_DOCS_INDEX.md](./PLANNING_DOCS_INDEX.md) · **1-1 關卡**：[LEVEL_DESIGN_GDD.md](./LEVEL_DESIGN_GDD.md)  
 > Buildbeck **戰前預覽**（`pre-war preview` 美術稿）內之謎題、解鎖條件與 UI 對照。  
 > 程式常數見 `BattlePreviewPuzzleIndex.cs`；實作見 `SceneLoader.BattlePreview.cs`、`SceneLoader.BattlePreview.BossUnlockFx.cs`。

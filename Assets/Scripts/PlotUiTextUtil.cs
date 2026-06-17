@@ -92,7 +92,7 @@ public static class PlotUiTextUtil
         TMP_FontAsset font = SettingsUiFonts.ResolveParameterDetailsFont();
         if (font != null)
             tmp.font = font;
-        else if (TMP_Settings.defaultFontAsset != null)
-            tmp.font = TMP_Settings.defaultFontAsset;
+        else if (UiFontResolver.ResolveUiFont() != null)
+            tmp.font = UiFontResolver.ResolveUiFont();
     }
 }

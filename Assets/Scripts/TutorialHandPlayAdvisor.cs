@@ -36,7 +36,7 @@ public static class TutorialHandPlayAdvisor
         for (int i = 0; i < handCount; i++)
         {
             Card card = manager.GetPlayerHandCard(i);
-            if (IsHandCardUnplayableNow(manager, card)) continue;
+            if (!manager.IsPlayerHandCardPlayableNow(i)) continue;
 
             int score = ScoreCardForEmptyFieldPlay(manager, card);
             if (score < 0) continue;
@@ -70,7 +70,7 @@ public static class TutorialHandPlayAdvisor
         {
             Card card = manager.GetPlayerHandCard(i);
             if (card is not SpellCard sp || sp.SpellOrdinal != 1) continue;
-            if (IsHandCardUnplayableNow(manager, card)) continue;
+            if (!manager.IsPlayerHandCardPlayableNow(i)) continue;
 
             int score = ScoreHeal(manager);
             if (score > bestHealScore)
@@ -135,30 +135,4 @@ public static class TutorialHandPlayAdvisor
         if (missing <= 0) return 40;
         return 80 + missing * 6;
     }
-
-    private static bool IsHandCardUnplayableNow(BattleSimulationManager manager, Card card)
-    {
-        if (card == null) return true;
-
-        if (manager.IsOpeningRoundFireballBlockedForPlayer() &&
-            card is SpellCard fireball &&
-            fireball.SpellOrdinal == 0)
-            return true;
-
-        if (manager.PlayerHasFieldMonster())
-        {
-            if (card is MonsterCard && manager.CanPlayerReplaceFieldMonsterForConsecration()) return false;
-            if (card is SpellCard heal && heal.SpellOrdinal == 1) return false;
-            return true;
-        }
-
-        if (card is SpellCard sp)
-        {
-            if (sp.SpellOrdinal == 1) return true;
-            if (sp.SpellOrdinal == 2 && !manager.CanPlayerCastLinGazeNow()) return true;
-        }
-
-        return false;
-    }
-
 }

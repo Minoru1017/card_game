@@ -48,6 +48,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   CardStore: {fileID: 3456576651310989609}
   playerCoins: 0
+  playerGems: 0
   deckSlotCount: 5
   selectedDeckSlot: 0
   totalCoins: 0
@@ -165,9 +166,9 @@ MonoBehaviour:
     deckThumbSprite: {fileID: 0}
   - id: 18
     artworkResourcePath: 
-    artworkSprite: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}
+    artworkSprite: {fileID: 2068828716, guid: d41e1ed8b8265264ea0d8d2873b7fd68, type: 3}
     deckThumbResourcePath: 
-    deckThumbSprite: {fileID: 0}
+    deckThumbSprite: {fileID: 2045266419, guid: d41e1ed8b8265264ea0d8d2873b7fd68, type: 3}
   - id: 19
     artworkResourcePath: 
     artworkSprite: {fileID: 8454677957956263055, guid: a30ccccd471f05d479677cdc11689fa9, type: 3}

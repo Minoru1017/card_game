@@ -13,4 +13,5 @@ MonoBehaviour:
   m_Name: UiFontLibrary
   m_EditorClassIdentifier: 
   cjkFont: {fileID: 11400000, guid: a0d819557b13b6f4ba257bbbe21c1478, type: 2}
-  defaultUiFont: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
+  defaultUiFont: {fileID: 11400000, guid: a0d819557b13b6f4ba257bbbe21c1478, type: 2}
+  cjkSourceFont: {fileID: 12800000, guid: a4022e80bc3c56442b3fad3d398ce9a7, type: 3}

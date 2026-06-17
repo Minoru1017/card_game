@@ -317,6 +317,16 @@ public partial class BattleSimulationManager : MonoBehaviour
     [Tooltip("勾選後，第一輪天氣觸發將優先套用「穿堂微風」。")]
     [SerializeField] private bool firstWeatherPreferGale;
     private bool firstWeatherOverrideConsumed;
+
+    // 鬥鳥戰前加成（roguelike 分支）的本場快照：StartBattle 從 PreBattleBonusContext 讀入後套用，單場有效。
+    private float bonusEnemyDamageMultiplier = 1f;
+    private bool bonusUnlockPlayerOpeningAttack;
+    private int bonusPlayerExtraDrawPerTurn;
+    private int bonusEnemyOpeningExtraDraw;
+    private bool bonusEnemyOpeningDrawConsumed;
+    private string pendingBirdDuelBonusAnnouncement;
+    private string pendingBirdDuelInsightReveal;
+
     private int weatherActiveRoundsRemaining;
     private int weatherCooldownRoundsRemaining;
     private int weatherRemainingRoundsForUi;
@@ -479,6 +489,36 @@ public partial class BattleSimulationManager : MonoBehaviour
         if (firstWeatherPreferFog) return BattleWeatherType.Fog;
         if (firstWeatherPreferGale) return BattleWeatherType.Gale;
         return BattleWeatherType.None;
+    }
+
+    /// <summary>鬥鳥加成指定開局天氣：覆寫第一輪天氣偏好旗標（None 則不更動既有設定）。</summary>
+    private void ApplyBonusOpeningWeather(BirdDuelOpeningWeather weather)
+    {
+        if (weather == BirdDuelOpeningWeather.None) return;
+        firstWeatherPreferFireRain = false;
+        firstWeatherPreferHolyLight = false;
+        firstWeatherPreferFog = weather == BirdDuelOpeningWeather.Fog;
+        firstWeatherPreferGale = weather == BirdDuelOpeningWeather.Gale;
+    }
+
+    /// <summary>「先聲奪人」等加成解除我方首回合禁攻；敵方與火球不受影響。</summary>
+    private bool IsPlayerOpeningAttackBlocked()
+    {
+        return IsOpeningRoundAttackBlocked() && !bonusUnlockPlayerOpeningAttack;
+    }
+
+    /// <summary>「看破」加成：開戰揭示敵方手牌前幾張的名稱。</summary>
+    private string BuildEnemyHandRevealToast(int count)
+    {
+        List<string> names = new List<string>();
+        for (int i = 0; i < enemyHand.Count && names.Count < count; i++)
+        {
+            Card c = enemyHand[i];
+            if (c != null && !string.IsNullOrEmpty(c.cardName))
+                names.Add(c.cardName);
+        }
+        if (names.Count == 0) return "看破：未能看清對手手牌";
+        return "看破：對手手牌 " + string.Join("、", names);
     }
 
     private void RefillWeatherRandomCycleBag(BattleWeatherType exclude = BattleWeatherType.None)
@@ -754,6 +794,10 @@ public partial class BattleSimulationManager : MonoBehaviour
         enemyConsecration.Reset();
         playerCastleFortressUsed = false;
         enemyCastleFortressUsed = false;
+        playerSanctumHolyGuardUsed = false;
+        enemySanctumHolyGuardUsed = false;
+        enemyDirectAttackBlockedByPlayerSanctumThisEnemyTurn = false;
+        playerDirectAttackBlockedByEnemySanctumThisPlayerTurn = false;
         playerKingWasOnFieldThisBattle = false;
         enemyKingWasOnFieldThisBattle = false;
         if (BattleLaunchContext.IsM12TrioMasteryBattle)
@@ -767,6 +811,11 @@ public partial class BattleSimulationManager : MonoBehaviour
     private bool IsPlayerCastleSkillActive() => IsPlayerMonsterSkillBattleActive(MonsterSkillIds.Castle);
 
     private bool IsPlayerNunSkillActive() => IsPlayerMonsterSkillBattleActive(MonsterSkillIds.Nun);
+
+    private bool IsPlayerSanctumKnightSkillActive() =>
+        IsPlayerMonsterSkillBattleActive(MonsterSkillIds.SanctumKnight);
+
+    private static bool IsEnemySanctumKnightSkillActiveForBattle() => true;
 
     /// <summary>
     /// 玩家戰技是否在本局結算：御三家恆開；宗教線需 B／M-1-2 畢業，或開局牌組有帶該怪（含入門 30 張）。
@@ -846,7 +895,7 @@ public partial class BattleSimulationManager : MonoBehaviour
     public bool CanPlayerReplaceFieldMonsterForConsecration() =>
         CanReplaceFieldMonsterForConsecration(true);
 
-    private void ApplySummonMonsterSkills(BattleMonster field, bool isPlayer)
+    private void ApplySummonMonsterSkills(BattleMonster field, bool isPlayer, BattleMonster replacedField = null)
     {
         if (field == null) return;
         NoteKingSummonedThisBattle(field, isPlayer);
@@ -882,22 +931,58 @@ public partial class BattleSimulationManager : MonoBehaviour
         else if (bishopSkillOn)
             TryConsecrationBindForFieldMonster(field, isPlayer);
 
-        if (field.id != MonsterSkillIds.Militia) return;
+        if (field.id == MonsterSkillIds.Militia)
+        {
+            if (isPlayer)
+            {
+                if (!playerMilitiaFormationUsed)
+                {
+                    playerMilitiaFormationUsed = true;
+                    field.attack += 5;
+                    M12TrioMasteryBattleTracker.NotifyMilitiaFormationTriggered();
+                    LogBattleHistory(side + " 列陣：這次攻擊力多 5 點 本局僅1次");
+                    ShowBattleToast(side + "民兵·列陣：攻擊力多 5 點", 2.2f);
+                }
+            }
+            else if (!enemyMilitiaFormationUsed)
+            {
+                enemyMilitiaFormationUsed = true;
+                field.attack += 5;
+                LogBattleHistory(side + " 列陣：這次攻擊力多 5 點 本局僅1次");
+                ShowBattleToast(side + "民兵·列陣：攻擊力多 5 點", 2.2f);
+            }
+        }
+
+        if (field.id != MonsterSkillIds.SanctumKnight) return;
+
+        bool sanctumSkillOn = isPlayer
+            ? IsPlayerSanctumKnightSkillActive()
+            : IsEnemySanctumKnightSkillActiveForBattle();
+        if (!sanctumSkillOn)
+        {
+            if (isPlayer)
+                LogBattleHistory("聖院騎士戰技未結算：本局牌組未帶聖院騎士且熟練度未達 B。");
+            return;
+        }
+
+        ref bool holyGuardUsed = ref isPlayer ? ref playerSanctumHolyGuardUsed : ref enemySanctumHolyGuardUsed;
+        bool replacedZeroAttackAlly = replacedField != null && replacedField.attack == 0;
+        if (!MonsterSkillRegistry.TryTriggerHolySanctuaryOnSanctumKnightSummon(
+                ref holyGuardUsed, true, replacedZeroAttackAlly))
+            return;
+
         if (isPlayer)
         {
-            if (playerMilitiaFormationUsed) return;
-            playerMilitiaFormationUsed = true;
+            enemyDirectAttackBlockedByPlayerSanctumThisEnemyTurn = true;
+            LogBattleHistory("我方 護聖：敵方本回合無法直擊我方英雄 本局僅1次");
+            ShowBattleToast("聖院騎士·護聖：敵方本回合無法直擊", 2.6f);
         }
         else
         {
-            if (enemyMilitiaFormationUsed) return;
-            enemyMilitiaFormationUsed = true;
+            playerDirectAttackBlockedByEnemySanctumThisPlayerTurn = true;
+            LogBattleHistory("敵方 護聖：我方下回合無法直擊敵方英雄 本局僅1次");
+            ShowBattleToast("敵方 聖院騎士·護聖：我方下回合無法直擊", 2.6f);
         }
-        field.attack += 5;
-        if (isPlayer)
-            M12TrioMasteryBattleTracker.NotifyMilitiaFormationTriggered();
-        LogBattleHistory(side + " 列陣：這次攻擊力多 5 點 本局僅1次");
-        ShowBattleToast(side + "民兵·列陣：攻擊力多 5 點", 2.2f);
     }
 
     private void NoteKingSummonedThisBattle(BattleMonster field, bool isPlayer)
@@ -1306,6 +1391,10 @@ public partial class BattleSimulationManager : MonoBehaviour
     private BishopConsecrationBattleState enemyConsecration;
     private bool playerCastleFortressUsed;
     private bool enemyCastleFortressUsed;
+    private bool playerSanctumHolyGuardUsed;
+    private bool enemySanctumHolyGuardUsed;
+    private bool enemyDirectAttackBlockedByPlayerSanctumThisEnemyTurn;
+    private bool playerDirectAttackBlockedByEnemySanctumThisPlayerTurn;
     private LesserHealVisualRequest pendingPlayerLesserHealVisual;
     private LesserHealVisualRequest pendingEnemyLesserHealVisual;
     private bool playerKingWasOnFieldThisBattle;
@@ -1486,6 +1575,8 @@ public partial class BattleSimulationManager : MonoBehaviour
         enemySchemingHoldStreak = 0;
         battleToastMessage = string.Empty;
         battleToastUntilUnscaled = 0f;
+        pendingBirdDuelBonusAnnouncement = null;
+        pendingBirdDuelInsightReveal = null;
         openingRollMessage = string.Empty;
         openingRollMessageUntil = 0f;
         openingPlayerDice = 0;
@@ -1506,6 +1597,15 @@ public partial class BattleSimulationManager : MonoBehaviour
         weatherRandomCycleBag.Clear();
         weatherRandomCycleCursor = 0;
 
+        // 鬥鳥戰前加成快照（單場有效）：Begin 時已聚合，此處取用並清空，避免重複 StartBattle 或跨場景遺失。
+        PreBattleBonusContext.TryConsumeForBattle(out BirdDuelBonusEffects birdDuelBonus, out string bonusAnnouncement);
+        bonusEnemyDamageMultiplier = birdDuelBonus.EnemyDamageMultiplier;
+        bonusUnlockPlayerOpeningAttack = birdDuelBonus.UnlockPlayerOpeningAttack;
+        bonusPlayerExtraDrawPerTurn = Mathf.Max(0, birdDuelBonus.PlayerExtraDrawPerTurn);
+        bonusEnemyOpeningExtraDraw = Mathf.Max(0, birdDuelBonus.EnemyExtraOpeningDraw);
+        bonusEnemyOpeningDrawConsumed = false;
+        ApplyBonusOpeningWeather(birdDuelBonus.OpeningWeather);
+
         BuildPlayerDeck();
         CapturePlayerBattleSkillRoster();
         BattleVerbose(
@@ -1517,13 +1617,17 @@ public partial class BattleSimulationManager : MonoBehaviour
         Shuffle(playerDeck);
         Shuffle(enemyDeck);
 
-        playerHp = startHealth;
+        playerHp = birdDuelBonus.PlayerHpAbsolute > 0
+            ? birdDuelBonus.PlayerHpAbsolute
+            : startHealth + birdDuelBonus.PlayerHpDelta;
+        playerHp = Mathf.Max(1, playerHp);
         if (BattleLaunchContext.IsIntroTutorialBattle)
             enemyHp = IntroTutorialBattleRules.EnemyStartHealth;
         else if (HarborTrainingDifficultyRuntime.TryGetEnemyStartHealth(out int harborEnemyHp))
             enemyHp = harborEnemyHp;
         else
             enemyHp = startHealth;
+        enemyHp = Mathf.Max(1, enemyHp + birdDuelBonus.EnemyHpDelta);
         int playerDice = UnityEngine.Random.Range(1, 7);
         int enemyDice = UnityEngine.Random.Range(1, 7);
         while (playerDice == enemyDice)
@@ -1535,19 +1639,18 @@ public partial class BattleSimulationManager : MonoBehaviour
         openingPlayerDice = playerDice;
         openingEnemyDice = enemyDice;
         openingPlayerFirst = playerTurn;
-        openingRollVersion++;
-        openingRollMessage =
-            "First roll  Player dice: " + playerDice +
-            "  Enemy dice: " + enemyDice +
-            "  → " + (playerTurn ? "Player first" : "Enemy first");
-        openingRollMessageUntil = Time.unscaledTime + openingPresentationSeconds;
+        // openingRollVersion 延後至加成播報結束（或無播報時於開場 coroutine 觸發），避免骰子與播報同時出現。
         BattleVerbose("Battle start dice: Player=" + playerDice + " Enemy=" + enemyDice + " | first=" + (playerTurn ? "Player" : "Enemy"));
 
-        int openingHandCount = Mathf.Clamp(5, 0, maxHandSize);
-        for (int i = 0; i < openingHandCount; i++)
+        int playerOpeningHandCount = Mathf.Clamp(5 + Mathf.Max(0, birdDuelBonus.OpeningExtraDraw), 0, maxHandSize);
+        const int enemyOpeningHandCount = 5;
+        int openingDealCount = Mathf.Max(playerOpeningHandCount, enemyOpeningHandCount);
+        for (int i = 0; i < openingDealCount; i++)
         {
-            DrawCard(playerDeck, playerHand, "Player");
-            DrawCard(enemyDeck, enemyHand, "Enemy");
+            if (i < playerOpeningHandCount)
+                DrawCard(playerDeck, playerHand, "Player");
+            if (i < enemyOpeningHandCount)
+                DrawCard(enemyDeck, enemyHand, "Enemy");
         }
 
         if (BattleLaunchContext.IsIntroTutorialBattle && playerHand.Count == 0)
@@ -1555,6 +1658,12 @@ public partial class BattleSimulationManager : MonoBehaviour
 
         EnsurePlayerHandDiscardRequirement();
         ResolveEnemyHandOverflowDiscards();
+
+        if (birdDuelBonus.RevealEnemyHandCount > 0)
+            pendingBirdDuelInsightReveal = BuildEnemyHandRevealToast(birdDuelBonus.RevealEnemyHandCount);
+
+        if (!string.IsNullOrWhiteSpace(bonusAnnouncement))
+            pendingBirdDuelBonusAnnouncement = bonusAnnouncement;
 
         BattleVerbose("Battle started");
         LogBattleHistory("對戰開始");
@@ -1566,9 +1675,32 @@ public partial class BattleSimulationManager : MonoBehaviour
 
     private IEnumerator BeginBattleAfterOpeningPresentation()
     {
-        // 批次模擬：開場不等待實時秒數，避免每局固定卡 Realtime。
         float openWait = BattleAutoSimPlugin.IsRunning ? 0f : openingPresentationSeconds;
+
+        yield return null;
+
+        if (!string.IsNullOrWhiteSpace(pendingBirdDuelBonusAnnouncement))
+        {
+            string announcement = pendingBirdDuelBonusAnnouncement;
+            pendingBirdDuelBonusAnnouncement = null;
+            float hold = BattleAutoSimPlugin.IsRunning ? 0f : Mathf.Max(4.5f, 3.2f + announcement.Split('\n').Length * 0.55f);
+            if (hold > 0f)
+                yield return SceneToast.ShowFullWidthBannerAndWait(announcement, hold);
+            ShowBattleToast(announcement, hold > 0f ? hold + 0.5f : 2f);
+            LogBattleHistory(announcement.Replace("\n", "　"));
+        }
+
+        ReleaseOpeningRollPresentation();
         yield return new WaitForSecondsRealtime(openWait);
+
+        if (!string.IsNullOrWhiteSpace(pendingBirdDuelInsightReveal))
+        {
+            SceneToast.Show(pendingBirdDuelInsightReveal, 4.5f);
+            ShowBattleToast(pendingBirdDuelInsightReveal, 4.5f);
+            pendingBirdDuelInsightReveal = null;
+            yield return new WaitForSecondsRealtime(1.2f);
+        }
+
         openingPresentationInProgress = false;
         if (!playerTurn)
         {
@@ -1579,6 +1711,16 @@ public partial class BattleSimulationManager : MonoBehaviour
             yield return StartCoroutine(CoPresentWeatherForecastForTurn(true));
             NotifyPlayerTurnActionWindowOpenedForPromptUi();
         }
+    }
+
+    private void ReleaseOpeningRollPresentation()
+    {
+        openingRollVersion++;
+        openingRollMessage =
+            "First roll  Player dice: " + openingPlayerDice +
+            "  Enemy dice: " + openingEnemyDice +
+            "  → " + (openingPlayerFirst ? "Player first" : "Enemy first");
+        openingRollMessageUntil = Time.unscaledTime + openingPresentationSeconds;
     }
 
     private IEnumerator RunEnemyOpeningTurn()
@@ -1604,10 +1746,11 @@ public partial class BattleSimulationManager : MonoBehaviour
             if (selected is MonsterCard replaceMonster && CanReplaceFieldMonsterForConsecration(true))
             {
                 string prevName = playerField.cardName;
+                BattleMonster replacedField = playerField;
                 playerHand.RemoveAt(handIndex);
                 playerField = new BattleMonster(replaceMonster);
                 LogBattleHistory("我方以 " + playerField.cardName + " 替換場上 " + prevName + "（祝聖轉移）");
-                ApplySummonMonsterSkills(playerField, true);
+                ApplySummonMonsterSkills(playerField, true, replacedField);
                 playerPlacedCardThisRound = true;
                 playerPlayedHandCardThisTurn = true;
                 BattleVerbose("Player replaced field with: " + playerField.cardName);
@@ -1700,7 +1843,7 @@ public partial class BattleSimulationManager : MonoBehaviour
     public void PlayerAttack()
     {
         if (!CanPlayerAct()) return;
-        if (IsOpeningRoundAttackBlocked())
+        if (IsPlayerOpeningAttackBlocked())
         {
             BattleVerbose("Opening round: attacks are not allowed; play cards only.");
             return;
@@ -1760,6 +1903,12 @@ public partial class BattleSimulationManager : MonoBehaviour
             if (!playerCanDirectAttackThisTurn)
             {
                 BattleVerbose("Enemy field is empty: direct attack is allowed on your next player turn after you end this turn.");
+                return;
+            }
+            if (playerDirectAttackBlockedByEnemySanctumThisPlayerTurn)
+            {
+                ShowBattleToast("敵方 護聖：我方本回合無法直擊敵方英雄。", 2.6f);
+                BattleVerbose("Player direct attack blocked by enemy Sanctum Knight Holy Sanctuary.");
                 return;
             }
             int directDmg = ModifyDirectDamageToEnemyHero(playerField.attack);
@@ -1824,6 +1973,7 @@ public partial class BattleSimulationManager : MonoBehaviour
         }
 
         playerTurn = false;
+        playerDirectAttackBlockedByEnemySanctumThisPlayerTurn = false;
         yield return StartCoroutine(RunEnemyTurn());
     }
 
@@ -1886,6 +2036,8 @@ public partial class BattleSimulationManager : MonoBehaviour
             yield break;
         }
 
+        enemyDirectAttackBlockedByPlayerSanctumThisEnemyTurn = false;
+
         playerTurn = true;
         playerHasAttackedThisTurn = false;
         linGazePlayerAttackNoticeSentThisPlayerTurn = false;
@@ -1916,7 +2068,7 @@ public partial class BattleSimulationManager : MonoBehaviour
             NotifyTurnBanner(BattleTurnBannerKind.Hidden);
             yield break;
         }
-        DrawPlayerCards(2);
+        DrawPlayerCards(2 + bonusPlayerExtraDrawPerTurn);
         EnsurePlayerHandDiscardRequirement();
         BattleVerbose("Player turn started | Round " + currentRound);
         PrintBattleState();
@@ -1986,6 +2138,13 @@ public partial class BattleSimulationManager : MonoBehaviour
             if (!enemyCanDirectAttackThisTurn)
             {
                 BattleVerbose("Enemy direct attack blocked: can attack only on next enemy turn after seeing empty player field.");
+                return;
+            }
+            if (enemyDirectAttackBlockedByPlayerSanctumThisEnemyTurn)
+            {
+                ShowBattleToast("聖院騎士·護聖：敵方本回合無法直擊我方英雄。", 2.6f);
+                LogBattleHistory("護聖：敵方本回合無法直擊我方英雄");
+                BattleVerbose("Enemy direct attack blocked by player Sanctum Knight Holy Sanctuary.");
                 return;
             }
             int directDmg = ScaleContextualEnemyDamage(
@@ -2212,6 +2371,12 @@ public partial class BattleSimulationManager : MonoBehaviour
         }
         else
         {
+            if (playerDirectAttackBlockedByEnemySanctumThisPlayerTurn)
+            {
+                ShowBattleToast("敵方 護聖：我方本回合無法以火球直擊敵方英雄。", 2.6f);
+                LogBattleHistory("護聖：我方本回合無法以火球直擊敵方英雄");
+                return;
+            }
             int toHero = ModifyDirectDamageToEnemyHero(dmg);
             int before = enemyHp;
             enemyHp = Mathf.Max(0, enemyHp - toHero);
@@ -2372,6 +2537,12 @@ public partial class BattleSimulationManager : MonoBehaviour
         }
         else
         {
+            if (enemyDirectAttackBlockedByPlayerSanctumThisEnemyTurn)
+            {
+                ShowBattleToast("聖院騎士·護聖：敵方本回合無法以火球直擊我方英雄。", 2.6f);
+                LogBattleHistory("護聖：敵方本回合無法以火球直擊我方英雄");
+                return;
+            }
             int toHero = ModifyDirectDamageToPlayerHero(dmg);
             int before = playerHp;
             playerHp = Mathf.Max(0, playerHp - toHero);
@@ -3015,6 +3186,11 @@ public partial class BattleSimulationManager : MonoBehaviour
                 bonus += 14;
         }
 
+        if (id == MonsterSkillIds.SanctumKnight && IsEnemySanctumKnightSkillActiveForBattle() &&
+            !enemySanctumHolyGuardUsed && CanReplaceFieldMonsterForConsecration(false) &&
+            enemyField != null && enemyField.attack == 0)
+            bonus += 66;
+
         if (enemyConsecration.awaitingNextSummon && IsEnemyBishopSkillActiveForBattle() &&
             MonsterSkillReligion.IsReligiousMonsterId(id) && id != MonsterSkillIds.Bishop)
             bonus += 30;
@@ -3119,27 +3295,48 @@ public partial class BattleSimulationManager : MonoBehaviour
 
     private int GetEnemyDrawCountPerTurn()
     {
+        int baseCount;
         if (BattleLaunchContext.IsIntroTutorialBattle)
-            return IntroTutorialBattleRules.EnemyDrawPerTurn;
-        if (HarborTrainingDifficultyRuntime.IsHarborBattleActive)
-            return HarborTrainingDifficultyRuntime.GetEnemyDrawPerTurn(currentRound);
-        return 2;
+            baseCount = IntroTutorialBattleRules.EnemyDrawPerTurn;
+        else if (HarborTrainingDifficultyRuntime.IsHarborBattleActive)
+            baseCount = HarborTrainingDifficultyRuntime.GetEnemyDrawPerTurn(currentRound);
+        else
+            baseCount = 2;
+
+        // 「敵·搶手」加成（風險 B）：敵方首回合多抽，僅生效一次。
+        if (!bonusEnemyOpeningDrawConsumed && bonusEnemyOpeningExtraDraw > 0)
+        {
+            bonusEnemyOpeningDrawConsumed = true;
+            baseCount += bonusEnemyOpeningExtraDraw;
+        }
+        return baseCount;
     }
 
-    private static int ScaleContextualEnemyDamage(int rawDamage)
+    private int ScaleContextualEnemyDamage(int rawDamage)
     {
         if (rawDamage <= 0)
             return rawDamage;
+
+        int scaled;
         if (BattleLaunchContext.IsIntroTutorialBattle)
         {
-            return Mathf.Max(
+            scaled = Mathf.Max(
                 1,
                 Mathf.RoundToInt(rawDamage * IntroTutorialBattleRules.EnemyDamageMultiplier));
         }
+        else if (HarborTrainingDifficultyRuntime.IsHarborBattleActive)
+        {
+            scaled = HarborTrainingDifficultyRuntime.ScaleEnemyDamage(rawDamage);
+        }
+        else
+        {
+            scaled = rawDamage;
+        }
 
-        if (HarborTrainingDifficultyRuntime.IsHarborBattleActive)
-            return HarborTrainingDifficultyRuntime.ScaleEnemyDamage(rawDamage);
-        return rawDamage;
+        // 鬥鳥戰前加成：整場敵方傷害倍率（壓制／穩固陣腳／看破·全局降低；敵·攻勢提高）。
+        if (bonusEnemyDamageMultiplier != 1f)
+            scaled = Mathf.Max(1, Mathf.RoundToInt(scaled * bonusEnemyDamageMultiplier));
+        return scaled;
     }
 
     private void ForceIntroTutorialRoundCapVictory()
@@ -3771,17 +3968,53 @@ public partial class BattleSimulationManager : MonoBehaviour
     public bool CanPlayerMonsterAttackNow()
     {
         if (!CanPlayerAct()) return false;
-        if (IsOpeningRoundAttackBlocked()) return false;
+        if (IsPlayerOpeningAttackBlocked()) return false;
         if (playerHasAttackedThisTurn) return false;
         if (playerField == null) return false;
         if (EnemyLinGazeActive()) return false;
         if (enemyField == null && !playerCanDirectAttackThisTurn) return false;
+        if (enemyField == null && playerDirectAttackBlockedByEnemySanctumThisPlayerTurn) return false;
         return true;
     }
 
     public bool IsOpeningRoundFireballBlockedForPlayer()
     {
         return IsOpeningRoundFireballBlocked();
+    }
+
+    /// <summary>玩家能否從手牌打出指定索引的牌（與 UI 鎖定／教學高亮共用）。</summary>
+    public bool IsPlayerHandCardPlayableNow(int handIndex)
+    {
+        if (!CanPlayerAct()) return false;
+        if (IsTurnSequenceInProgress()) return false;
+        if (playerPendingDiscardCount > 0) return false;
+        if (handIndex < 0 || handIndex >= playerHand.Count) return false;
+
+        Card card = playerHand[handIndex];
+        if (card == null) return false;
+
+        if (IsOpeningRoundFireballBlocked() &&
+            card is SpellCard fireball &&
+            fireball.SpellOrdinal == 0)
+            return false;
+
+        if (playerField != null)
+        {
+            if (card is MonsterCard)
+                return CanReplaceFieldMonsterForConsecration(true);
+            return card is SpellCard sp && sp.SpellOrdinal == 1;
+        }
+
+        if (card is SpellCard spell)
+        {
+            if (spell.SpellOrdinal == 1) return false;
+            if (spell.SpellOrdinal == 2) return CanPlayerCastLinGazeNow();
+            if (spell.SpellOrdinal == 0 && enemyField == null &&
+                playerDirectAttackBlockedByEnemySanctumThisPlayerTurn)
+                return false;
+        }
+
+        return true;
     }
 
     public bool IsOpeningPresentationInProgress() { return openingPresentationInProgress; }
@@ -4090,7 +4323,7 @@ public partial class BattleSimulationManager : MonoBehaviour
                 Secondary = FieldCardStatusIndex.BadgeSecondaryRoundsRemaining(GetEnemyLinGazeRoundsRemaining())
             };
         }
-        if (IsOpeningRoundAttackBlocked())
+        if (IsPlayerOpeningAttackBlocked())
         {
             return new FieldMonsterStatusBadge
             {
@@ -4181,8 +4414,9 @@ public partial class BattleSimulationManager : MonoBehaviour
             {
                 enemyHand.RemoveAt(handIndex);
                 string prevName = enemyField.cardName;
+                BattleMonster replacedField = enemyField;
                 enemyField = new BattleMonster(replaceMonster);
-                ApplySummonMonsterSkills(enemyField, false);
+                ApplySummonMonsterSkills(enemyField, false, replacedField);
                 enemyPlacedCardThisRound = true;
                 enemyPlayedHandCardThisTurn = true;
                 BattleVerbose("Enemy replaced field with: " + enemyField.cardName);

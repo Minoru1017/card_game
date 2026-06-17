@@ -57,7 +57,7 @@ public class CardInspectPanelHost : MonoBehaviour, ICardInspectPanelHost
     {
         TMP_FontAsset buildbeck = BuildbeckUiFonts.ResolveBuildbeckButtonFont();
         if (buildbeck != null) return buildbeck;
-        return TMP_Settings.defaultFontAsset;
+        return UiFontResolver.ResolveUiFont();
     }
 
     public string BackpackInspectDeckInclusionText(int cardId)

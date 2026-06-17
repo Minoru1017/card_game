@@ -21,6 +21,7 @@ public sealed class UiSpriteLibrary : ScriptableObject
 
     [Header("通用 UI")]
     [SerializeField] private Sprite returnButton;
+    [SerializeField] private Sprite responsiveBasePlate;
 
     [Header("對戰場景")]
     [SerializeField] private Sprite harborBayBackground;
@@ -40,7 +41,13 @@ public sealed class UiSpriteLibrary : ScriptableObject
     [SerializeField] private Sprite rarityFrameSsr;
     [SerializeField] private Sprite rarityFrameUr;
 
+    [Header("鬥鳥 CD 封面")]
+    [Tooltip("《港灣練習帶》— Assets/UI/CD/CD_1")]
+    [SerializeField] private Sprite birdDuelCdHarborPractice;
+
     public Sprite ReturnButton => returnButton;
+    /// <summary>響應式左右底板（361×1080）；右側以水平翻轉共用同一張。</summary>
+    public Sprite ResponsiveBasePlate => responsiveBasePlate;
     public Sprite HarborBayBackground => harborBayBackground;
     public Sprite BattlePreviewPanel => battlePreviewPanel;
 
@@ -77,6 +84,18 @@ public sealed class UiSpriteLibrary : ScriptableObject
             case CardRarity.UR: return rarityFrameUr;
             default: return rarityFrameN;
         }
+    }
+
+    /// <summary>CD 光碟封面；未註冊的 cdId 回傳 null。</summary>
+    public Sprite GetBirdDuelCdCover(string cdId)
+    {
+        if (string.IsNullOrWhiteSpace(cdId))
+            return null;
+
+        if (string.Equals(cdId.Trim(), BirdDuelCdCatalog.DefaultCdId, System.StringComparison.Ordinal))
+            return birdDuelCdHarborPractice;
+
+        return null;
     }
 
     private static UiSpriteLibrary instance;
@@ -119,6 +138,12 @@ public sealed class UiSpriteLibrary : ScriptableObject
     }
 
     /// <summary>供 Editor 填表工具使用，請勿在執行期呼叫。</summary>
+    public void EditorSetResponsiveBasePlate(Sprite sprite)
+    {
+        responsiveBasePlate = sprite;
+    }
+
+    /// <summary>供 Editor 填表工具使用，請勿在執行期呼叫。</summary>
     public void EditorSetBattleScene(Sprite harborBay, Sprite previewPanel)
     {
         harborBayBackground = harborBay;
@@ -143,6 +168,12 @@ public sealed class UiSpriteLibrary : ScriptableObject
         rarityFrameSr = sr;
         rarityFrameSsr = ssr;
         rarityFrameUr = ur;
+    }
+
+    /// <summary>供 Editor 填表工具使用，請勿在執行期呼叫。</summary>
+    public void EditorSetBirdDuelCdCovers(Sprite harborPracticeTape)
+    {
+        birdDuelCdHarborPractice = harborPracticeTape;
     }
 #endif
 }

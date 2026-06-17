@@ -4,41 +4,25 @@ using UnityEngine;
 /// <summary>TMP font resolution for Buildbeck UI (CJK-safe labels).</summary>
 public static class BuildbeckUiFonts
 {
+    private const string DefaultProbe = "儲存返回";
     private static TMP_FontAsset cachedBuildbeckFont;
 
-    public static TMP_FontAsset ResolveBuildbeckButtonFont()
+    public static TMP_FontAsset ResolveBuildbeckButtonFont() =>
+        ResolveCjkFont(DefaultProbe);
+
+    public static TMP_FontAsset ResolveCjkFont(string glyphProbe = DefaultProbe)
     {
-        const string required = "儲存返回";
-        if (cachedBuildbeckFont != null && FontSupportsText(cachedBuildbeckFont, required))
+        if (cachedBuildbeckFont != null && FontSupportsText(cachedBuildbeckFont, glyphProbe))
             return cachedBuildbeckFont;
 
-        // 直接引用優先：UiFontLibrary 註冊表的 CJK 主字型。
-        UiFontLibrary library = UiFontLibrary.Instance;
-        if (library != null && library.CjkFont != null && FontSupportsText(library.CjkFont, required))
+        TMP_FontAsset font = UiFontResolver.ResolveUiFont();
+        if (font != null && FontSupportsText(font, glyphProbe))
         {
-            cachedBuildbeckFont = library.CjkFont;
+            cachedBuildbeckFont = font;
             return cachedBuildbeckFont;
         }
 
-        TMP_FontAsset[] fonts = Resources.FindObjectsOfTypeAll<TMP_FontAsset>();
-        for (int i = 0; i < fonts.Length; i++)
-        {
-            TMP_FontAsset f = fonts[i];
-            if (!FontSupportsText(f, required)) continue;
-            if (FontNameLikelySupportsCjk(f.name))
-            {
-                cachedBuildbeckFont = f;
-                return cachedBuildbeckFont;
-            }
-        }
-
-        if (TMP_Settings.defaultFontAsset != null && FontSupportsText(TMP_Settings.defaultFontAsset, required))
-        {
-            cachedBuildbeckFont = TMP_Settings.defaultFontAsset;
-            return cachedBuildbeckFont;
-        }
-
-        return null;
+        return font;
     }
 
     public static bool FontSupportsText(TMP_FontAsset font, string required)

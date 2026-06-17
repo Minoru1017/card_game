@@ -162,6 +162,10 @@ public static class MonsterSkillRegistry
                 return HighlightPhrases(plainIntro,
                     new[] { "首次減5點", "最少1點", "僅1次" },
                     new[] { "堅城駐守", "城堡在場", "祝聖不疊加" });
+            case MonsterSkillIds.SanctumKnight:
+                return HighlightPhrases(plainIntro,
+                    new[] { "僅1次" },
+                    new[] { "首上場", "0攻友軍", "敵本回合禁直擊", "火球直擊" });
             default:
                 return plainIntro;
         }
@@ -196,6 +200,10 @@ public static class MonsterSkillRegistry
                 return HighlightPhrases(plainLineB,
                     new[] { "首次減5", "最少1", "全場1次" },
                     new[] { "堅城駐守", "城堡在場" });
+            case MonsterSkillIds.SanctumKnight:
+                return HighlightPhrases(plainLineB,
+                    new[] { "全場1次" },
+                    new[] { "首上場", "0攻友軍", "敵本回合禁直擊" });
             default:
                 return plainLineB;
         }
@@ -286,6 +294,13 @@ public static class MonsterSkillRegistry
                     "據說能在海牆前像城堡一樣擋下第一波衝擊",
                     "堅城駐守 城堡在場 首次受傷減5 最少1 全場1次",
                     "場上為城堡時 本局首次對其結算傷害減5點最少1點 對戰內僅1次 若該次已觸發主教祝聖預留減傷則不疊加");
+                return true;
+            case MonsterSkillIds.SanctumKnight:
+                entry = new SkillEntry(
+                    "護聖",
+                    "據說與無法廝殺的同伴同列時，會暫時斷絕敵人直取導師的路",
+                    "護聖 首上場有0攻友軍 敵本回合禁直擊 全場1次",
+                    "本局首次將聖院騎士置入場上時 若替換下場的友軍攻擊力為0 則敵方本回合無法以場怪直擊我方英雄 亦無法以火球術直擊我方英雄 對戰內僅1次 與國王庭訓號令減傷可並存但本效果為完全阻擋直擊");
                 return true;
             default:
                 entry = default;
@@ -463,6 +478,20 @@ public static class MonsterSkillRegistry
         fortressUsed = true;
         logHistory?.Invoke("堅城駐守：這次傷害少 5 點 本局僅1次");
         return reduced;
+    }
+
+    /// <summary>
+    /// 聖院騎士·護聖：本局首次置場，且替換下場的友軍 ATK=0 時觸發（單格場上僅能經祝聖替換達成）。
+    /// </summary>
+    public static bool TryTriggerHolySanctuaryOnSanctumKnightSummon(
+        ref bool holyGuardUsed,
+        bool skillActive,
+        bool replacedZeroAttackAlly)
+    {
+        if (holyGuardUsed || !skillActive || !replacedZeroAttackAlly)
+            return false;
+        holyGuardUsed = true;
+        return true;
     }
 
     /// <summary>王后·王室庇護：每局首次受到傷害時 −3（減後至少 1）。</summary>

@@ -10,7 +10,19 @@ using UnityEngine.UI;
 [DisallowMultipleComponent]
 public class BackpackCardInspectPanel : MonoBehaviour
 {
-    private const int UiBuildGeneration = 20;
+    private const int UiBuildGeneration = 24;
+
+    private struct SkillLayoutCache
+    {
+        public int cardId;
+        public CardSkillRevealStage stage;
+        public float columnWidth;
+        public float preferredH;
+        public float contentH;
+        public float sectionH;
+        public bool scrollActive;
+        public bool valid;
+    }
 
     private const float ArtAnchorMax = 0.58f;
     private const float HeaderLeftAnchorMax = 0.54f;
@@ -27,6 +39,10 @@ public class BackpackCardInspectPanel : MonoBehaviour
     private const float StatChipSpacing = 8f;
     private const float StatStripPadH = 10f;
     private const float StatStripPadV = 10f;
+    private const float SkillScrollPadV = 12f;
+    private const float SkillScrollMinMaxHeight = 120f;
+    private const float SkillScrollVisibleMax = 240f;
+    private const float SkillScrollMaxHeightCap = 320f;
 
     private ICardInspectPanelHost host;
     private Canvas uiCanvas;
@@ -54,6 +70,10 @@ public class BackpackCardInspectPanel : MonoBehaviour
     private RectTransform masteryFillRt;
     private readonly TextMeshProUGUI[] statChipTmps = new TextMeshProUGUI[4];
     private TextMeshProUGUI skillTmp;
+    private ScrollRect skillScroll;
+    private RectTransform skillScrollContentRt;
+    private bool skillScrollActive;
+    private SkillLayoutCache skillLayoutCache;
     private readonly TextMeshProUGUI[] stageTabLabelTmps = new TextMeshProUGUI[3];
     private readonly Image[] stageTabBgImages = new Image[3];
 
@@ -160,6 +180,7 @@ public class BackpackCardInspectPanel : MonoBehaviour
         if (currentCard != null && skillTmp != null)
         {
             skillTmp.text = BuildSkillRich(currentCard);
+            InvalidateSkillLayoutCache();
             StartCoroutine(CoRefreshInfoScrollLayout());
         }
         RefreshStageTabVisuals();
@@ -170,7 +191,7 @@ public class BackpackCardInspectPanel : MonoBehaviour
         if (card == null) return;
 
         TMP_FontAsset font = host.BackpackInspectResolveFont();
-        if (font == null) font = TMP_Settings.defaultFontAsset;
+        if (font == null) font = UiFontResolver.ResolveUiFont();
         ApplyTypographyFonts(font);
         ApplyTypographySpacing();
 
@@ -200,6 +221,7 @@ public class BackpackCardInspectPanel : MonoBehaviour
         ApplyStatChips(card);
         if (skillTmp != null) skillTmp.text = BuildSkillRich(card);
 
+        InvalidateSkillLayoutCache();
         RefreshStageTabVisuals();
         ApplyArt(card);
         StartCoroutine(CoRefreshInfoScrollLayout());
@@ -236,7 +258,11 @@ public class BackpackCardInspectPanel : MonoBehaviour
         ApplyMasteryBar(currentCard);
         RefreshStageTabVisuals();
         if (skillTmp != null)
+        {
             skillTmp.text = BuildSkillRich(currentCard);
+            InvalidateSkillLayoutCache();
+        }
+        StartCoroutine(CoRefreshInfoScrollLayout());
     }
 
     private void RefreshStageTabVisuals()
@@ -266,17 +292,33 @@ public class BackpackCardInspectPanel : MonoBehaviour
         }
     }
 
+    private void InvalidateSkillLayoutCache() => skillLayoutCache.valid = false;
+
     private IEnumerator CoRefreshInfoScrollLayout()
     {
         yield return null;
         Canvas.ForceUpdateCanvases();
         if (infoContentRt == null) yield break;
 
+        float fullW = infoContentRt.rect.width;
+        if (fullW <= 8f)
+        {
+            yield return null;
+            Canvas.ForceUpdateCanvases();
+            fullW = infoContentRt.rect.width > 8f ? infoContentRt.rect.width : 520f;
+        }
+
+        ApplyInfoScrollLayoutPass(fullW);
+    }
+
+    private void ApplyInfoScrollLayoutPass(float fullW)
+    {
+        if (fullW <= 8f) fullW = 520f;
+
         float padH = BackpackInspectVisualStyle.Typography.InfoPaddingH;
         float gap = BackpackInspectVisualStyle.Typography.BlockGap;
         float padTop = BackpackInspectVisualStyle.Typography.InfoPaddingTop;
         float padBottom = 28f;
-        float fullW = infoContentRt.rect.width > 8f ? infoContentRt.rect.width : 520f;
 
         float y = padTop;
 
@@ -301,13 +343,136 @@ public class BackpackCardInspectPanel : MonoBehaviour
             y += MasteryBarHeight + gap;
         }
 
-        float skillH = LayoutInfoColumn(0f, padH, gap, fullW, skillTmp);
+        float skillH = LayoutSkillBlock(fullW, padH, y, padBottom);
         PlaceBand(skillSectionRt, y, skillH);
         y += skillH + padBottom;
         infoContentRt.sizeDelta = new Vector2(0f, y);
 
         if (infoScroll != null)
             infoScroll.verticalNormalizedPosition = 1f;
+        RefreshScrollHint();
+    }
+
+    private float LayoutSkillBlock(float columnWidth, float padH, float contentYOffset, float contentPadBottom)
+    {
+        if (skillTmp == null) return 0f;
+
+        if (TryApplySkillLayoutCache(columnWidth, padH))
+            return skillLayoutCache.sectionH;
+
+        float innerW = Mathf.Max(80f, columnWidth - padH * 2f);
+        float preferredH = MeasureAndLayoutSkillText(innerW, padH);
+        float contentH = preferredH + SkillScrollPadV * 2f;
+        float maxScrollH = ResolveSkillScrollMaxHeight(contentYOffset, contentPadBottom);
+        skillScrollActive = contentH > maxScrollH + 1f;
+        float sectionH = skillScrollActive ? maxScrollH : contentH;
+
+        if (skillScrollContentRt != null)
+        {
+            skillScrollContentRt.sizeDelta = new Vector2(0f, contentH);
+            LayoutRebuilder.ForceRebuildLayoutImmediate(skillScrollContentRt);
+        }
+
+        if (skillScroll != null)
+        {
+            skillScroll.vertical = skillScrollActive;
+            skillScroll.enabled = true;
+            skillScroll.StopMovement();
+            skillScroll.velocity = Vector2.zero;
+            skillScroll.verticalNormalizedPosition = 1f;
+        }
+
+        StoreSkillLayoutCache(columnWidth, preferredH, contentH, sectionH);
+        return sectionH;
+    }
+
+    private bool TryApplySkillLayoutCache(float columnWidth, float padH)
+    {
+        if (!skillLayoutCache.valid || currentCard == null) return false;
+        if (skillLayoutCache.cardId != currentCard.id || skillLayoutCache.stage != previewStage) return false;
+        if (Mathf.Abs(skillLayoutCache.columnWidth - columnWidth) > 1f) return false;
+
+        skillScrollActive = skillLayoutCache.scrollActive;
+        ApplySkillTextRect(padH, skillLayoutCache.preferredH);
+        if (skillScrollContentRt != null)
+            skillScrollContentRt.sizeDelta = new Vector2(0f, skillLayoutCache.contentH);
+        if (skillScroll != null)
+        {
+            skillScroll.vertical = skillScrollActive;
+            skillScroll.verticalNormalizedPosition = 1f;
+        }
+        return true;
+    }
+
+    private void StoreSkillLayoutCache(float columnWidth, float preferredH, float contentH, float sectionH)
+    {
+        if (currentCard == null) return;
+        skillLayoutCache = new SkillLayoutCache
+        {
+            cardId = currentCard.id,
+            stage = previewStage,
+            columnWidth = columnWidth,
+            preferredH = preferredH,
+            contentH = contentH,
+            sectionH = sectionH,
+            scrollActive = skillScrollActive,
+            valid = true
+        };
+    }
+
+    private void ApplySkillTextRect(float padH, float preferredH)
+    {
+        if (skillTmp == null) return;
+        RectTransform rt = skillTmp.rectTransform;
+        rt.anchorMin = new Vector2(0f, 1f);
+        rt.anchorMax = new Vector2(1f, 1f);
+        rt.pivot = new Vector2(0.5f, 1f);
+        rt.anchoredPosition = new Vector2(0f, -SkillScrollPadV);
+        rt.sizeDelta = new Vector2(-padH * 2f, preferredH);
+    }
+
+    private float MeasureAndLayoutSkillText(float innerW, float padH)
+    {
+        skillTmp.alignment = TextAlignmentOptions.TopLeft;
+        skillTmp.ForceMeshUpdate(true);
+
+        float preferredH = skillTmp.GetPreferredValues(skillTmp.text, innerW, 0f).y;
+        if (skillTmp.textBounds.size.y > 1f)
+            preferredH = Mathf.Max(preferredH, skillTmp.textBounds.size.y);
+        preferredH = Mathf.Max(34f, preferredH + 8f);
+
+        ApplySkillTextRect(padH, preferredH);
+        skillTmp.ForceMeshUpdate(true);
+        return preferredH;
+    }
+
+    private float ResolveSkillScrollMaxHeight(float contentYOffset, float contentPadBottom)
+    {
+        float viewportH = SkillScrollMaxHeightCap;
+        if (infoScroll != null && infoScroll.viewport != null)
+        {
+            float measured = infoScroll.viewport.rect.height;
+            if (measured > 80f)
+                viewportH = measured;
+        }
+
+        float remaining = viewportH - contentYOffset - contentPadBottom;
+        float fromRemaining = remaining > SkillScrollMinMaxHeight
+            ? remaining
+            : Mathf.Max(80f, remaining);
+        return Mathf.Clamp(
+            Mathf.Min(SkillScrollVisibleMax, fromRemaining),
+            SkillScrollMinMaxHeight,
+            SkillScrollMaxHeightCap);
+    }
+
+    private void RefreshScrollHint()
+    {
+        if (hintTmp == null) return;
+        if (skillScrollActive)
+            hintTmp.text = "戰技說明可上下滑動 · 左右滑動切換卡牌";
+        else
+            hintTmp.text = "上下滑動閱讀詳情 · 左右滑動切換卡牌";
     }
 
     private static void PlaceColumnBand(RectTransform col, float yTop, float height)
@@ -524,7 +689,7 @@ public class BackpackCardInspectPanel : MonoBehaviour
         if (pageTmp != null)
             pageTmp.text = many && currentIndex >= 0 ? $"{currentIndex + 1} / {cardIds.Count}" : string.Empty;
         if (hintTmp != null)
-            hintTmp.text = "上下滑動閱讀詳情";
+            RefreshScrollHint();
     }
 
     private void RebuildCardList()
@@ -588,6 +753,10 @@ public class BackpackCardInspectPanel : MonoBehaviour
         for (int i = 0; i < statChipTmps.Length; i++)
             statChipTmps[i] = null;
         skillTmp = null;
+        skillScroll = null;
+        skillScrollContentRt = null;
+        skillScrollActive = false;
+        skillLayoutCache.valid = false;
         infoScroll = null;
         infoContentRt = null;
         headerLeftRt = headerRightRt = deckBarRt = null;
@@ -601,9 +770,9 @@ public class BackpackCardInspectPanel : MonoBehaviour
         uiCanvas = canvas;
         uiBuildGeneration = UiBuildGeneration;
         TMP_FontAsset font = host.BackpackInspectResolveFont();
-        if (font == null) font = TMP_Settings.defaultFontAsset;
+        if (font == null) font = UiFontResolver.ResolveUiFont();
 
-        PurgeLegacyRoots();
+        PurgeLegacyRootsUnder(canvas.transform);
 
         root = new GameObject("BackpackCardInspectRoot", typeof(RectTransform), typeof(Canvas), typeof(GraphicRaycaster));
         root.transform.SetParent(canvas.transform, false);
@@ -750,9 +919,49 @@ public class BackpackCardInspectPanel : MonoBehaviour
         Stretch(skillBg.rectTransform, 0, 0, 0, 0);
         skillBg.color = BackpackInspectUiColors.PanelSkill;
 
-        skillTmp = CreateText(skillSectionRt, string.Empty, font, BackpackInspectVisualStyle.Typography.BodySize,
+        GameObject skillScrollGo = new GameObject("SkillScroll", typeof(RectTransform), typeof(Image), typeof(ScrollRect));
+        skillScrollGo.transform.SetParent(skillSectionRt, false);
+        RectTransform skillScrollRt = skillScrollGo.GetComponent<RectTransform>();
+        Stretch(skillScrollRt, 4, 4, 4, 4);
+        Image skillScrollHit = skillScrollGo.GetComponent<Image>();
+        skillScrollHit.color = new Color(0f, 0f, 0f, 0.001f);
+        skillScrollHit.raycastTarget = true;
+
+        skillScroll = skillScrollGo.GetComponent<ScrollRect>();
+        skillScroll.horizontal = false;
+        skillScroll.vertical = true;
+        skillScroll.movementType = ScrollRect.MovementType.Clamped;
+        skillScroll.scrollSensitivity = 32f;
+        skillScroll.inertia = true;
+        skillScroll.decelerationRate = 0.135f;
+
+        RectTransform skillViewport = CreateRect(skillScrollRt, "Viewport");
+        Stretch(skillViewport, 0, 0, 0, 0);
+        Image skillViewportHit = skillViewport.gameObject.AddComponent<Image>();
+        skillViewportHit.color = new Color(0f, 0f, 0f, 0.001f);
+        skillViewportHit.raycastTarget = false;
+        skillViewport.gameObject.AddComponent<RectMask2D>();
+        skillScroll.viewport = skillViewport;
+        AttachSwipeRelay(skillScrollGo, skillScroll);
+
+        skillScrollContentRt = CreateRect(skillViewport, "Content");
+        skillScrollContentRt.anchorMin = new Vector2(0f, 1f);
+        skillScrollContentRt.anchorMax = new Vector2(1f, 1f);
+        skillScrollContentRt.pivot = new Vector2(0.5f, 1f);
+        skillScrollContentRt.anchoredPosition = Vector2.zero;
+        skillScrollContentRt.sizeDelta = new Vector2(0f, 200f);
+        skillScroll.content = skillScrollContentRt;
+
+        skillTmp = CreateText(skillScrollContentRt, string.Empty, font, BackpackInspectVisualStyle.Typography.BodySize,
             FontStyles.Normal, BackpackInspectUiColors.InkOnSkill, TextAlignmentOptions.TopLeft);
         skillTmp.richText = true;
+        skillTmp.margin = new Vector4(0f, 0f, 0f, 0f);
+        RectTransform skillTextRt = skillTmp.rectTransform;
+        skillTextRt.anchorMin = new Vector2(0f, 1f);
+        skillTextRt.anchorMax = new Vector2(1f, 1f);
+        skillTextRt.pivot = new Vector2(0.5f, 1f);
+        skillTextRt.anchoredPosition = Vector2.zero;
+        skillTextRt.sizeDelta = new Vector2(0f, 200f);
     }
 
     private void BuildStatChips(RectTransform parent, TMP_FontAsset font)
@@ -970,14 +1179,16 @@ public class BackpackCardInspectPanel : MonoBehaviour
         return tmp;
     }
 
-    private static void PurgeLegacyRoots()
+    private static void PurgeLegacyRootsUnder(Transform canvasTransform)
     {
-        var all = Object.FindObjectsByType<Transform>(FindObjectsInactive.Include, FindObjectsSortMode.None);
-        for (int i = 0; i < all.Length; i++)
+        if (canvasTransform == null) return;
+        for (int i = canvasTransform.childCount - 1; i >= 0; i--)
         {
-            Transform t = all[i];
-            if (t != null && (t.name == "BackpackCardInspectRoot" || t.name == "BackpackInspectFloatingPanel"))
-                Object.Destroy(t.gameObject);
+            Transform child = canvasTransform.GetChild(i);
+            if (child == null) continue;
+            string n = child.name;
+            if (n == "BackpackCardInspectRoot" || n == "BackpackInspectFloatingPanel")
+                Destroy(child.gameObject);
         }
     }
 

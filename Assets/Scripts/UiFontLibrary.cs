@@ -3,7 +3,7 @@ using UnityEngine;
 
 /// <summary>
 /// TMP 字型註冊表（直接引用，取代 Resources.FindObjectsOfTypeAll 掃描與字串式 Resources.Load）。
-/// D 類：CJK 主字型（Noto Sans TC）、預設 UI 字型（LiberationSans）。
+/// CJK 主字型（Noto Sans TC）、預設 UI 字型（同 Noto）、Legacy Text 用 TTF。
 ///
 /// 取得方式：UiFontLibrary.Instance（一次性從 Resources/UiFontLibrary.asset 載入並快取）。
 /// 直接引用可確保 CJK 字型一定被打包並載入，免去掃描在某些場景找不到的脆弱性。
@@ -16,11 +16,15 @@ public sealed class UiFontLibrary : ScriptableObject
     [Header("CJK 主字型（Noto Sans TC，支援繁中標點）")]
     [SerializeField] private TMP_FontAsset cjkFont;
 
-    [Header("預設 UI 字型（LiberationSans 等拉丁字型）")]
+    [Header("預設 UI 字型（與 CJK 主字型相同，避免缺字）")]
     [SerializeField] private TMP_FontAsset defaultUiFont;
+
+    [Header("Legacy UI.Text 用 Noto TTF")]
+    [SerializeField] private Font cjkSourceFont;
 
     public TMP_FontAsset CjkFont => cjkFont;
     public TMP_FontAsset DefaultUiFont => defaultUiFont;
+    public Font CjkSourceFont => cjkSourceFont;
 
     private static UiFontLibrary instance;
     private static bool instanceLoaded;
@@ -47,10 +51,12 @@ public sealed class UiFontLibrary : ScriptableObject
 
 #if UNITY_EDITOR
     /// <summary>供 Editor 填表工具使用，請勿在執行期呼叫。</summary>
-    public void EditorSetFonts(TMP_FontAsset cjk, TMP_FontAsset defaultUi)
+    public void EditorSetFonts(TMP_FontAsset cjk, TMP_FontAsset defaultUi, Font legacySource = null)
     {
         cjkFont = cjk;
-        defaultUiFont = defaultUi;
+        defaultUiFont = defaultUi != null ? defaultUi : cjk;
+        if (legacySource != null)
+            cjkSourceFont = legacySource;
     }
 #endif
 }

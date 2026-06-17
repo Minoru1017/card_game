@@ -651,10 +651,38 @@ public class CardDisplay : MonoBehaviour
         if (shell == null) return null;
         Transform art = shell.Find(LibraryDeckGenArtChildName);
         if (art == null) art = FindDeepChildByName(shell, LibraryDeckGenArtChildName);
+        if (art == null)
+            art = EnsureDeckStripPortraitArtNode(shell);
         if (art == null) return null;
         Image onArt = art.GetComponent<Image>();
         if (onArt != null) return onArt;
         return art.GetComponentInChildren<Image>(true);
+    }
+
+    /// <summary>牌組列外殼左側圓形槽：若場景未掛 <c>Art</c>，執行期補建。</summary>
+    private static Transform EnsureDeckStripPortraitArtNode(Transform shell)
+    {
+        if (shell == null) return null;
+
+        RectTransform shellRt = shell as RectTransform;
+        float slot = shellRt != null && shellRt.rect.height > 1f ? shellRt.rect.height : 112f;
+
+        GameObject go = new GameObject(LibraryDeckGenArtChildName, typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+        Transform art = go.transform;
+        art.SetParent(shell, false);
+        art.SetAsFirstSibling();
+
+        RectTransform rt = art.GetComponent<RectTransform>();
+        rt.anchorMin = new Vector2(0f, 0.5f);
+        rt.anchorMax = new Vector2(0f, 0.5f);
+        rt.pivot = new Vector2(0.5f, 0.5f);
+        rt.sizeDelta = new Vector2(slot, slot);
+        rt.anchoredPosition = new Vector2(slot * 0.5f, 0f);
+        rt.localScale = Vector3.one;
+
+        Image img = art.GetComponent<Image>();
+        img.raycastTarget = false;
+        return art;
     }
 
     private static bool IsUnderDeckCardInfoStrip(Transform t)
@@ -678,10 +706,22 @@ public class CardDisplay : MonoBehaviour
                 break;
         }
 
-        target.sprite = sprite;
-        target.color = Color.white;
-        target.preserveAspect = false;
-        if (!target.gameObject.activeSelf) target.gameObject.SetActive(true);
+        ApplyDeckThumbPortraitLayout(target.rectTransform, ResolveDeckThumbPortraitLayoutMode(target.transform));
+        ApplyDeckThumbSpriteToImage(target, sprite);
+    }
+
+    private static DeckThumbPortraitLayoutMode ResolveDeckThumbPortraitLayoutMode(Transform artTransform)
+    {
+        for (Transform p = artTransform; p != null; p = p.parent)
+        {
+            string n = p.name;
+            if (n == DeckStripMtDfName || n == DeckStripMtOiName)
+                return DeckThumbPortraitLayoutMode.DeckStripLeftCircle;
+            if (n == "DeckGen_Library_df" || n == "DeckGen_Library_oi" || n == "DeckGen_Library_ol")
+                return DeckThumbPortraitLayoutMode.FillParent;
+        }
+
+        return DeckThumbPortraitLayoutMode.DeckStripLeftCircle;
     }
 
     /// <summary>在 <c>DeckGen_Library_df</c>／<c>DeckGen_Library_oi</c> 子階層的 <c>Art</c> 上解析立繪用 <see cref="Image"/>（Art 本體或子物件皆可）。</summary>
@@ -708,9 +748,51 @@ public class CardDisplay : MonoBehaviour
                 break;
         }
 
+        ApplyDeckThumbPortraitLayout(target.rectTransform, DeckThumbPortraitLayoutMode.FillParent);
+        ApplyDeckThumbSpriteToImage(target, sprite);
+    }
+
+    private enum DeckThumbPortraitLayoutMode
+    {
+        FillParent,
+        DeckStripLeftCircle,
+    }
+
+    /// <summary>組牌 DeckThumb：填滿圓形／方槽，避免場景預設 140×155 + 偏移在圓框內露白邊。</summary>
+    private static void ApplyDeckThumbPortraitLayout(RectTransform rt, DeckThumbPortraitLayoutMode mode)
+    {
+        if (rt == null) return;
+
+        if (mode == DeckThumbPortraitLayoutMode.DeckStripLeftCircle)
+        {
+            RectTransform shellRt = rt.parent as RectTransform;
+            float slot = shellRt != null && shellRt.rect.height > 1f ? shellRt.rect.height : 112f;
+            rt.anchorMin = new Vector2(0f, 0.5f);
+            rt.anchorMax = new Vector2(0f, 0.5f);
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.sizeDelta = new Vector2(slot, slot);
+            rt.anchoredPosition = new Vector2(slot * 0.5f, 0f);
+        }
+        else
+        {
+            rt.anchorMin = Vector2.zero;
+            rt.anchorMax = Vector2.one;
+            rt.offsetMin = Vector2.zero;
+            rt.offsetMax = Vector2.zero;
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.anchoredPosition = Vector2.zero;
+        }
+
+        rt.localScale = Vector3.one;
+    }
+
+    private static void ApplyDeckThumbSpriteToImage(Image target, Sprite sprite)
+    {
         target.sprite = sprite;
         target.color = Color.white;
+        target.type = Image.Type.Simple;
         target.preserveAspect = false;
+        if (!target.gameObject.activeSelf) target.gameObject.SetActive(true);
     }
 
     private static Transform FindDeepChildByName(Transform root, string exactName)

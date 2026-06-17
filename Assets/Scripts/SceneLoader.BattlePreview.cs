@@ -285,26 +285,21 @@ public partial class SceneLoader
 
     private void OnBattlePreviewStartClicked()
     {
-        if (battlePreviewHarborTrainingMode)
+        // roguelike 分支：先詢問「挑戰鬥鳥／直接進入對戰」。挑戰鬥鳥才會走暖身賽並依表現拿加成。
+        // 讀取旗標需早於對話框流程（LaunchBirdDuelThenBattle / 直接進入 內部會 HideBattlePreviewModal 重置港灣旗標）。
+        bool harbor = battlePreviewHarborTrainingMode;
+        BattleDifficultyTier selected = selectedDifficultyTier;
+        // 標準戰前提供隱藏難度（魔王級），鬥鳥勝出可選擇挑戰；港灣訓練場無隱藏難度。
+        bool hasHidden = !harbor;
+
+        if (harbor)
         {
-            ApplyHarborTrainingPendingConfig(selectedDifficultyTier);
-        }
-        else
-        {
-            BattleDifficultyConfig cfg = BuildDifficultyConfig(selectedDifficultyTier);
-            pendingUseFixedEnemyDeck = cfg.UseFixedDeck;
-            pendingFixedEnemyDeckCardIds = cfg.FixedDeckIds;
-            pendingEnemyOverLimitAllowance = cfg.OverLimitAllowance;
-            pendingMinEnemySpellsInDeck = cfg.MinSpellsInDeck;
-            pendingEnemyAiPlayStyle = MapDifficultyToEnemyAiPlayStyle(selectedDifficultyTier);
-            pendingDifficultyLabelZh = cfg.LabelZh;
+            ShowHarborEnemyHeroPortraitA(() =>
+                ShowBirdDuelEntryChoice(harbor, selected, hasHidden, BattleDifficultyTier.Boss));
+            return;
         }
 
-        BattleLaunchContext.SetPendingDifficultyLabelZh(pendingDifficultyLabelZh);
-        if (battlePreviewHarborTrainingMode)
-            BattleLaunchContext.BeginHarborTrainingGroundBattleLaunch();
-        HideBattlePreviewModal();
-        StartBattleSceneLoad();
+        ShowBirdDuelEntryChoice(harbor, selected, hasHidden, BattleDifficultyTier.Boss);
     }
 
     private static EnemyAiPlayStyle MapDifficultyToEnemyAiPlayStyle(BattleDifficultyTier tier)
@@ -2675,6 +2670,6 @@ public partial class SceneLoader
                 n.Contains("jhenghei") || n.Contains("yahei") || n.Contains("pingfang") || n.Contains("han"))
                 return tmps[i].font;
         }
-        return fallback != null ? fallback : TMP_Settings.defaultFontAsset;
+        return fallback != null ? fallback : UiFontResolver.ResolveUiFont();
     }
 }

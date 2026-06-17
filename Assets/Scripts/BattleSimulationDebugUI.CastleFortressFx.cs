@@ -247,7 +247,7 @@ public partial class BattleSimulationDebugUI
         tmp.raycastTarget = false;
         tmp.fontSize = fontSize;
         tmp.alignment = TextAlignmentOptions.Center;
-        tmp.font = font != null ? font : TMP_Settings.defaultFontAsset;
+        tmp.font = font != null ? font : UiFontResolver.ResolveUiFont();
         tmp.text = text;
         tmp.color = BattleFxColors.CastleFortressLabelText;
         tag.AddComponent<CanvasGroup>();
@@ -302,7 +302,7 @@ public partial class BattleSimulationDebugUI
         amountTmp.raycastTarget = false;
         amountTmp.fontSize = 28f;
         amountTmp.alignment = TextAlignmentOptions.MidlineRight;
-        amountTmp.font = font != null ? font : TMP_Settings.defaultFontAsset;
+        amountTmp.font = font != null ? font : UiFontResolver.ResolveUiFont();
         amountTmp.text = "-" + reduction;
         amountTmp.color = BattleFxColors.CastleFortressReduceLabelText;
 

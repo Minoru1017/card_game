@@ -9,7 +9,9 @@ using UnityEngine.SceneManagement;
 
 /// <summary>
 /// Auto-binds card artwork sprite overrides when artists drop/update images under Assets/UI.
-/// 兩類美術：<see cref="CardArtKind.CardArt"/>（本體立繪）、<see cref="CardArtKind.DeckThumb"/>（組牌縮圖）。
+/// <para><b>合併圖（現行）</b>：<c>Assets/UI/CardArt/{卡名}.png</c> 內含多個 Sprite 子圖時，
+/// 以像素尺寸區分——面積較大者 → CardArt（基準 337×491）、面積較小者 → DeckThumb，一次寫入兩欄。</para>
+/// <para><b>舊制（仍支援）</b>：單 Sprite 的 CardArt 檔、或 <c>Assets/UI/DeckThumb/</c> 獨立縮圖檔、或檔名尾碼 <c>_deck</c>／<c>_thumb</c>。</para>
 /// </summary>
 public sealed class CardArtworkAutoBinder : AssetPostprocessor
 {
@@ -48,21 +50,32 @@ public sealed class CardArtworkAutoBinder : AssetPostprocessor
     private static readonly HashSet<string> PendingClearPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
     private static bool deferredFlushScheduled;
     private static bool isFlushingDeferred;
+    private static bool suppressAssetPostprocess;
+
+    /// <summary>合併圖有效 Sprite 最小邊長（過濾自動切片碎屑）。</summary>
+    private const float MinCombinedSpriteEdgePx = 48f;
+    private const float MinCombinedSpriteAreaPx = 4096f;
+    /// <summary>DeckThumb 偏好短邊接近此值（約 128～256 的圓形縮圖）。</summary>
+    private const float PreferredDeckThumbEdgePx = 160f;
 
     [MenuItem("Tools/Card Art/Rescan UI Images And Rebind")]
     private static void RescanAllUiImages()
     {
-        // 手動觸發入口：掃描 Assets/UI 內所有 Sprite，逐一嘗試自動綁定。
-        string[] guids = AssetDatabase.FindAssets("t:Sprite", new[] { "Assets/UI" });
-        int boundCount = 0;
+        // 手動觸發入口：掃描 Assets/UI 內圖檔路徑（合併圖每檔只處理一次），逐一自動綁定。
+        string[] guids = AssetDatabase.FindAssets("t:Texture2D", new[] { "Assets/UI" });
+        var imagePaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         for (int i = 0; i < guids.Length; i++)
         {
             string path = AssetDatabase.GUIDToAssetPath(guids[i]);
-            if (!TryBindByImagePath(path, syncSceneStores: true))
-            {
-                continue;
-            }
+            if (IsUiImagePath(path))
+                imagePaths.Add(path);
+        }
 
+        int boundCount = 0;
+        foreach (string path in imagePaths)
+        {
+            if (!TryBindByImagePath(path, syncSceneStores: true))
+                continue;
             boundCount++;
         }
 
@@ -114,7 +127,7 @@ public sealed class CardArtworkAutoBinder : AssetPostprocessor
         string[] movedAssets,
         string[] movedFromAssetPaths)
     {
-        if (isFlushingDeferred)
+        if (isFlushingDeferred || suppressAssetPostprocess)
             return;
 
         EnqueuePostprocessPaths(importedAssets, PendingBindPaths);
@@ -189,28 +202,36 @@ public sealed class CardArtworkAutoBinder : AssetPostprocessor
         }
 
         if (changed)
+        {
             AssetDatabase.SaveAssets();
+            CardArtLibraryPopulator.CreateOrRefresh();
+        }
     }
 
     private static bool TryBindByImagePath(string assetPath, bool syncSceneStores = true)
     {
-        // 自動綁定主流程：路徑/副檔名過濾 -> 取 Sprite -> 檔名比對卡牌 -> 寫回 Prefab/Scene。
+        // 自動綁定主流程：路徑/副檔名過濾 -> 列舉 Sprite 子圖 -> 合併圖或舊制 -> 寫回 Prefab/Scene。
         if (!IsUiImagePath(assetPath))
-        {
             return false;
-        }
 
-        Sprite sprite = AssetDatabase.LoadAssetAtPath<Sprite>(assetPath);
-        if (sprite == null)
+        if (!TryLoadSpritesFromAsset(assetPath, out List<Sprite> sprites) || sprites.Count == 0)
         {
-            LogWarn($"已讀取到美術資源，但目前不是可綁定的 Sprite：{assetPath}");
+            LogWarn($"已讀取到美術資源，但目前沒有可綁定的 Sprite 子圖：{assetPath}");
             return false;
         }
 
         string fileName = Path.GetFileNameWithoutExtension(assetPath);
         if (string.IsNullOrWhiteSpace(fileName))
-        {
             return false;
+
+        if (IsCardArtFolderPath(assetPath) && sprites.Count >= 2)
+            return TryBindCombinedCardArtSheet(assetPath, fileName, sprites, syncSceneStores);
+
+        if (IsCardArtFolderPath(assetPath) && sprites.Count == 1)
+        {
+            LogWarn(
+                $"CardArt 合併圖僅偵測到 1 個 Sprite；請在 Import Settings 切為 Multiple 並切出 CardArt＋DeckThumb 兩塊：" +
+                assetPath);
         }
 
         CardArtKind kind = ClassifyArtKind(assetPath, fileName);
@@ -221,22 +242,301 @@ public sealed class CardArtworkAutoBinder : AssetPostprocessor
             return false;
         }
 
+        Sprite sprite = PickLegacySingleSprite(sprites, kind);
+        if (sprite == null)
+            return false;
+
         string kindLabel = kind == CardArtKind.DeckThumb ? "組牌縮圖" : "卡牌立繪";
-        LogInfo($"正在將{kindLabel}套至對應卡牌（cardKey={cardKey}）：{assetPath}");
+        LogInfo($"正在將{kindLabel}套至對應卡牌（cardKey={cardKey}）：{assetPath} [{FormatSpritePixelSize(sprite)}]");
         bool prefabUpdated = TryUpdatePrefabCardStore(cardKey, sprite, kind);
         bool sceneUpdated = syncSceneStores && TryUpdateSceneCardStore(CardStoreScenePath, cardKey, sprite, kind);
         bool anyUpdated = prefabUpdated || sceneUpdated;
 
         if (anyUpdated)
-        {
             LogInfo($"套用成功，請Play查看新的美術圖是否正確（cardKey={cardKey}）：{assetPath}");
+        else
+            LogInfo($"已檢查完成：目前綁定內容無變更（cardKey={cardKey}）。");
+
+        return anyUpdated;
+    }
+
+    /// <summary>CardArt 資料夾內含 ≥2 Sprite：依像素面積大→CardArt、小→DeckThumb。</summary>
+    private static bool TryBindCombinedCardArtSheet(
+        string assetPath,
+        string fileName,
+        List<Sprite> sprites,
+        bool syncSceneStores)
+    {
+        if (!TryGetCardKeyByFileName(fileName, out int cardKey))
+        {
+            LogWarn($"已讀取到合併美術圖，但找不到同名卡牌：{fileName}");
+            return false;
+        }
+
+        if (!TryPickCardArtAndDeckThumbBySize(sprites, out Sprite cardArt, out Sprite deckThumb))
+        {
+            LogWarn($"合併美術圖無法依尺寸分出 CardArt／DeckThumb：{assetPath}");
+            return false;
+        }
+
+        suppressAssetPostprocess = true;
+        try
+        {
+            bool pivotChanged = false;
+            if (CardArtSpritePivotUtility.TrySetPivotToOpaqueCenter(assetPath, cardArt))
+            {
+                LogInfo("已依非透明區域重算 CardArt pivot：" + cardArt.name);
+                pivotChanged = true;
+            }
+
+            if (CardArtSpritePivotUtility.TrySetPivotToOpaqueCenter(assetPath, deckThumb))
+            {
+                LogInfo("已依非透明區域重算 DeckThumb pivot：" + deckThumb.name);
+                pivotChanged = true;
+            }
+
+            if (pivotChanged)
+            {
+                if (!TryLoadSpritesFromAsset(assetPath, out sprites) ||
+                    !TryPickCardArtAndDeckThumbBySize(sprites, out cardArt, out deckThumb))
+                {
+                    LogWarn($"重算 pivot 後無法重新載入 Sprite：{assetPath}");
+                    return false;
+                }
+            }
+        }
+        finally
+        {
+            suppressAssetPostprocess = false;
+        }
+
+        if (sprites.Count > 2)
+        {
+            LogWarn(
+                $"合併美術圖含 {sprites.Count} 個 Sprite，已忽略碎屑並依基準尺寸配對 CardArt／DeckThumb：" +
+                assetPath);
+        }
+
+        LogInfo(
+            "正在套用合併美術圖（cardKey=" + cardKey + "）：CardArt=" +
+            FormatSpritePixelSize(cardArt) + " DeckThumb=" + FormatSpritePixelSize(deckThumb) +
+            " → " + assetPath);
+
+        bool prefabUpdated = TryUpdatePrefabCombined(cardKey, cardArt, deckThumb);
+        bool sceneUpdated = syncSceneStores &&
+                            TryUpdateSceneCombined(CardStoreScenePath, cardKey, cardArt, deckThumb);
+        bool anyUpdated = prefabUpdated || sceneUpdated;
+
+        if (anyUpdated)
+            LogInfo($"合併美術圖套用成功，請Play確認 CardArt／DeckThumb（cardKey={cardKey}）。");
+        else
+            LogInfo($"已檢查完成：合併美術圖綁定無變更（cardKey={cardKey}）。");
+
+        return anyUpdated;
+    }
+
+    private static bool TryLoadSpritesFromAsset(string assetPath, out List<Sprite> sprites)
+    {
+        sprites = new List<Sprite>();
+        UnityEngine.Object[] assets = AssetDatabase.LoadAllAssetsAtPath(assetPath);
+        if (assets == null || assets.Length == 0)
+            return false;
+
+        for (int i = 0; i < assets.Length; i++)
+        {
+            if (assets[i] is Sprite s && s != null)
+                sprites.Add(s);
+        }
+
+        return sprites.Count > 0;
+    }
+
+    private static bool TryPickCardArtAndDeckThumbBySize(
+        List<Sprite> sprites,
+        out Sprite cardArt,
+        out Sprite deckThumb)
+    {
+        cardArt = null;
+        deckThumb = null;
+        if (sprites == null || sprites.Count < 2)
+            return false;
+
+        var candidates = new List<Sprite>(sprites.Count);
+        for (int i = 0; i < sprites.Count; i++)
+        {
+            if (IsValidCombinedSpriteCandidate(sprites[i]))
+                candidates.Add(sprites[i]);
+        }
+
+        if (candidates.Count < 2)
+        {
+            LogWarn(
+                "合併美術圖有效 Sprite 不足 2 個（已過濾小於 " +
+                Mathf.RoundToInt(MinCombinedSpriteEdgePx) + "px 的碎屑）；請檢查切片。");
+            return false;
+        }
+
+        cardArt = PickBestCardArtSprite(candidates);
+        if (cardArt == null)
+            return false;
+
+        deckThumb = PickBestDeckThumbSprite(candidates, cardArt);
+        if (deckThumb == null)
+            return false;
+
+        float artW = cardArt.rect.width;
+        float artH = cardArt.rect.height;
+        if (!IsNearPresetCardArtSize(artW, artH))
+        {
+            LogWarn(
+                "CardArt Sprite 尺寸為 " + FormatPixelSize(artW, artH) +
+                "，與基準 " + FormatPixelSize(CardArtLayoutSpec.PresetArtWidthPx, CardArtLayoutSpec.PresetArtHeightPx) +
+                " 不一致（已選最接近基準者）。");
+        }
+
+        return true;
+    }
+
+    private static bool IsValidCombinedSpriteCandidate(Sprite sprite)
+    {
+        if (sprite == null)
+            return false;
+        float w = sprite.rect.width;
+        float h = sprite.rect.height;
+        if (w < MinCombinedSpriteEdgePx || h < MinCombinedSpriteEdgePx)
+            return false;
+        return w * h >= MinCombinedSpriteAreaPx;
+    }
+
+    private static Sprite PickBestCardArtSprite(List<Sprite> candidates)
+    {
+        Sprite best = null;
+        float bestScore = float.MaxValue;
+        for (int i = 0; i < candidates.Count; i++)
+        {
+            float score = ScoreCardArtPresetFit(candidates[i]);
+            if (score >= bestScore)
+                continue;
+            bestScore = score;
+            best = candidates[i];
+        }
+        return best;
+    }
+
+    private static Sprite PickBestDeckThumbSprite(List<Sprite> candidates, Sprite cardArt)
+    {
+        Sprite best = null;
+        float bestScore = float.MaxValue;
+        for (int i = 0; i < candidates.Count; i++)
+        {
+            Sprite s = candidates[i];
+            if (s == cardArt)
+                continue;
+            float score = ScoreDeckThumbFit(s);
+            if (score >= bestScore)
+                continue;
+            bestScore = score;
+            best = s;
+        }
+        return best;
+    }
+
+    private static float ScoreCardArtPresetFit(Sprite sprite)
+    {
+        float w = sprite.rect.width;
+        float h = sprite.rect.height;
+        float refW = CardArtLayoutSpec.PresetArtWidthPx;
+        float refH = CardArtLayoutSpec.PresetArtHeightPx;
+        float sizeDiff = Mathf.Abs(w - refW) + Mathf.Abs(h - refH);
+        float refAspect = refW / refH;
+        float aspectDiff = Mathf.Abs((w / h) - refAspect) * refH;
+        return sizeDiff + aspectDiff * 0.35f;
+    }
+
+    private static float ScoreDeckThumbFit(Sprite sprite)
+    {
+        float w = sprite.rect.width;
+        float h = sprite.rect.height;
+        float maxEdge = Mathf.Max(w, h);
+        float minEdge = Mathf.Min(w, h);
+        float squarePenalty = Mathf.Abs((w / h) - 1f) * 96f;
+        float sizePenalty = Mathf.Abs(maxEdge - PreferredDeckThumbEdgePx);
+        float cardArtPenalty = ScoreCardArtPresetFit(sprite) * 0.15f;
+        return squarePenalty + sizePenalty + cardArtPenalty + minEdge * 0.02f;
+    }
+
+    private static int CompareSpriteByPixelAreaDescending(Sprite a, Sprite b)
+    {
+        if (a == null && b == null) return 0;
+        if (a == null) return 1;
+        if (b == null) return -1;
+        float areaA = a.rect.width * a.rect.height;
+        float areaB = b.rect.width * b.rect.height;
+        return areaB.CompareTo(areaA);
+    }
+
+    private static Sprite PickLegacySingleSprite(List<Sprite> sprites, CardArtKind kind)
+    {
+        if (sprites == null || sprites.Count == 0)
+            return null;
+        if (sprites.Count == 1)
+            return sprites[0];
+
+        if (kind == CardArtKind.DeckThumb)
+        {
+            Sprite best = null;
+            float bestScore = float.MaxValue;
+            for (int i = 0; i < sprites.Count; i++)
+            {
+                if (!IsValidCombinedSpriteCandidate(sprites[i]))
+                    continue;
+                float score = ScoreDeckThumbFit(sprites[i]);
+                if (score >= bestScore)
+                    continue;
+                bestScore = score;
+                best = sprites[i];
+            }
+            if (best != null)
+                return best;
         }
         else
         {
-            LogInfo($"已檢查完成：目前綁定內容無變更（cardKey={cardKey}）。");
+            Sprite best = PickBestCardArtSprite(
+                sprites.FindAll(IsValidCombinedSpriteCandidate));
+            if (best != null)
+                return best;
         }
 
-        return anyUpdated;
+        sprites.Sort(CompareSpriteByPixelAreaDescending);
+        return kind == CardArtKind.DeckThumb ? sprites[sprites.Count - 1] : sprites[0];
+    }
+
+    private static bool IsNearPresetCardArtSize(float widthPx, float heightPx, float tolerance = 0.2f)
+    {
+        float refW = CardArtLayoutSpec.PresetArtWidthPx;
+        float refH = CardArtLayoutSpec.PresetArtHeightPx;
+        if (refW <= 0f || refH <= 0f)
+            return true;
+        float wRatio = Mathf.Abs(widthPx - refW) / refW;
+        float hRatio = Mathf.Abs(heightPx - refH) / refH;
+        return wRatio <= tolerance && hRatio <= tolerance;
+    }
+
+    private static string FormatSpritePixelSize(Sprite sprite)
+    {
+        if (sprite == null) return "?×?";
+        return FormatPixelSize(sprite.rect.width, sprite.rect.height);
+    }
+
+    private static string FormatPixelSize(float widthPx, float heightPx) =>
+        Mathf.RoundToInt(widthPx) + "×" + Mathf.RoundToInt(heightPx);
+
+    private static bool IsCardArtFolderPath(string assetPath)
+    {
+        if (string.IsNullOrWhiteSpace(assetPath))
+            return false;
+        string p = assetPath.Replace('\\', '/');
+        return p.StartsWith(CardArtFolderPrefix, StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsUiImagePath(string assetPath)
@@ -328,8 +628,20 @@ public sealed class CardArtworkAutoBinder : AssetPostprocessor
             LogWarn($"預設圖不存在或不可用，將改為清空對應欄位：{DefaultFallbackArtPath}");
         }
 
-        bool prefabUpdated = TryClearPrefabCardStore(cardKey, fallbackSprite, kind);
-        bool sceneUpdated = syncSceneStores && TryClearSceneCardStore(CardStoreScenePath, cardKey, fallbackSprite, kind);
+        bool prefabUpdated;
+        bool sceneUpdated;
+        if (IsCardArtFolderPath(assetPath))
+        {
+            prefabUpdated = TryClearPrefabCombined(cardKey, fallbackSprite);
+            sceneUpdated = syncSceneStores &&
+                           TryClearSceneCombined(CardStoreScenePath, cardKey, fallbackSprite);
+        }
+        else
+        {
+            prefabUpdated = TryClearPrefabCardStore(cardKey, fallbackSprite, kind);
+            sceneUpdated = syncSceneStores &&
+                           TryClearSceneCardStore(CardStoreScenePath, cardKey, fallbackSprite, kind);
+        }
         bool anyUpdated = prefabUpdated || sceneUpdated;
 
         if (anyUpdated)
@@ -704,6 +1016,140 @@ public sealed class CardArtworkAutoBinder : AssetPostprocessor
             {
                 EditorSceneManager.CloseScene(scene, true);
             }
+        }
+
+        return changed;
+    }
+
+    private static bool TryUpdatePrefabCombined(int cardKey, Sprite cardArt, Sprite deckThumb)
+    {
+        GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(DataManagerPrefabPath);
+        if (prefab == null)
+            return false;
+
+        CardStore store = prefab.GetComponent<CardStore>();
+        if (store == null)
+            return false;
+
+        bool changed = UpsertArtworkOverride(store, cardKey, cardArt);
+        changed |= UpsertDeckThumbOverride(store, cardKey, deckThumb);
+        if (changed)
+        {
+            EditorUtility.SetDirty(store);
+            EditorUtility.SetDirty(prefab);
+        }
+
+        return changed;
+    }
+
+    private static bool TryUpdateSceneCombined(
+        string scenePath,
+        int cardKey,
+        Sprite cardArt,
+        Sprite deckThumb)
+    {
+        if (!File.Exists(scenePath))
+            return false;
+
+        Scene scene = SceneManager.GetSceneByPath(scenePath);
+        bool wasLoaded = scene.IsValid() && scene.isLoaded;
+        if (!wasLoaded)
+            scene = EditorSceneManager.OpenScene(scenePath, OpenSceneMode.Additive);
+
+        bool changed = false;
+        try
+        {
+            GameObject[] roots = scene.GetRootGameObjects();
+            for (int i = 0; i < roots.Length; i++)
+            {
+                CardStore[] stores = roots[i].GetComponentsInChildren<CardStore>(true);
+                for (int j = 0; j < stores.Length; j++)
+                {
+                    bool storeChanged = UpsertArtworkOverride(stores[j], cardKey, cardArt);
+                    storeChanged |= UpsertDeckThumbOverride(stores[j], cardKey, deckThumb);
+                    if (!storeChanged)
+                        continue;
+
+                    EditorUtility.SetDirty(stores[j]);
+                    changed = true;
+                }
+            }
+
+            if (changed)
+            {
+                EditorSceneManager.MarkSceneDirty(scene);
+                EditorSceneManager.SaveScene(scene);
+            }
+        }
+        finally
+        {
+            if (!wasLoaded && scene.IsValid() && scene.isLoaded)
+                EditorSceneManager.CloseScene(scene, true);
+        }
+
+        return changed;
+    }
+
+    private static bool TryClearPrefabCombined(int cardKey, Sprite fallbackSprite)
+    {
+        GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(DataManagerPrefabPath);
+        if (prefab == null)
+            return false;
+
+        CardStore store = prefab.GetComponent<CardStore>();
+        if (store == null)
+            return false;
+
+        bool changed = ClearArtworkOverride(store, cardKey, fallbackSprite);
+        changed |= ClearDeckThumbOverride(store, cardKey, fallbackSprite);
+        if (changed)
+        {
+            EditorUtility.SetDirty(store);
+            EditorUtility.SetDirty(prefab);
+        }
+
+        return changed;
+    }
+
+    private static bool TryClearSceneCombined(string scenePath, int cardKey, Sprite fallbackSprite)
+    {
+        if (!File.Exists(scenePath))
+            return false;
+
+        Scene scene = SceneManager.GetSceneByPath(scenePath);
+        bool wasLoaded = scene.IsValid() && scene.isLoaded;
+        if (!wasLoaded)
+            scene = EditorSceneManager.OpenScene(scenePath, OpenSceneMode.Additive);
+
+        bool changed = false;
+        try
+        {
+            GameObject[] roots = scene.GetRootGameObjects();
+            for (int i = 0; i < roots.Length; i++)
+            {
+                CardStore[] stores = roots[i].GetComponentsInChildren<CardStore>(true);
+                for (int j = 0; j < stores.Length; j++)
+                {
+                    bool storeChanged = ClearArtworkOverride(stores[j], cardKey, fallbackSprite);
+                    storeChanged |= ClearDeckThumbOverride(stores[j], cardKey, fallbackSprite);
+                    if (!storeChanged)
+                        continue;
+
+                    EditorUtility.SetDirty(stores[j]);
+                    changed = true;
+                }
+            }
+
+            if (changed)
+            {
+                EditorSceneManager.MarkSceneDirty(scene);
+                EditorSceneManager.SaveScene(scene);
+            }
+        }
+        finally
+        {
+            if (!wasLoaded && scene.IsValid() && scene.isLoaded)
+                EditorSceneManager.CloseScene(scene, true);
         }
 
         return changed;

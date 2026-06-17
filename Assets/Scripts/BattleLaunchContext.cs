@@ -18,6 +18,21 @@ public static class BattleLaunchContext
     /// <summary>M-1-2 御三家戰技段考：帶教練實戰練習。</summary>
     public static bool IsM12CoachPracticeBattle { get; private set; }
 
+    /// <summary>本場敵方英雄 id（港灣 v1：熱血同學）。</summary>
+    public static string EnemyHeroId { get; private set; }
+
+    /// <summary>本場敵方英雄顯示名；戰鬥 HUD 優先於「敵方英雄」。</summary>
+    public static string EnemyHeroDisplayName { get; private set; }
+
+    public static void SetEnemyHero(string heroId, string displayName)
+    {
+        EnemyHeroId = string.IsNullOrWhiteSpace(heroId) ? null : heroId.Trim();
+        EnemyHeroDisplayName = string.IsNullOrWhiteSpace(displayName) ? null : displayName.Trim();
+    }
+
+    public static string ResolveEnemyHeroHudLabel() =>
+        string.IsNullOrWhiteSpace(EnemyHeroDisplayName) ? "敵方英雄" : EnemyHeroDisplayName;
+
     public static bool IsM12TrioMasteryBattle => IsM12TrioTutorialBattle || IsM12CoachPracticeBattle;
 
     public static void BeginIntroTutorialBattleLaunch()
@@ -79,6 +94,8 @@ public static class BattleLaunchContext
         IsHarborTrainingGroundBattle = false;
         IsM12TrioTutorialBattle = false;
         IsM12CoachPracticeBattle = false;
+        EnemyHeroId = null;
+        EnemyHeroDisplayName = null;
     }
 
     public static string PeekDifficultyLabelZh() => PendingDifficultyLabelZh;

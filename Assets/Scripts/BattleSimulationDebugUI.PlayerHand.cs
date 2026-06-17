@@ -84,13 +84,14 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         for (int i = 0; i < count; i++)
         {
             Card card = battleManager.GetPlayerHandCard(i);
+            int handIndex = i;
             if (battleCardPrefab != null)
             {
-                CreateHandCardFromPrefab(handArea, "HandCard_" + i, card, centerX + (i - center) * stackStep);
+                CreateHandCardFromPrefab(handArea, "HandCard_" + i, card, handIndex, centerX + (i - center) * stackStep);
             }
             else
             {
-                CreateHandCardButton(handArea, "HandCard_" + i, card, centerX + (i - center) * stackStep, () => OnPlayerCardClicked(card, null));
+                CreateHandCardButton(handArea, "HandCard_" + i, card, handIndex, centerX + (i - center) * stackStep, () => OnPlayerCardClickedByIndex(handIndex, null));
             }
 
             RectTransform cardRect = handArea.GetChild(handArea.childCount - 1) as RectTransform;
@@ -192,7 +193,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
 
         TryScheduleEnemyOpeningHandFlyFromDeck();
     }
-    private void CreateHandCardButton(Transform parent, string name, Card card, float x, UnityEngine.Events.UnityAction action)
+    private void CreateHandCardButton(Transform parent, string name, Card card, int handIndex, float x, UnityEngine.Events.UnityAction action)
     {
         GameObject cardObj = new GameObject(name, typeof(RectTransform), typeof(Image), typeof(Button));
         cardObj.transform.SetParent(parent, false);
@@ -204,7 +205,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         rect.anchoredPosition = new Vector2(x, -8f);
         rect.sizeDelta = new Vector2(170f, 210f);
 
-        bool handLocked = IsPlayerHandCardLockedByFieldRule(card);
+        bool handLocked = battleManager == null || !battleManager.IsPlayerHandCardPlayableNow(handIndex);
         Image image = cardObj.GetComponent<Image>();
         image.color = handLocked ? new Color(0.62f, 0.58f, 0.53f, 0.9f) : new Color(0.97f, 0.94f, 0.88f, 0.96f);
 
@@ -239,7 +240,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         AttachPlayerHandPressNotifier(cardObj, this);
     }
 
-    private void CreateHandCardFromPrefab(Transform parent, string name, Card card, float x)
+    private void CreateHandCardFromPrefab(Transform parent, string name, Card card, int handIndex, float x)
     {
         GameObject cardObj = Instantiate(battleCardPrefab, parent);
         cardObj.name = name;
@@ -270,12 +271,12 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
 
         Button button = cardObj.GetComponent<Button>();
         if (button == null) button = cardObj.AddComponent<Button>();
-        bool handLocked = IsPlayerHandCardLockedByFieldRule(card);
+        bool handLocked = battleManager == null || !battleManager.IsPlayerHandCardPlayableNow(handIndex);
         BattleHandSkillLongPress skillLongPress = null;
         button.onClick.AddListener(() =>
         {
             if (skillLongPress != null && skillLongPress.ShouldSuppressClickAfterLongPress()) return;
-            OnPlayerCardClicked(card, rect);
+            OnPlayerCardClickedByIndex(handIndex, rect);
         });
         ApplyLinGazeHandCardLockedVisual(cardObj, handLocked);
         button.interactable = battleManager.IsPlayerTurn() && !handLocked;
@@ -379,44 +380,40 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         skillLongPress.Setup(cardRect, card, this, suppressWhenHandCardDimmed);
     }
 
-    private void OnPlayerCardClicked(Card card, RectTransform cardRect)
+    private void OnPlayerCardClickedByIndex(int handIndex, RectTransform cardRect)
     {
         if (isPlayingCardAnimation) return;
-        if (battleManager == null || !battleManager.IsPlayerTurn()) return;
+        if (battleManager == null || !battleManager.IsPlayerHandCardPlayableNow(handIndex)) return;
+
+        Card card = battleManager.GetPlayerHandCard(handIndex);
         if (card == null) return;
         if (battleManager.IsPlayerInDiscardSelection())
         {
             // Discard phase uses long-press drag into discard zone only.
             return;
         }
-        if (battleManager.PlayerHasFieldMonster())
-        {
-            if (card is MonsterCard)
-            {
-                if (!battleManager.CanPlayerReplaceFieldMonsterForConsecration()) return;
-            }
-            else if (!(card is SpellCard spGate && spGate.SpellOrdinal == 1))
-                return;
-        }
-        if (IsLinGazeSpellCard(card) && !battleManager.CanPlayerCastLinGazeNow())
-            return;
-
-        int index = battleManager.GetPlayerHandCardIndex(card);
-        if (index < 0) return;
 
         NotifyTurnIdlePromptPlayerTookPlayOrAttackIntent();
 
         if (card is SpellCard sp && sp.SpellOrdinal == 1)
         {
-            battleManager.PlayerPlayCardFromHand(index);
+            battleManager.PlayerPlayCardFromHand(handIndex);
             return;
         }
 
-        if (cardRect != null) StartCoroutine(PlayCardAnimationThenCast(card, cardRect));
-        else battleManager.PlayerPlayCardFromHand(index);
+        if (cardRect != null) StartCoroutine(PlayCardAnimationThenCast(handIndex, cardRect));
+        else battleManager.PlayerPlayCardFromHand(handIndex);
     }
 
-    private IEnumerator PlayCardAnimationThenCast(Card card, RectTransform cardRect)
+    private void OnPlayerCardClicked(Card card, RectTransform cardRect)
+    {
+        if (battleManager == null || card == null) return;
+        int index = battleManager.GetPlayerHandCardIndex(card);
+        if (index < 0) return;
+        OnPlayerCardClickedByIndex(index, cardRect);
+    }
+
+    private IEnumerator PlayCardAnimationThenCast(int handIndex, RectTransform cardRect)
     {
         if (BattleAutoSimPlugin.IsRunning) yield break;
         isPlayingCardAnimation = true;
@@ -437,10 +434,9 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
             yield return null;
         }
 
-        int index = battleManager.GetPlayerHandCardIndex(card);
-        if (index >= 0)
+        if (battleManager != null && battleManager.IsPlayerHandCardPlayableNow(handIndex))
         {
-            bool asyncSpell = battleManager.PlayerPlayCardFromHand(index);
+            bool asyncSpell = battleManager.PlayerPlayCardFromHand(handIndex);
             if (!asyncSpell) isPlayingCardAnimation = false;
         }
         else isPlayingCardAnimation = false;
@@ -454,17 +450,23 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
     {
         bool debugPanelOpen = debugUiRoot != null && debugUiRoot.activeSelf;
         bool spellPresenting = battleManager != null && battleManager.IsSpellCastPresentationActive();
-        bool canPlay = battleManager.IsPlayerTurn() && !isPlayingCardAnimation && !spellPresenting && !debugPanelOpen;
-        bool inDiscardSelection = battleManager.IsPlayerInDiscardSelection();
+        bool inDiscardSelection = battleManager != null && battleManager.IsPlayerInDiscardSelection();
+        bool canPlay = battleManager != null
+            && battleManager.IsPlayerTurn()
+            && battleManager.CanPlayerActNow()
+            && !battleManager.IsTurnSequenceInProgress()
+            && !isPlayingCardAnimation
+            && !spellPresenting
+            && !debugPanelOpen;
         for (int i = 0; i < handArea.childCount; i++)
         {
             Transform t = handArea.GetChild(i);
             Button b = t.GetComponent<Button>();
             if (b == null) continue;
-            Card c = i < battleManager.GetPlayerHandCount() ? battleManager.GetPlayerHandCard(i) : null;
-            bool handLocked = !inDiscardSelection && IsPlayerHandCardLockedByFieldRule(c);
-            b.interactable = canPlay && !handLocked;
-            ApplyLinGazeHandCardLockedVisual(t.gameObject, handLocked);
+            bool handPlayable = i < battleManager.GetPlayerHandCount()
+                && battleManager.IsPlayerHandCardPlayableNow(i);
+            b.interactable = canPlay && (inDiscardSelection || handPlayable);
+            ApplyLinGazeHandCardLockedVisual(t.gameObject, !inDiscardSelection && !handPlayable);
 
             GameObject handRoot = t.gameObject;
             System.Func<bool> suppressWhenDimmed = () =>
@@ -498,21 +500,6 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
     }
 
     private static bool IsLinGazeSpellCard(Card c) => c is SpellCard sp && sp.SpellOrdinal == 2;
-
-    /// <summary>我方場上有怪時僅初級治療可打；祝聖待換時手牌怪獸可替換場怪。</summary>
-    private bool IsPlayerHandCardLockedByFieldRule(Card card)
-    {
-        if (battleManager != null &&
-            battleManager.IsOpeningRoundFireballBlockedForPlayer() &&
-            card is SpellCard fireball &&
-            fireball.SpellOrdinal == 0)
-            return true;
-
-        if (battleManager == null || !battleManager.PlayerHasFieldMonster()) return false;
-        if (card is MonsterCard && battleManager.CanPlayerReplaceFieldMonsterForConsecration()) return false;
-        if (card is SpellCard sp && sp.SpellOrdinal == 1) return false;
-        return true;
-    }
 
     private bool IsEnemyLinGazeHandCardLocked(Card card) =>
         battleManager != null && IsLinGazeSpellCard(card) && !battleManager.CanEnemyCastLinGazeNow();
@@ -592,6 +579,9 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
             yield break;
         }
 
+        if (TutorialBattleCoachUi.IsActiveForCurrentBattle)
+            ApplyTutorialHandPlayHighlightVisuals(null);
+
         const float stagger = 0.055f;
         const float flyDur = 0.38f;
         float total = stagger * (rects.Count - 1) + flyDur;
@@ -621,6 +611,8 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         }
 
         SetHandButtonsInteractable();
+        if (TutorialBattleCoachUi.IsActiveForCurrentBattle)
+            RefreshTutorialHandPlayHighlights();
         playerOpeningHandFlySessionDone = battleSessionId;
         playerOpeningHandFlyRoutine = null;
     }

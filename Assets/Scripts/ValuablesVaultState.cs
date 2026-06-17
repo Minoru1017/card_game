@@ -35,6 +35,17 @@ public static class ValuablesVaultState
 
     public static void InvalidateAllCaches()
     {
+        if (anySlotDirty)
+        {
+            PlayerData pd = PlayerData.ResolveCanonical();
+            if (pd != null && pd.IsSaveHydratedFromDisk)
+                pd.SavePlayerData();
+            else
+                Debug.LogWarning(
+                    "ValuablesVaultState: vault changes pending but PlayerData not hydrated; " +
+                    "skipping full save to avoid overwriting coins/gems with defaults.");
+        }
+
         SlotCaches.Clear();
         LoadedSlots.Clear();
         anySlotDirty = false;

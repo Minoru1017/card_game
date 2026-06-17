@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -17,7 +18,7 @@ public sealed class GlobalNavValuablesVaultOverlay
     private const float CellSpacing = 10f;
     private const float ScrollContentPadH = 12f;
     private const float ScrollContentPadV = 8f;
-    private const int OverlayLayoutVersion = 5;
+    private const int OverlayLayoutVersion = 8;
 
     private static readonly Color DimColor = new Color(0.1f, 0.08f, 0.06f, 0.72f);
     private static readonly Color PanelBg = new Color(0.94f, 0.9f, 0.84f, 0.99f);
@@ -44,6 +45,7 @@ public sealed class GlobalNavValuablesVaultOverlay
     private TextMeshProUGUI detailSlotTmp;
     private Image detailIconImage;
     private GameObject detailIconPlaceholder;
+    private RectTransform detailDepositRoot;
     private ScrollRect vaultScrollRect;
     private int builtLayoutVersion;
     private int selectedCellIndex = -1;
@@ -108,6 +110,9 @@ public sealed class GlobalNavValuablesVaultOverlay
         if (root == null)
             return;
         selectedCellIndex = -1;
+        ValuablesVaultCatalog.SyncOwnedCdsToVault(PlayerData.GetActivePlayerSlotOrDefault());
+        if (ValuablesVaultState.HasPendingChanges)
+            PlayerSaveCoordinator.FlushDebouncedThenSavePlayerData();
         RefreshAllCells();
         RefreshDetailPanel(-1);
         RefreshCellSelectionVisuals();
@@ -133,6 +138,7 @@ public sealed class GlobalNavValuablesVaultOverlay
         detailSlotTmp = null;
         detailIconImage = null;
         detailIconPlaceholder = null;
+        detailDepositRoot = null;
         vaultScrollRect = null;
         builtLayoutVersion = 0;
         selectedCellIndex = -1;
@@ -410,7 +416,7 @@ public sealed class GlobalNavValuablesVaultOverlay
         RectTransform bodyRt = bodyObj.GetComponent<RectTransform>();
         bodyRt.anchorMin = new Vector2(0f, 0f);
         bodyRt.anchorMax = new Vector2(1f, 1f);
-        bodyRt.offsetMin = new Vector2(pad, pad + 36f);
+        bodyRt.offsetMin = new Vector2(pad, pad + 212f);
         bodyRt.offsetMax = new Vector2(-pad, -(textTop + 48f));
         detailBodyTmp = bodyObj.GetComponent<TextMeshProUGUI>();
         applyFont?.Invoke(detailBodyTmp);
@@ -419,6 +425,15 @@ public sealed class GlobalNavValuablesVaultOverlay
         detailBodyTmp.enableWordWrapping = true;
         detailBodyTmp.lineSpacing = 4f;
         detailBodyTmp.color = DetailBodyColor;
+
+        GameObject depositRootObj = new GameObject("DepositActions", typeof(RectTransform));
+        depositRootObj.transform.SetParent(detailPanel.transform, false);
+        detailDepositRoot = depositRootObj.GetComponent<RectTransform>();
+        detailDepositRoot.anchorMin = new Vector2(0f, 0f);
+        detailDepositRoot.anchorMax = new Vector2(1f, 0f);
+        detailDepositRoot.pivot = new Vector2(0.5f, 0f);
+        detailDepositRoot.anchoredPosition = new Vector2(0f, pad + 36f);
+        detailDepositRoot.sizeDelta = new Vector2(-pad * 2f, 168f);
 
         GameObject slotObj = new GameObject("SlotLine", typeof(RectTransform), typeof(TextMeshProUGUI));
         slotObj.transform.SetParent(detailPanel.transform, false);
@@ -539,6 +554,201 @@ public sealed class GlobalNavValuablesVaultOverlay
 
         if (detailIconPlaceholder != null)
             detailIconPlaceholder.SetActive(sprite == null);
+
+        RefreshDetailActions(cellIndex, definitionId, quantity, copy.HasItem);
+    }
+
+    private void RefreshDetailActions(int cellIndex, int cellDefinitionId, int cellQuantity, bool hasItem)
+    {
+        if (detailDepositRoot == null)
+            return;
+
+        for (int i = detailDepositRoot.childCount - 1; i >= 0; i--)
+            UnityEngine.Object.Destroy(detailDepositRoot.GetChild(i).gameObject);
+
+        if (cellIndex < 0)
+            return;
+
+        float y = 0f;
+        if (hasItem && cellDefinitionId > 0 && cellQuantity > 0)
+        {
+            CreateDiscardButton(ValuablesVaultUiCopy.DiscardButtonLabel, y, cellIndex);
+            y -= 50f;
+        }
+
+        RefreshDepositActions(cellIndex, cellDefinitionId, y);
+    }
+
+    private void RefreshDepositActions(int cellIndex, int cellDefinitionId, float startY)
+    {
+        if (detailDepositRoot == null)
+            return;
+
+        if (cellIndex < 0)
+            return;
+
+        int slot = PlayerData.GetActivePlayerSlotOrDefault();
+        if (ValuablesVaultState.TryGetStack(slot, cellIndex, out ValuablesVaultState.VaultStack existing)
+            && !existing.IsEmpty
+            && !ValuablesVaultCatalog.IsCdFragmentDefinition(existing.DefinitionId))
+            return;
+
+        if (ValuablesVaultState.TryGetStack(slot, cellIndex, out existing)
+            && !existing.IsEmpty
+            && ValuablesVaultCatalog.IsCdFragmentDefinition(existing.DefinitionId))
+        {
+            cellDefinitionId = existing.DefinitionId;
+        }
+
+        List<string> walletIds = PlayerBirdDuelCdState.GetWalletFragmentCdIdsSorted(slot);
+        if (walletIds.Count == 0)
+            return;
+
+        CreateDepositHintLabel(ValuablesVaultUiCopy.WalletFragmentsTitle, startY);
+
+        float y = startY - 32f;
+        for (int i = 0; i < walletIds.Count; i++)
+        {
+            string cdId = walletIds[i];
+            int walletCount = PlayerBirdDuelCdState.GetFragments(slot, cdId);
+            if (walletCount <= 0) continue;
+
+            int fragmentDefId = ValuablesVaultCatalog.ResolveCdFragmentDefinitionId(cdId);
+            if (fragmentDefId <= 0) continue;
+
+            if (cellDefinitionId > 0 && cellDefinitionId != fragmentDefId)
+                continue;
+
+            string label = ValuablesVaultDisplay.ResolveCdFragmentWalletLabel(cdId, walletCount)
+                + " · " + ValuablesVaultUiCopy.DepositAllButtonLabel;
+            CreateDepositButton(label, y, cdId, cellIndex, walletCount);
+            y -= 44f;
+        }
+    }
+
+    private void CreateDepositHintLabel(string text, float y)
+    {
+        GameObject hintObj = new GameObject("DepositHint", typeof(RectTransform), typeof(TextMeshProUGUI));
+        hintObj.transform.SetParent(detailDepositRoot, false);
+        RectTransform hintRt = hintObj.GetComponent<RectTransform>();
+        hintRt.anchorMin = new Vector2(0f, 1f);
+        hintRt.anchorMax = new Vector2(1f, 1f);
+        hintRt.pivot = new Vector2(0.5f, 1f);
+        hintRt.anchoredPosition = new Vector2(0f, y);
+        hintRt.sizeDelta = new Vector2(0f, 28f);
+        TextMeshProUGUI hintTmp = hintObj.GetComponent<TextMeshProUGUI>();
+        applyFont?.Invoke(hintTmp);
+        hintTmp.fontSize = 18f;
+        hintTmp.alignment = TextAlignmentOptions.MidlineLeft;
+        hintTmp.color = DetailMutedColor;
+        hintTmp.text = text;
+        hintTmp.raycastTarget = false;
+    }
+
+    private void CreateDepositButton(string label, float y, string cdId, int cellIndex, int walletCount)
+    {
+        GameObject btnObj = new GameObject("Deposit_" + cdId, typeof(RectTransform), typeof(Image), typeof(Button));
+        btnObj.transform.SetParent(detailDepositRoot, false);
+        RectTransform btnRt = btnObj.GetComponent<RectTransform>();
+        btnRt.anchorMin = new Vector2(0f, 1f);
+        btnRt.anchorMax = new Vector2(1f, 1f);
+        btnRt.pivot = new Vector2(0.5f, 1f);
+        btnRt.anchoredPosition = new Vector2(0f, y);
+        btnRt.sizeDelta = new Vector2(0f, 38f);
+
+        Image btnBg = btnObj.GetComponent<Image>();
+        btnBg.color = new Color(0.78f, 0.86f, 0.72f, 0.98f);
+        btnBg.raycastTarget = true;
+
+        GameObject textObj = new GameObject("Label", typeof(RectTransform), typeof(TextMeshProUGUI));
+        textObj.transform.SetParent(btnObj.transform, false);
+        RectTransform textRt = textObj.GetComponent<RectTransform>();
+        StretchFull(textRt);
+        TextMeshProUGUI textTmp = textObj.GetComponent<TextMeshProUGUI>();
+        applyFont?.Invoke(textTmp);
+        textTmp.fontSize = 17f;
+        textTmp.alignment = TextAlignmentOptions.Center;
+        textTmp.color = new Color(0.18f, 0.24f, 0.16f, 1f);
+        textTmp.text = label;
+        textTmp.raycastTarget = false;
+
+        Button button = btnObj.GetComponent<Button>();
+        button.targetGraphic = btnBg;
+        string capturedCdId = cdId;
+        int capturedCell = cellIndex;
+        int capturedCount = walletCount;
+        button.onClick.AddListener(() => OnDepositCdFragmentsClicked(capturedCell, capturedCdId, capturedCount));
+    }
+
+    private void CreateDiscardButton(string label, float y, int cellIndex)
+    {
+        GameObject btnObj = new GameObject("DiscardButton", typeof(RectTransform), typeof(Image), typeof(Button));
+        btnObj.transform.SetParent(detailDepositRoot, false);
+        RectTransform btnRt = btnObj.GetComponent<RectTransform>();
+        btnRt.anchorMin = new Vector2(0f, 1f);
+        btnRt.anchorMax = new Vector2(1f, 1f);
+        btnRt.pivot = new Vector2(0.5f, 1f);
+        btnRt.anchoredPosition = new Vector2(0f, y);
+        btnRt.sizeDelta = new Vector2(0f, 38f);
+
+        Image btnBg = btnObj.GetComponent<Image>();
+        btnBg.color = new Color(0.94f, 0.62f, 0.58f, 1f);
+        btnBg.raycastTarget = true;
+
+        GameObject textObj = new GameObject("Label", typeof(RectTransform), typeof(TextMeshProUGUI));
+        textObj.transform.SetParent(btnObj.transform, false);
+        RectTransform textRt = textObj.GetComponent<RectTransform>();
+        StretchFull(textRt);
+        TextMeshProUGUI textTmp = textObj.GetComponent<TextMeshProUGUI>();
+        applyFont?.Invoke(textTmp);
+        textTmp.fontSize = 17f;
+        textTmp.fontStyle = FontStyles.Bold;
+        textTmp.alignment = TextAlignmentOptions.Center;
+        textTmp.enableWordWrapping = false;
+        textTmp.color = new Color(0.34f, 0.14f, 0.12f, 1f);
+        textTmp.text = label;
+        textTmp.raycastTarget = false;
+
+        Button button = btnObj.GetComponent<Button>();
+        button.targetGraphic = btnBg;
+        int capturedCell = cellIndex;
+        button.onClick.AddListener(() => OnDiscardCellClicked(capturedCell));
+    }
+
+    private void OnDiscardCellClicked(int cellIndex)
+    {
+        int slot = PlayerData.GetActivePlayerSlotOrDefault();
+        ValuablesVaultDiscard.Result result = ValuablesVaultDiscard.TryDiscardCell(slot, cellIndex);
+        if (!result.Success)
+        {
+            SceneToast.Show(string.IsNullOrEmpty(result.ToastLine) ? "無法丟棄" : result.ToastLine);
+            return;
+        }
+
+        PlayerSaveCoordinator.FlushDebouncedThenSavePlayerData();
+        RefreshAllCells();
+        RefreshDetailPanel(cellIndex);
+        RefreshCellSelectionVisuals();
+        SceneToast.Show(result.ToastLine);
+    }
+
+    private void OnDepositCdFragmentsClicked(int cellIndex, string cdId, int quantity)
+    {
+        int slot = PlayerData.GetActivePlayerSlotOrDefault();
+        if (!ValuablesVaultCatalog.TryDepositCdFragments(slot, cellIndex, cdId, quantity))
+        {
+            SceneToast.Show("無法放入此格");
+            return;
+        }
+
+        RefreshAllCells();
+        RefreshDetailPanel(cellIndex);
+        RefreshCellSelectionVisuals();
+
+        BirdDuelCdProfile profile = BirdDuelCdCatalog.Get(cdId);
+        string name = profile != null ? profile.DisplayName : cdId;
+        SceneToast.Show(name + " 碎片已放入貴重品庫");
+        PlayerSaveCoordinator.FlushDebouncedThenSavePlayerData();
     }
 
     private void RefreshCellSelectionVisuals()

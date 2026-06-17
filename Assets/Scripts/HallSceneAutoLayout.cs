@@ -260,22 +260,7 @@ public class HallSceneAutoLayout : MonoBehaviour
     private static TMP_FontAsset ResolveProjectTcFont()
     {
         if (cachedTcFont != null) return cachedTcFont;
-
-        TMP_FontAsset[] fonts = Resources.FindObjectsOfTypeAll<TMP_FontAsset>();
-        for (int i = 0; i < fonts.Length; i++)
-        {
-            TMP_FontAsset f = fonts[i];
-            if (f == null || string.IsNullOrEmpty(f.name)) continue;
-            // Prefer project TC font asset.
-            if (f.name.StartsWith("NotoSansTC") || f.name.StartsWith("TC"))
-            {
-                cachedTcFont = f;
-                return cachedTcFont;
-            }
-        }
-
-        if (TMP_Settings.defaultFontAsset != null)
-            cachedTcFont = TMP_Settings.defaultFontAsset;
+        cachedTcFont = UiFontResolver.ResolveUiFont();
         return cachedTcFont;
     }
 }

@@ -220,7 +220,8 @@ public static class PlayerProfileCsvService
             {
                 string slotKey = cols[2].Trim();
                 // Clear active slot runtime progress rows.
-                if (slotKey == "coins" || slotKey == "selected_deck_slot" || slotKey == "card" || slotKey == "deck" ||
+                if (slotKey == "coins" || slotKey == "gems" || slotKey == "bird_cd" ||
+                    slotKey == "selected_deck_slot" || slotKey == "card" || slotKey == "deck" ||
                     slotKey == "deckslot" || slotKey == "tutorial_plot" || slotKey == "tutorial_battle" ||
                     slotKey == ValuablesVaultState.SaveKey)
                     continue;
@@ -234,6 +235,8 @@ public static class PlayerProfileCsvService
             merged.Insert(0, "active_slot," + activeSlot);
 
         merged.Add("slot," + activeSlot + ",coins," + defaultCoins);
+        merged.Add("slot," + activeSlot + ",gems,300");
+        merged.Add("slot," + activeSlot + ",bird_cd,own," + BirdDuelCdCatalog.DefaultCdId);
         merged.Add("slot," + activeSlot + ",selected_deck_slot,0");
         if (!slotNameKept)
             merged.Add("slot," + activeSlot + ",slot_name,玩家" + activeSlot);
@@ -261,6 +264,7 @@ public static class PlayerProfileCsvService
     private static void EnsureAllSlotsMinimalRows(List<string> rows)
     {
         bool[] hasCoin = new bool[PlayerData.MaxPlayerSlots + 1];
+        bool[] hasGems = new bool[PlayerData.MaxPlayerSlots + 1];
         bool[] hasSelect = new bool[PlayerData.MaxPlayerSlots + 1];
         bool[] hasName = new bool[PlayerData.MaxPlayerSlots + 1];
         for (int i = 0; i < rows.Count; i++)
@@ -273,6 +277,7 @@ public static class PlayerProfileCsvService
             if (!int.TryParse(cols[1].Trim(), out int slot) || slot < 1 || slot > PlayerData.MaxPlayerSlots) continue;
             string k = cols[2].Trim();
             if (k == "coins") hasCoin[slot] = true;
+            else if (k == "gems") hasGems[slot] = true;
             else if (k == "selected_deck_slot") hasSelect[slot] = true;
             else if (k == "slot_name") hasName[slot] = true;
         }
@@ -280,6 +285,7 @@ public static class PlayerProfileCsvService
         for (int slot = 1; slot <= PlayerData.MaxPlayerSlots; slot++)
         {
             if (!hasCoin[slot]) rows.Add("slot," + slot + ",coins,100");
+            if (!hasGems[slot]) rows.Add("slot," + slot + ",gems,300");
             if (!hasSelect[slot]) rows.Add("slot," + slot + ",selected_deck_slot,0");
             if (!hasName[slot]) rows.Add("slot," + slot + ",slot_name,玩家" + slot);
         }

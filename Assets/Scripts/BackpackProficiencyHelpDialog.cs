@@ -179,7 +179,7 @@ public class BackpackProficiencyHelpDialog : MonoBehaviour
             bodyContentRt = null;
             bodyScrollRect = null;
         }
-        if (font == null) font = TMP_Settings.defaultFontAsset;
+        if (font == null) font = UiFontResolver.ResolveUiFont();
 
         root = new GameObject("BackpackProficiencyHelpRoot", typeof(RectTransform), typeof(Canvas), typeof(GraphicRaycaster));
         root.transform.SetParent(hostCanvas.transform, false);

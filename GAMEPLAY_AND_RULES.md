@@ -108,7 +108,7 @@
 
 完整企劃、解鎖條件類型、待決事項與 UI 原則見：**[`CARD_PROFICIENCY_GDD.md`](CARD_PROFICIENCY_GDD.md)**。  
 單卡戰技 A/B/C 文案（含**國王**範例）見：**[`卡牌技能階段式揭露.md`](卡牌技能階段式揭露.md)**。  
-市場竞品與引用來源見：**[`MARKET_ANALYSIS_SOURCES.md`](MARKET_ANALYSIS_SOURCES.md)**。
+市場競品與引用來源見：**[`MARKET_ANALYSIS_SOURCES.md`](MARKET_ANALYSIS_SOURCES.md)**。
 
 ---
 

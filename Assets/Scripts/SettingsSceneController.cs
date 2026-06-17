@@ -383,8 +383,8 @@ public class SettingsSceneController : MonoBehaviour
         tmp.raycastTarget = false;
         if (font != null)
             tmp.font = font;
-        else if (TMP_Settings.defaultFontAsset != null)
-            tmp.font = TMP_Settings.defaultFontAsset;
+        else if (UiFontResolver.ResolveUiFont() != null)
+            tmp.font = UiFontResolver.ResolveUiFont();
 
         return btn;
     }
@@ -429,7 +429,7 @@ public class SettingsSceneController : MonoBehaviour
         if (resolved != null && BuildbeckUiFonts.FontSupportsText(resolved, cjkProbe))
             return resolved;
 
-        return TMP_Settings.defaultFontAsset;
+        return UiFontResolver.ResolveUiFont();
     }
 
     private void OnLeaveClicked()

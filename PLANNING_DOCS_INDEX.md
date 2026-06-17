@@ -27,6 +27,7 @@
 | [`PLANNING_MASTER_TABLE.md`](PLANNING_MASTER_TABLE.md) | **企劃總表**（領域 × 狀態 × 主文件） |
 | [`PLANNING_OPEN_ITEMS.md`](PLANNING_OPEN_ITEMS.md) | **待定／未定義**集中清單 |
 | [`企劃發想.md`](企劃發想.md) | **體驗發想**（不改規則提升爽感、任天堂式主動探索感） |
+| [`Docs/鬥鳥手勢小遊戲企劃.md`](Docs/鬥鳥手勢小遊戲企劃.md) | **鬥鳥暖身賽**（BGM 鼓點節奏反制；戰前讀心與進階 AI 情報）；**已取代戰前謎題**：戰前一律先鬥鳥，勝出可挑戰魔王級，情報帶入戰鬥 |
 | [`ARCHITECTURE_OVERVIEW.md`](ARCHITECTURE_OVERVIEW.md) | 場景流程、存檔、DataManager（英文架構圖） |
 
 ---
@@ -63,7 +64,7 @@
 |------|------|
 | [`DIFFICULTY_AND_AI_DESIGN.md`](DIFFICULTY_AND_AI_DESIGN.md) | 難度五檔、設計指數、AI 摘要（報告用） |
 | [`ENEMY_AI_DECISION_TREE.md`](ENEMY_AI_DECISION_TREE.md) | 敵方出牌決策樹細節 |
-| [`BATTLE_PREVIEW_PUZZLE_INDEX.md`](BATTLE_PREVIEW_PUZZLE_INDEX.md) | 戰前預覽謎題 PZ01、PZ02 |
+| [`BATTLE_PREVIEW_PUZZLE_INDEX.md`](BATTLE_PREVIEW_PUZZLE_INDEX.md) | 戰前預覽謎題 PZ01、PZ02（**已停用**，由鬥鳥暖身賽取代；保留作歷史紀錄） |
 | [`BALANCE_AND_AI_BIBLIOGRAPHY.md`](BALANCE_AND_AI_BIBLIOGRAPHY.md) | 平衡／AI 外部文獻連結 |
 
 ---
@@ -83,8 +84,8 @@
 
 | 文件 | 說明 |
 |------|------|
-| [`MARKET_ANALYSIS_SOURCES.md`](MARKET_ANALYSIS_SOURCES.md) | 竞品資料來源 |
-| [`MARKET_ANALYSIS_FIVE_GAMES.md`](MARKET_ANALYSIS_FIVE_GAMES.md) | 五款竞品與熟練度策略建議 |
+| [`MARKET_ANALYSIS_SOURCES.md`](MARKET_ANALYSIS_SOURCES.md) | 競品資料來源 |
+| [`MARKET_ANALYSIS_FIVE_GAMES.md`](MARKET_ANALYSIS_FIVE_GAMES.md) | 五款競品與熟練度策略建議 |
 
 ---
 
@@ -115,5 +116,7 @@
 
 | 日期 | 說明 |
 |------|------|
+| 2026-06-14 | 鬥鳥取代戰前謎題：所有戰前先進鬥鳥場景，勝出挑戰魔王級、否則打所選難度，情報以 toast 帶入戰鬥；停用 `BATTLE_PREVIEW_PUZZLE_INDEX.md` 謎題解鎖 |
+| 2026-06-10 | 定案 `Docs/鬥鳥手勢小遊戲企劃.md`：改為 BGM 鼓點節奏反制，築巢定義為看破增益，連接戰前進階 AI 情報 |
 | 2026-06-07 | 新增 `企劃發想.md`：整理不改規則提升爽感與主動探索感方向 |
 | 2026-05-30 | 初版：建立企劃索引，串接總表與待定文件；補主線 1-1 閱讀路徑 |

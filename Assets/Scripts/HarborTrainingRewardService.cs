@@ -1,6 +1,6 @@
 using UnityEngine;
 
-/// <summary>港灣訓練場通關獎勵：首通任一難度解鎖地圖；困難首通贈 SR 畢業證。</summary>
+/// <summary>港灣訓練場通關獎勵：首通任一難度解鎖地圖；困難首通贈 SR 畢業證；各難度首通贈寶石。</summary>
 public static class HarborTrainingRewardService
 {
     /// <summary>港灣畢業證 SR（聖院騎士，CardList.csv id 18）。</summary>
@@ -11,27 +11,37 @@ public static class HarborTrainingRewardService
         public readonly bool FirstCombatClear;
         public readonly bool GrantedGraduationCard;
         public readonly string GraduationCardDisplayName;
+        public readonly int GrantedGems;
 
-        public VictoryGrantResult(bool firstCombatClear, bool grantedGraduationCard, string graduationCardDisplayName)
+        public VictoryGrantResult(
+            bool firstCombatClear,
+            bool grantedGraduationCard,
+            string graduationCardDisplayName,
+            int grantedGems)
         {
             FirstCombatClear = firstCombatClear;
             GrantedGraduationCard = grantedGraduationCard;
             GraduationCardDisplayName = graduationCardDisplayName ?? string.Empty;
+            GrantedGems = grantedGems;
         }
 
-        public bool HasNewReward => FirstCombatClear || GrantedGraduationCard;
+        public bool HasNewReward => FirstCombatClear || GrantedGraduationCard || GrantedGems > 0;
     }
 
-    /// <summary>勝利時呼叫；回傳本次新發放的進度／卡牌（重複通關不再發 SR）。</summary>
+    /// <summary>勝利時呼叫；回傳本次新發放的進度／卡牌／寶石（重複通關不再發）。</summary>
     public static VictoryGrantResult ProcessVictory(BattleDifficultyTier tier, PlayerData playerData = null)
     {
         int slot = PlayerData.GetActivePlayerSlotOrDefault();
         bool wasCombatCleared = HarborTrainingProgressState.IsHarborCombatCleared(slot);
         bool wasHardRewardGranted = HarborTrainingProgressState.IsHarborHardGraduationRewardGranted(slot);
+        bool wasGemGranted = HarborTrainingProgressState.IsHarborGemRewardGranted(slot, tier);
 
         bool firstCombatClear = false;
         bool grantedCard = false;
         string cardName = string.Empty;
+        int grantedGems = 0;
+
+        playerData = playerData != null ? playerData : PlayerData.ResolveCanonical();
 
         if (!wasCombatCleared)
         {
@@ -42,12 +52,10 @@ public static class HarborTrainingRewardService
         bool isHard = tier == BattleDifficultyTier.Hard;
         if (isHard && !wasHardRewardGranted)
         {
-            playerData = playerData != null ? playerData : PlayerData.ResolveCanonical();
             if (playerData != null)
             {
                 playerData.LoadPlayerData();
                 playerData.AddCollection(GraduationCardId, 1);
-                playerData.SavePlayerData();
                 HarborTrainingProgressState.SetHarborHardGraduationRewardGranted(slot, true);
                 grantedCard = true;
                 cardName = ResolveCardDisplayName(playerData);
@@ -59,17 +67,37 @@ public static class HarborTrainingRewardService
             }
         }
 
-        return new VictoryGrantResult(firstCombatClear, grantedCard, cardName);
+        if (!wasGemGranted && playerData != null)
+        {
+            playerData.LoadPlayerData();
+            grantedGems = HarborTrainingProgressState.GetHarborFirstClearGemAmount(tier);
+            if (grantedGems > 0)
+            {
+                playerData.AddGems(grantedGems);
+                HarborTrainingProgressState.SetHarborGemRewardGranted(slot, tier, true);
+                Debug.Log("HarborTrainingRewardService: granted harbor gems " + grantedGems + " for " + tier + ".");
+            }
+        }
+
+        if (playerData != null && (grantedCard || grantedGems > 0))
+            playerData.SavePlayerData();
+
+        return new VictoryGrantResult(firstCombatClear, grantedCard, cardName, grantedGems);
     }
 
     public static string BuildVictorySubtitle(VictoryGrantResult result)
     {
+        string gemLine = result.GrantedGems > 0 ? "寶石 +" + result.GrantedGems : null;
+
         if (result.GrantedGraduationCard && result.FirstCombatClear)
         {
             string name = string.IsNullOrWhiteSpace(result.GraduationCardDisplayName)
                 ? "港灣畢業證"
                 : result.GraduationCardDisplayName;
-            return "港灣實戰通關 · 海牆巡邏已解鎖\n港灣畢業證 " + name + " 已入收藏";
+            string text = "港灣實戰通關 · 海牆巡邏已解鎖\n港灣畢業證 " + name + " 已入收藏";
+            if (!string.IsNullOrEmpty(gemLine))
+                text += "\n" + gemLine;
+            return text;
         }
 
         if (result.GrantedGraduationCard)
@@ -77,11 +105,22 @@ public static class HarborTrainingRewardService
             string name = string.IsNullOrWhiteSpace(result.GraduationCardDisplayName)
                 ? "港灣畢業證"
                 : result.GraduationCardDisplayName;
-            return "港灣畢業證 " + name + " 已入收藏";
+            string text = "港灣畢業證 " + name + " 已入收藏";
+            if (!string.IsNullOrEmpty(gemLine))
+                text += "\n" + gemLine;
+            return text;
         }
 
         if (result.FirstCombatClear)
-            return "港灣實戰通關 · 海牆巡邏已解鎖";
+        {
+            string text = "港灣實戰通關 · 海牆巡邏已解鎖";
+            if (!string.IsNullOrEmpty(gemLine))
+                text += "\n" + gemLine;
+            return text;
+        }
+
+        if (!string.IsNullOrEmpty(gemLine))
+            return gemLine;
 
         return "熟練度與戰績已記錄";
     }

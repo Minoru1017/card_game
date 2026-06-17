@@ -560,7 +560,7 @@ public static class BackpackInspectSkillUiBuilder
         TMP_FontAsset buildbeck = BuildbeckUiFonts.ResolveBuildbeckButtonFont();
         if (buildbeck != null) return buildbeck;
 
-        return TMP_Settings.defaultFontAsset;
+        return UiFontResolver.ResolveUiFont();
     }
 
     private static void ApplyFont(TextMeshProUGUI tmp, TMP_FontAsset font)

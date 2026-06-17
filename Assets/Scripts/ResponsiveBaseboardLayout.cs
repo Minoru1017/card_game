@@ -12,7 +12,8 @@ using UnityEngine.UI;
 /// - 中央保險區 1440×1080：critical UI 一律放這裡，最方到 4:3 仍完整。
 ///
 /// 用法：掛在 UI Canvas 上（或其子物件），指定 leftBaseboard / rightBaseboard（兩個容器，
-/// 底板美術放在容器內以 stretch 充滿即可）。可選 safeArea、background 由本元件統一定位。
+/// 底板美術由 <see cref="UiSpriteLibrary.ResponsiveBasePlate"/> 自動套用；右側水平翻轉共用）。
+/// 可選 safeArea、background 由本元件統一定位。
 /// </summary>
 [ExecuteAlways]
 [RequireComponent(typeof(RectTransform))]
@@ -42,6 +43,10 @@ public sealed class ResponsiveBaseboardLayout : MonoBehaviour
 
     [Header("背景（選填，依高度等比縮放置中；絕不左右拉伸）")]
     [SerializeField] private RectTransform background;
+
+    [Header("底板美術")]
+    [Tooltip("留空則使用 UiSpriteLibrary.ResponsiveBasePlate（base plate.png，左右共用）。")]
+    [SerializeField] private Sprite basePlateSpriteOverride;
 
     private RectTransform rt;
     private RectTransform Rt => rt != null ? rt : (rt = GetComponent<RectTransform>());
@@ -125,8 +130,65 @@ public sealed class ResponsiveBaseboardLayout : MonoBehaviour
         board.anchorMin = new Vector2(x, 0f);
         board.anchorMax = new Vector2(x, 1f);
         board.pivot = new Vector2(x, 0.5f);
+        board.localScale = Vector3.one;
         board.sizeDelta = new Vector2(gap, 0f);
         board.anchoredPosition = Vector2.zero;
+        ApplyBasePlateVisual(board, left);
+    }
+
+    private const string BaseboardArtChildName = "BaseboardArt";
+
+    private Sprite ResolveBasePlateSprite()
+    {
+        if (basePlateSpriteOverride != null)
+            return basePlateSpriteOverride;
+
+        UiSpriteLibrary library = UiSpriteLibrary.Instance;
+        return library != null ? library.ResponsiveBasePlate : null;
+    }
+
+    private void ApplyBasePlateVisual(RectTransform board, bool left)
+    {
+        if (board == null)
+            return;
+
+        Sprite sprite = ResolveBasePlateSprite();
+        if (sprite == null)
+            return;
+
+        Image parentImage = board.GetComponent<Image>();
+        if (parentImage != null)
+        {
+            parentImage.sprite = null;
+            parentImage.enabled = false;
+        }
+
+        RectTransform art = EnsureBaseboardArtChild(board);
+        Image image = art.GetComponent<Image>();
+        image.sprite = sprite;
+        image.color = Color.white;
+        image.type = Image.Type.Simple;
+        image.preserveAspect = false;
+        image.raycastTarget = false;
+
+        art.anchorMin = Vector2.zero;
+        art.anchorMax = Vector2.one;
+        art.pivot = new Vector2(0.5f, 0.5f);
+        art.offsetMin = Vector2.zero;
+        art.offsetMax = Vector2.zero;
+        art.anchoredPosition = Vector2.zero;
+        art.localScale = new Vector3(left ? 1f : -1f, 1f, 1f);
+    }
+
+    private static RectTransform EnsureBaseboardArtChild(RectTransform board)
+    {
+        Transform existing = board.Find(BaseboardArtChildName);
+        if (existing != null)
+            return existing as RectTransform;
+
+        GameObject go = new GameObject(BaseboardArtChildName, typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+        go.transform.SetParent(board, false);
+        return go.GetComponent<RectTransform>();
     }
 
     private void ApplySafeArea()

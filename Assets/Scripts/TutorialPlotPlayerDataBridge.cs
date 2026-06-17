@@ -5,33 +5,5 @@ using UnityEngine;
 /// </summary>
 public static class TutorialPlotPlayerDataBridge
 {
-    private const string HostName = "TutorialPlotPlayerDataHost";
-    private static GameObject host;
-
-    public static PlayerData EnsureWritable()
-    {
-        PlayerData canonical = PlayerData.ResolveCanonical();
-        if (canonical != null)
-        {
-            canonical.LoadPlayerData();
-            return canonical;
-        }
-
-        if (host == null)
-        {
-            host = GameObject.Find(HostName);
-            if (host == null)
-            {
-                host = new GameObject(HostName);
-                Object.DontDestroyOnLoad(host);
-            }
-        }
-
-        PlayerData pd = host.GetComponent<PlayerData>();
-        if (pd == null)
-            pd = host.AddComponent<PlayerData>();
-
-        pd.LoadPlayerData();
-        return pd;
-    }
+    public static PlayerData EnsureWritable() => PlayerData.EnsureWritable();
 }

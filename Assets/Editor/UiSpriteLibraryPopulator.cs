@@ -16,6 +16,7 @@ public static class UiSpriteLibraryPopulator
     private const string BattlePreviewPanelPath = "UI/pre-war preview";
     private const string DifficultyRoot = "UI/Difficulty level";
     private const string RarityRoot = "UI/Rarity";
+    private const string CdRoot = "Assets/UI/CD";
 
     [MenuItem("Tools/UI/Create or Refresh UI Sprite Library")]
     public static void CreateOrRefresh()
@@ -39,6 +40,9 @@ public static class UiSpriteLibraryPopulator
         Sprite returnButton = LoadReturnSprite(ReturnPath);
         library.EditorSetReturnButton(returnButton);
 
+        Sprite basePlate = LoadBasePlateSprite();
+        library.EditorSetResponsiveBasePlate(basePlate);
+
         Sprite harborBay = LoadSprite(HarborBayPath);
         Sprite previewPanel = LoadPreviewPanelSprite(BattlePreviewPanelPath);
         library.EditorSetBattleScene(harborBay, previewPanel);
@@ -57,6 +61,9 @@ public static class UiSpriteLibraryPopulator
         Sprite rUr = LoadRaritySprite(RarityRoot + "/稀有度UR", RarityRoot + "/UR");
         library.EditorSetRarityFrames(rN, rR, rSr, rSsr, rUr);
 
+        Sprite cdHarborPractice = LoadCdCoverSprite(BirdDuelCdCatalog.DefaultCoverAssetKey);
+        library.EditorSetBirdDuelCdCovers(cdHarborPractice);
+
         EditorUtility.SetDirty(library);
         AssetDatabase.SaveAssets();
         AssetDatabase.Refresh();
@@ -64,10 +71,12 @@ public static class UiSpriteLibraryPopulator
         Debug.Log(
             $"UiSpriteLibraryPopulator: coach(neutral={neutral != null}, alert={alert != null}, " +
             $"serious={serious != null}, encourage={encourage != null}), return={returnButton != null}, " +
+            $"basePlate={basePlate != null}, " +
             $"harborBay={harborBay != null}, previewPanel={previewPanel != null}, " +
             $"difficulty(intro={dIntro != null}, easy={dEasy != null}, normal={dNormal != null}, " +
             $"hard={dHard != null}, boss={dBoss != null}), " +
-            $"rarity(N={rN != null}, R={rR != null}, SR={rSr != null}, SSR={rSsr != null}, UR={rUr != null}) " +
+            $"rarity(N={rN != null}, R={rR != null}, SR={rSr != null}, SSR={rSsr != null}, UR={rUr != null}), " +
+            $"cdHarborPractice={cdHarborPractice != null} " +
             $"→ {LibraryAssetPath}");
     }
 
@@ -138,6 +147,53 @@ public static class UiSpriteLibraryPopulator
                 if (slices[i] != null)
                     return slices[i];
         }
+        return null;
+    }
+
+    private const string BasePlateAssetPath = "Assets/UI/base plate.png";
+
+    private static Sprite LoadBasePlateSprite()
+    {
+        Object[] assets = AssetDatabase.LoadAllAssetsAtPath(BasePlateAssetPath);
+        if (assets == null)
+            return null;
+
+        for (int i = 0; i < assets.Length; i++)
+        {
+            if (assets[i] is Sprite sprite)
+                return sprite;
+        }
+        return null;
+    }
+
+    private static Sprite LoadCdCoverSprite(string cdFileName)
+    {
+        if (string.IsNullOrWhiteSpace(cdFileName))
+            return null;
+
+        string[] extensions = { ".jpg", ".jpeg", ".png" };
+        for (int i = 0; i < extensions.Length; i++)
+        {
+            string path = CdRoot + "/" + cdFileName + extensions[i];
+            Object[] assets = AssetDatabase.LoadAllAssetsAtPath(path);
+            if (assets == null || assets.Length == 0)
+                continue;
+
+            string preferredSlice = cdFileName + "_0";
+            for (int a = 0; a < assets.Length; a++)
+            {
+                if (assets[a] is Sprite sprite &&
+                    string.Equals(sprite.name, preferredSlice, System.StringComparison.Ordinal))
+                    return sprite;
+            }
+
+            for (int a = 0; a < assets.Length; a++)
+            {
+                if (assets[a] is Sprite sprite)
+                    return sprite;
+            }
+        }
+
         return null;
     }
 }

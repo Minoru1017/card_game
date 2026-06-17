@@ -45,6 +45,7 @@ public class LoginSceneController : MonoBehaviour
     private static readonly float[] SlotAnchoredX = { -566f, 0f, 566f };
     private static Coroutine entranceAnimationRoutine;
     private static LoginSceneAnimRunner animRunner;
+    private static readonly List<RectTransform> entranceRectBuffer = new List<RectTransform>(128);
     private static bool deleteModeEnabled;
     private static readonly List<GameObject> runtimeDeleteBadges = new List<GameObject>(8);
     private static GameObject deleteConfirmRoot;
@@ -69,25 +70,26 @@ public class LoginSceneController : MonoBehaviour
     private static void TryBindLoginScene(Scene scene)
     {
         if (!scene.IsValid() || scene.name != LoginSceneName) return;
+        LoginSceneGraph.Invalidate();
         deleteModeEnabled = false;
         HideDeleteConfirmDialog();
-        BuildDynamicLoginSlots();
+        BuildDynamicLoginSlots(scene);
     }
 
-    private static void BuildDynamicLoginSlots()
+    private static void BuildDynamicLoginSlots(Scene scene)
     {
-        CleanupRuntimeSlots();
+        CleanupRuntimeSlots(scene);
         CleanupDeleteBadges();
 
-        GameObject existingTemplate = FindTemplateObject(ExistingPlayerObjectName, -566f);
-        GameObject createTemplate = FindTemplateObject(CreateNewPlayerObjectName, 0f);
+        GameObject existingTemplate = LoginSceneGraph.FindClosestByAnchoredX(scene, ExistingPlayerObjectName, -566f);
+        GameObject createTemplate = LoginSceneGraph.FindClosestByAnchoredX(scene, CreateNewPlayerObjectName, 0f);
         if (existingTemplate == null || createTemplate == null)
         {
             Debug.LogWarning("LoginSceneController: template objects not found in login scene.");
             return;
         }
-        DisableDuplicateNamedTemplates(ExistingPlayerObjectName, existingTemplate);
-        DisableDuplicateNamedTemplates(CreateNewPlayerObjectName, createTemplate);
+        LoginSceneGraph.DisableDuplicatesExcept(scene, ExistingPlayerObjectName, existingTemplate);
+        LoginSceneGraph.DisableDuplicatesExcept(scene, CreateNewPlayerObjectName, createTemplate);
 
         PlayerData.SlotSnapshot[] snapshots = PlayerData.GetSlotSnapshots();
         int preferredSlot = preferredCreateSlot;
@@ -151,98 +153,13 @@ public class LoginSceneController : MonoBehaviour
 
         BindEditRecordButton();
         UpdateDeleteBadgeVisibility();
-        PlaySceneEntranceAnimation();
+        LoginSceneGraph.Invalidate();
+        PlaySceneEntranceAnimation(scene);
     }
 
-    private static GameObject FindTemplateObject(string objectName, float preferredX)
+    private static void CleanupRuntimeSlots(Scene scene)
     {
-        // Prefer scene object with Button and matching name (closest X to desired slot).
-        Button[] buttons = Object.FindObjectsByType<Button>(FindObjectsSortMode.None);
-        GameObject bestButton = null;
-        float bestButtonDx = float.MaxValue;
-        for (int i = 0; i < buttons.Length; i++)
-        {
-            Button b = buttons[i];
-            if (b == null) continue;
-            GameObject go = b.gameObject;
-            if (!go.scene.IsValid()) continue;
-            if (!string.Equals(go.name, objectName, System.StringComparison.Ordinal)) continue;
-            RectTransform rt = go.GetComponent<RectTransform>();
-            if (rt == null) continue;
-            float dx = Mathf.Abs(rt.anchoredPosition.x - preferredX);
-            if (bestButton == null || dx < bestButtonDx)
-            {
-                bestButton = go;
-                bestButtonDx = dx;
-            }
-        }
-        if (bestButton != null) return bestButton;
-
-        // Fallback: scene object with TMP label child and closest X to desired slot.
-        GameObject best = null;
-        float bestDx = float.MaxValue;
-        TextMeshProUGUI[] labels = Object.FindObjectsByType<TextMeshProUGUI>(FindObjectsSortMode.None);
-        for (int i = 0; i < labels.Length; i++)
-        {
-            TextMeshProUGUI tmp = labels[i];
-            if (tmp == null) continue;
-            Transform p = tmp.transform.parent;
-            if (p == null) continue;
-            GameObject go = p.gameObject;
-            if (!go.scene.IsValid()) continue;
-            if (!string.Equals(go.name, objectName, System.StringComparison.Ordinal)) continue;
-            if (go.GetComponent<RectTransform>() == null) continue;
-            RectTransform rt = go.GetComponent<RectTransform>();
-            float dx = Mathf.Abs(rt.anchoredPosition.x - preferredX);
-            if (best == null || dx < bestDx)
-            {
-                best = go;
-                bestDx = dx;
-            }
-        }
-        if (best != null) return best;
-
-        GameObject fallback = GameObject.Find(objectName);
-        if (fallback != null) return fallback;
-
-        // Last fallback: scan all scene GameObjects with same name.
-        GameObject[] all = Object.FindObjectsByType<GameObject>(FindObjectsSortMode.None);
-        for (int i = 0; i < all.Length; i++)
-        {
-            GameObject go = all[i];
-            if (go == null || !go.scene.IsValid()) continue;
-            if (string.Equals(go.name, objectName, System.StringComparison.Ordinal))
-                return go;
-        }
-        return null;
-    }
-
-    private static void DisableDuplicateNamedTemplates(string objectName, GameObject keep)
-    {
-        GameObject[] all = Object.FindObjectsByType<GameObject>(FindObjectsSortMode.None);
-        for (int i = 0; i < all.Length; i++)
-        {
-            GameObject go = all[i];
-            if (go == null || !go.scene.IsValid()) continue;
-            if (!string.Equals(go.name, objectName, System.StringComparison.Ordinal)) continue;
-            if (go == keep) continue;
-            if (go.transform.IsChildOf(keep.transform) || keep.transform.IsChildOf(go.transform)) continue;
-            if (!go.activeSelf) continue;
-            go.SetActive(false);
-        }
-    }
-
-    private static void CleanupRuntimeSlots()
-    {
-        GameObject[] all = Object.FindObjectsByType<GameObject>(FindObjectsSortMode.None);
-        for (int i = 0; i < all.Length; i++)
-        {
-            GameObject go = all[i];
-            if (go == null || !go.scene.IsValid()) continue;
-            if (!go.scene.name.Equals(LoginSceneName, StringComparison.Ordinal)) continue;
-            if (go.name.StartsWith("LoginSlotRuntime_Player_") || go.name.StartsWith("LoginSlotRuntime_Create_"))
-                Object.Destroy(go);
-        }
+        LoginSceneGraph.DestroyRuntimeSlotClones(scene);
     }
 
     private static void CleanupDeleteBadges()
@@ -295,7 +212,7 @@ public class LoginSceneController : MonoBehaviour
 
     private static void BindEditRecordButton()
     {
-        GameObject editObj = FindNamedSceneObject(EditRecordPointObjectName);
+        GameObject editObj = LoginSceneGraph.FindNamed(SceneManager.GetActiveScene(), EditRecordPointObjectName);
         if (editObj == null) return;
 
         Image img = editObj.GetComponent<Image>();
@@ -435,7 +352,7 @@ public class LoginSceneController : MonoBehaviour
 
     private static GameObject CreateDeleteConfirmDialog(Scene loginScene)
     {
-        Canvas canvas = FindSceneCanvas(loginScene);
+        Canvas canvas = LoginSceneGraph.FindSceneCanvas(loginScene);
         if (canvas == null) return null;
         TMP_FontAsset uiFont = ResolveLoginSceneFont();
 
@@ -571,59 +488,7 @@ public class LoginSceneController : MonoBehaviour
         if (deleteConfirmRoot != null) deleteConfirmRoot.SetActive(false);
     }
 
-    private static Canvas FindSceneCanvas(Scene scene)
-    {
-        Canvas[] canvases = Object.FindObjectsByType<Canvas>(FindObjectsSortMode.None);
-        for (int i = 0; i < canvases.Length; i++)
-        {
-            Canvas c = canvases[i];
-            if (c == null || !c.gameObject.scene.IsValid()) continue;
-            if (c.gameObject.scene != scene) continue;
-            if (c.GetComponentInParent<GlobalNavRuntime>() != null) continue;
-            return c;
-        }
-        return null;
-    }
-
-    private static GameObject FindNamedSceneObject(string objectName)
-    {
-        GameObject[] all = Object.FindObjectsByType<GameObject>(FindObjectsSortMode.None);
-        for (int i = 0; i < all.Length; i++)
-        {
-            GameObject go = all[i];
-            if (go == null || !go.scene.IsValid()) continue;
-            if (go.scene.name != LoginSceneName) continue;
-            if (string.Equals(go.name, objectName, System.StringComparison.Ordinal)) return go;
-        }
-        return null;
-    }
-
-    private static TMP_FontAsset ResolveLoginSceneFont()
-    {
-        const string required = "是否要刪除該玩家的資料刪除取消";
-
-        TMP_FontAsset[] fonts = Resources.FindObjectsOfTypeAll<TMP_FontAsset>();
-        for (int i = 0; i < fonts.Length; i++)
-        {
-            TMP_FontAsset f = fonts[i];
-            if (!FontSupportsText(f, required)) continue;
-            if (FontNameLikelySupportsCjk(f.name)) return f;
-        }
-
-        TextMeshProUGUI[] all = Object.FindObjectsByType<TextMeshProUGUI>(FindObjectsSortMode.None);
-        for (int i = 0; i < all.Length; i++)
-        {
-            TextMeshProUGUI tmp = all[i];
-            if (tmp == null || !tmp.gameObject.scene.IsValid()) continue;
-            if (tmp.gameObject.scene.name != LoginSceneName) continue;
-            if (tmp.font == null) continue;
-            if (FontSupportsText(tmp.font, required)) return tmp.font;
-        }
-
-        TMP_FontAsset fallback = TMP_Settings.defaultFontAsset;
-        if (FontSupportsText(fallback, required)) return fallback;
-        return null;
-    }
+    private static TMP_FontAsset ResolveLoginSceneFont() => UiFontResolver.ResolveUiFont();
 
     private static void ApplyFontToDialog(GameObject dialogRoot)
     {
@@ -669,36 +534,6 @@ public class LoginSceneController : MonoBehaviour
         return value.Trim();
     }
 
-    private static bool FontSupportsText(TMP_FontAsset font, string required)
-    {
-        if (font == null || string.IsNullOrEmpty(required)) return false;
-        for (int i = 0; i < required.Length; i++)
-        {
-            char ch = required[i];
-            if (char.IsWhiteSpace(ch)) continue;
-            if (!font.HasCharacter(ch, true)) return false;
-        }
-        return true;
-    }
-
-    private static bool FontNameLikelySupportsCjk(string fontAssetName)
-    {
-        if (string.IsNullOrEmpty(fontAssetName)) return false;
-        string n = fontAssetName.ToLowerInvariant();
-        return n.Contains("noto") ||
-               n.Contains("cjk") ||
-               n.Contains("sourcehan") ||
-               n.Contains("source han") ||
-               n.Contains("jhenghei") ||
-               n.Contains("yahei") ||
-               n.Contains("pingfang") ||
-               n.Contains("heiti") ||
-               n.Contains("simhei") ||
-               n.Contains("simsun") ||
-               n.Contains("msjh") ||
-               n.Contains("mingliu");
-    }
-
     private static void OnSelectExistingPlayer(int slot)
     {
         PlayerData.SelectActivePlayerSlot(slot);
@@ -726,9 +561,8 @@ public class LoginSceneController : MonoBehaviour
         SceneManager.LoadScene(HomeSceneName);
     }
 
-    private static void PlaySceneEntranceAnimation()
+    private static void PlaySceneEntranceAnimation(Scene loginScene)
     {
-        Scene loginScene = SceneManager.GetActiveScene();
         if (!loginScene.IsValid() || loginScene.name != LoginSceneName) return;
         EnsureAnimRunner(loginScene);
         if (animRunner == null) return;
@@ -764,19 +598,11 @@ public class LoginSceneController : MonoBehaviour
         // Wait one frame so all runtime-created login slots are active and positioned.
         yield return null;
 
-        RectTransform[] allRects = Object.FindObjectsByType<RectTransform>(FindObjectsSortMode.None);
-        List<EntranceItem> items = new List<EntranceItem>(allRects.Length);
-        for (int i = 0; i < allRects.Length; i++)
+        LoginSceneGraph.CollectEntranceRectTransforms(loginScene, entranceRectBuffer);
+        List<EntranceItem> items = new List<EntranceItem>(entranceRectBuffer.Count);
+        for (int i = 0; i < entranceRectBuffer.Count; i++)
         {
-            RectTransform rt = allRects[i];
-            if (rt == null || !rt.gameObject.scene.IsValid()) continue;
-            if (rt.gameObject.scene != loginScene) continue;
-            if (!rt.gameObject.activeInHierarchy) continue;
-            if (rt.GetComponentInParent<GlobalNavRuntime>() != null) continue;
-            if (rt.gameObject.name.StartsWith("SelectionRing_")) continue;
-            if (rt.GetComponent<Canvas>() != null) continue;
-            if (rt.GetComponent<Graphic>() == null && rt.GetComponentInChildren<Graphic>(true) == null) continue;
-
+            RectTransform rt = entranceRectBuffer[i];
             CanvasGroup cg = rt.GetComponent<CanvasGroup>();
             bool temp = false;
             if (cg == null)

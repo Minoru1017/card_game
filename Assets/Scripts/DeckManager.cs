@@ -1060,7 +1060,7 @@ public partial class DeckManager : MonoBehaviour, ICardInspectPanelHost
         else if (deckHintLegacyText != null)
         {
             if (hintDynamicFont != null) deckHintLegacyText.font = hintDynamicFont;
-            else if (deckHintLegacyText.font == null) deckHintLegacyText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            else if (deckHintLegacyText.font == null) deckHintLegacyText.font = UiFontResolver.ResolveLegacyUiFont();
             deckHintLegacyText.text = message;
             deckHintLegacyText.color = Color.white;
             deckHintLegacyText.gameObject.SetActive(true);
@@ -1118,7 +1118,7 @@ public partial class DeckManager : MonoBehaviour, ICardInspectPanelHost
             _cachedAnyTmpForFontProbe = anyTMP;
         }
         if (anyTMP != null && anyTMP.font != null) return anyTMP.font;
-        return TMP_Settings.defaultFontAsset;
+        return UiFontResolver.ResolveUiFont();
     }
 
     private void EnsureLegacyHintTextReady()
@@ -2403,11 +2403,7 @@ public partial class DeckManager : MonoBehaviour, ICardInspectPanelHost
     private void BindExternalSlotButtonsIfNeeded()
     {
         if (externalSlotButtonsBound)
-        {
-            RefreshDeckSlotTabVisual();
-            RefreshCurrentDeckDisplayName();
             return;
-        }
 
         bool hasAny = deckSlotButton1 != null || deckSlotButton2 != null || deckSlotButton3 != null ||
                       deckSlotButton4 != null || deckSlotButton5 != null;
@@ -3874,7 +3870,7 @@ public partial class DeckManager : MonoBehaviour, ICardInspectPanelHost
 
         TMP_FontAsset uiFont = BuildbeckUiFonts.ResolveBuildbeckButtonFont();
         if (uiFont == null) uiFont = hintTMPFont;
-        if (uiFont == null) uiFont = TMP_Settings.defaultFontAsset;
+        if (uiFont == null) uiFont = UiFontResolver.ResolveUiFont();
 
         deckNameEditPanel = new GameObject("DeckNameEditModal", typeof(RectTransform));
         deckNameEditPanel.transform.SetParent(canvas.transform, false);
@@ -4207,7 +4203,7 @@ public partial class DeckManager : MonoBehaviour, ICardInspectPanelHost
             );
         }
         if (hintDynamicFont != null) return hintDynamicFont;
-        return Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        return UiFontResolver.ResolveLegacyUiFont();
     }
 
     // --- 背包場景（showDeck == false）：點卡開浮動檢視，不加入牌組 ---
@@ -4250,7 +4246,7 @@ public partial class DeckManager : MonoBehaviour, ICardInspectPanelHost
             return fromPrefabs;
         TMP_FontAsset buildbeck = BuildbeckUiFonts.ResolveBuildbeckButtonFont();
         if (buildbeck != null) return buildbeck;
-        return TMP_Settings.defaultFontAsset;
+        return UiFontResolver.ResolveUiFont();
     }
 
     internal GameObject BackpackInspectLibraryPrefab => librarycardPrefab;

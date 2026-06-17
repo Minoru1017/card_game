@@ -103,6 +103,18 @@ public class GlobalNavRuntime : MonoBehaviour
         instance.ApplySceneState(SceneManager.GetActiveScene().name);
     }
 
+    /// <summary>重新套用當前場景的全局導覽顯示，並把 ≡ 觸發鈕提到 GlobalNavCanvas 最上層。</summary>
+    public static void RefreshActiveSceneNav()
+    {
+        EnsureInitialized();
+        if (instance == null || instance.view == null)
+            return;
+
+        instance.ApplySceneState(SceneManager.GetActiveScene().name);
+        if (instance.view.triggerButtonObject != null)
+            instance.view.triggerButtonObject.transform.SetAsLastSibling();
+    }
+
     public static bool TryOpenPlayerInfoOverlay()
     {
         EnsureInitialized();
@@ -464,46 +476,21 @@ public class GlobalNavRuntime : MonoBehaviour
     {
         if (navLabelFont != null && FontSupportsRequiredGlyphs(navLabelFont)) return;
 
-        TMP_FontAsset settingsFont = SettingsUiFonts.ResolveParameterDetailsFont();
-        if (settingsFont != null && FontSupportsRequiredGlyphs(settingsFont))
+        TMP_FontAsset font = SettingsUiFonts.ResolveParameterDetailsFont();
+        if (font != null && FontSupportsRequiredGlyphs(font))
         {
-            navLabelFont = settingsFont;
+            navLabelFont = font;
             return;
         }
 
-        TMP_FontAsset buildbeck = BuildbeckUiFonts.ResolveBuildbeckButtonFont();
-        if (buildbeck != null && FontSupportsRequiredGlyphs(buildbeck))
+        font = BuildbeckUiFonts.ResolveBuildbeckButtonFont();
+        if (font != null && FontSupportsRequiredGlyphs(font))
         {
-            navLabelFont = buildbeck;
+            navLabelFont = font;
             return;
         }
-        TMP_FontAsset[] fonts = Resources.FindObjectsOfTypeAll<TMP_FontAsset>();
-        for (int i = 0; i < fonts.Length; i++)
-        {
-            TMP_FontAsset f = fonts[i];
-            if (f == null || string.IsNullOrEmpty(f.name)) continue;
-            if (!FontSupportsRequiredGlyphs(f)) continue;
-            string n = f.name.ToLowerInvariant();
-            if (n.StartsWith("notosanstc") || n.StartsWith("tc") || FontNameLikelySupportsCjk(n))
-            {
-                navLabelFont = f;
-                return;
-            }
-        }
 
-        TextMeshProUGUI[] tmps = UnityEngine.Object.FindObjectsByType<TextMeshProUGUI>(FindObjectsSortMode.None);
-        for (int i = 0; i < tmps.Length; i++)
-        {
-            if (tmps[i] == null || tmps[i].font == null) continue;
-            if (!FontSupportsRequiredGlyphs(tmps[i].font)) continue;
-            if (FontNameLikelySupportsCjk(tmps[i].font.name))
-            {
-                navLabelFont = tmps[i].font;
-                return;
-            }
-        }
-
-        navLabelFont = TMP_Settings.defaultFontAsset;
+        navLabelFont = UiFontResolver.ResolveUiFont();
     }
 
     private static bool FontSupportsRequiredGlyphs(TMP_FontAsset font) =>

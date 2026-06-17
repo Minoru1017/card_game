@@ -106,6 +106,8 @@ public partial class SceneLoader
         ApplyHarborTrainingPendingConfig(tier);
         BattleLaunchContext.SetPendingDifficultyLabelZh(pendingDifficultyLabelZh);
         BattleLaunchContext.BeginHarborTrainingGroundBattleLaunch();
+        EnemyHeroProfile hero = EnemyHeroCatalog.ResolveForHarbor();
+        BattleLaunchContext.SetEnemyHero(hero.HeroId, hero.DisplayName);
     }
 
     public static string PrepareHarborTrainingBattleLaunch(BattleDifficultyTier tier, string targetBattleScene = null)

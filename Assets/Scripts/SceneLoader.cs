@@ -168,6 +168,11 @@ public partial class SceneLoader : MonoBehaviour
                 label);
             manager.CaptureBattleDifficultyForRecords();
         }
+
+        // 戰前鬥鳥帶入的情報：戰鬥載入完成後以 toast 顯示一次。
+        string intel = PreBattleDuelContext.ConsumeIntelText();
+        if (!string.IsNullOrWhiteSpace(intel))
+            SceneToast.Show(intel, 3.5f);
     }
 
 }

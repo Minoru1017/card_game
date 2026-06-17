@@ -22,6 +22,8 @@ public sealed class SceneToast : MonoBehaviour
     private static SceneToast instance;
 
     private CanvasGroup canvasGroup;
+    private RectTransform plateRt;
+    private Image plateImage;
     private TextMeshProUGUI label;
     private Coroutine activeRoutine;
 
@@ -31,7 +33,17 @@ public sealed class SceneToast : MonoBehaviour
             return;
 
         EnsureInstance();
-        instance.Display(message, holdSeconds);
+        instance.DisplayCompact(message, holdSeconds);
+    }
+
+    /// <summary>全寬黑底播報條（貫穿左右），播完才返回。供開場加成播報等需阻塞流程的場合。</summary>
+    public static IEnumerator ShowFullWidthBannerAndWait(string message, float holdSeconds = 5f)
+    {
+        if (string.IsNullOrEmpty(message))
+            yield break;
+
+        EnsureInstance();
+        yield return instance.RunFullWidthBanner(message, holdSeconds);
     }
 
     private static void EnsureInstance()
@@ -57,19 +69,17 @@ public sealed class SceneToast : MonoBehaviour
         canvasGroup.interactable = false;
         canvasGroup.blocksRaycasts = false;
 
-        // 半透明背板
         var plateGo = new GameObject("Plate", typeof(RectTransform), typeof(Image));
         plateGo.transform.SetParent(transform, false);
-        var plateRt = plateGo.GetComponent<RectTransform>();
+        plateRt = plateGo.GetComponent<RectTransform>();
         plateRt.anchorMin = new Vector2(0.5f, 0.12f);
         plateRt.anchorMax = new Vector2(0.5f, 0.12f);
         plateRt.pivot = new Vector2(0.5f, 0.5f);
         plateRt.sizeDelta = new Vector2(680f, 96f);
-        var plateImg = plateGo.GetComponent<Image>();
-        plateImg.color = new Color(0f, 0f, 0f, 0.78f);
-        plateImg.raycastTarget = false;
+        plateImage = plateGo.GetComponent<Image>();
+        plateImage.color = new Color(0f, 0f, 0f, 0.78f);
+        plateImage.raycastTarget = false;
 
-        // 文字
         var labelGo = new GameObject("Label", typeof(RectTransform));
         labelGo.transform.SetParent(plateGo.transform, false);
         var labelRt = labelGo.GetComponent<RectTransform>();
@@ -80,6 +90,7 @@ public sealed class SceneToast : MonoBehaviour
 
         label = labelGo.AddComponent<TextMeshProUGUI>();
         label.alignment = TextAlignmentOptions.Center;
+        label.enableWordWrapping = true;
         label.enableAutoSizing = true;
         label.fontSizeMin = 22f;
         label.fontSizeMax = 40f;
@@ -89,11 +100,73 @@ public sealed class SceneToast : MonoBehaviour
         if (font != null) label.font = font;
     }
 
-    private void Display(string message, float holdSeconds)
+    private void DisplayCompact(string message, float holdSeconds)
     {
         label.text = message;
+
+        int lineCount = CountLines(message);
+        bool multiLine = lineCount > 1 || message.Length > 28;
+        if (multiLine)
+        {
+            plateRt.anchorMin = new Vector2(0.5f, 0.52f);
+            plateRt.anchorMax = new Vector2(0.5f, 0.52f);
+            plateRt.pivot = new Vector2(0.5f, 0.5f);
+            plateRt.anchoredPosition = Vector2.zero;
+            plateRt.sizeDelta = new Vector2(
+                Mathf.Min(920f, 680f + message.Length * 0.35f),
+                Mathf.Clamp(88f + lineCount * 38f, 96f, 520f));
+            plateImage.color = new Color(0f, 0f, 0f, 0.78f);
+            label.fontSizeMin = 20f;
+            label.fontSizeMax = 32f;
+            label.alignment = TextAlignmentOptions.Top;
+        }
+        else
+        {
+            plateRt.anchorMin = new Vector2(0.5f, 0.12f);
+            plateRt.anchorMax = new Vector2(0.5f, 0.12f);
+            plateRt.pivot = new Vector2(0.5f, 0.5f);
+            plateRt.anchoredPosition = Vector2.zero;
+            plateRt.sizeDelta = new Vector2(680f, 96f);
+            plateImage.color = new Color(0f, 0f, 0f, 0.78f);
+            label.fontSizeMin = 22f;
+            label.fontSizeMax = 40f;
+            label.alignment = TextAlignmentOptions.Center;
+        }
+
         if (activeRoutine != null) StopCoroutine(activeRoutine);
         activeRoutine = StartCoroutine(FadeRoutine(Mathf.Max(0.1f, holdSeconds)));
+    }
+
+    private IEnumerator RunFullWidthBanner(string message, float holdSeconds)
+    {
+        label.text = message;
+
+        int lineCount = CountLines(message);
+        float bannerHeight = Mathf.Clamp(100f + lineCount * 40f, 120f, 420f);
+
+        // 貫穿左右邊的黑底播報條。
+        plateRt.anchorMin = new Vector2(0f, 0.5f);
+        plateRt.anchorMax = new Vector2(1f, 0.5f);
+        plateRt.pivot = new Vector2(0.5f, 0.5f);
+        plateRt.anchoredPosition = Vector2.zero;
+        plateRt.sizeDelta = new Vector2(0f, bannerHeight);
+        plateImage.color = new Color(0f, 0f, 0f, 0.92f);
+
+        label.enableAutoSizing = false;
+        label.fontSize = lineCount > 4 ? 26f : 30f;
+        label.alignment = TextAlignmentOptions.Center;
+        label.lineSpacing = 4f;
+
+        if (activeRoutine != null) StopCoroutine(activeRoutine);
+        yield return FadeRoutine(Mathf.Max(0.5f, holdSeconds));
+    }
+
+    private static int CountLines(string message)
+    {
+        int lineCount = 1;
+        for (int i = 0; i < message.Length; i++)
+            if (message[i] == '\n') lineCount++;
+        return lineCount;
     }
 
     private IEnumerator FadeRoutine(float holdSeconds)

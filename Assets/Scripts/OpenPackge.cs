@@ -11,6 +11,9 @@ public class OpenPackge : MonoBehaviour
     [SerializeField] private int cardsPerPack = 5;
     [SerializeField] private float openTimeoutSeconds = 15f;
 
+    public int PackCost => packCost;
+    public int CardsPerPack => cardsPerPack;
+
     public GameObject cardPrefab;
     public Transform cardPool;
 
@@ -46,8 +49,8 @@ public class OpenPackge : MonoBehaviour
     void Start()
     {
         ClearStaleOpenStateOnLoad();
+        playerData = PlayerData.ResolveCanonical();
         if (cardStore == null) cardStore = Object.FindFirstObjectByType<CardStore>();
-        if (playerData == null) playerData = PlayerData.ResolveCanonical();
         if (playerData != null) playerData.LoadPlayerData();
         if (packVideo != null) packVideo.EnsureUiDoesNotBlockInput();
         EnsureInspectHost();
@@ -90,6 +93,8 @@ public class OpenPackge : MonoBehaviour
 
         playerData.playerCoins -= packCost;
         playerData.RefreshCoins();
+        playerData.SavePlayerData();
+        CardStoreGachaLayoutUi.RefreshCurrencyLabels();
 
         ClearPool();
         StartTimeoutGuard();
@@ -119,6 +124,7 @@ public class OpenPackge : MonoBehaviour
 
             pendingOpen = false;
             reservedCoins = 0;
+            CardStoreGachaLayoutUi.RefreshCurrencyLabels();
         }
         catch (System.Exception ex)
         {
@@ -248,6 +254,8 @@ public class OpenPackge : MonoBehaviour
 
     private bool ValidateRefs()
     {
+        playerData = PlayerData.ResolveCanonical();
+        if (cardStore == null) cardStore = Object.FindFirstObjectByType<CardStore>();
         if (playerData == null || cardStore == null || packVideo == null || cardPrefab == null || cardPool == null)
         {
             Debug.LogError("OpenPackge missing refs: playerData/cardStore/packVideo/cardPrefab/cardPool");
@@ -295,6 +303,7 @@ public class OpenPackge : MonoBehaviour
         {
             playerData.playerCoins += reservedCoins;
             playerData.RefreshCoins();
+            CardStoreGachaLayoutUi.RefreshCurrencyLabels();
             try
             {
                 playerData.SavePlayerData();

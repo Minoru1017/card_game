@@ -11,6 +11,8 @@ public class PlayerData : MonoBehaviour
     public const int MinDeckSlotCount = 5;
     public CardStore CardStore;
     public int playerCoins;
+    /// <summary>寶石：CD 光碟抽選專用（與金幣分池）。新檔預設 300。</summary>
+    public int playerGems;
     /// <summary>Owned cards: key = runtime id (monster ≥0, spell &lt;0 via <see cref="DeckCardId"/>).</summary>
     public readonly Dictionary<int, int> playerCollection = new Dictionary<int, int>();
     public int deckSlotCount = 5;
@@ -25,6 +27,7 @@ public class PlayerData : MonoBehaviour
     /// <summary>怪物牌熟練度勝場（key = monster id）。</summary>
     private readonly Dictionary<int, CardProficiencyWins> cardProficiencyWins = new Dictionary<int, CardProficiencyWins>();
     private readonly List<string> cachedOtherSlotRows = new List<string>(128);
+    private bool saveHydratedFromDisk;
 
     [Header("UI")]
     public TextMeshProUGUI coinsText;
@@ -58,6 +61,48 @@ public class PlayerData : MonoBehaviour
         return any;
     }
 
+    private const string FallbackHostName = "TutorialPlotPlayerDataHost";
+    private static GameObject fallbackHost;
+
+    /// <summary>已成功自 CSV 載入金幣／寶石等欄位；未 hydrate 前不得整檔 Save。</summary>
+    public bool IsSaveHydratedFromDisk => saveHydratedFromDisk;
+
+    /// <summary>
+    /// 需寫入存檔時取得可寫入的 <see cref="PlayerData"/>。
+    /// 大廳／劇情等場景可能沒有 DataManager，此時建立常駐 fallback 並自 CSV 載入。
+    /// </summary>
+    public static PlayerData EnsureWritable()
+    {
+        PlayerData canonical = ResolveCanonical();
+        if (canonical != null)
+        {
+            if (!canonical.saveHydratedFromDisk)
+                canonical.LoadPlayerData();
+            return canonical;
+        }
+
+        if (fallbackHost == null)
+        {
+            fallbackHost = GameObject.Find(FallbackHostName);
+            if (fallbackHost == null)
+            {
+                fallbackHost = new GameObject(FallbackHostName);
+                UnityEngine.Object.DontDestroyOnLoad(fallbackHost);
+            }
+        }
+
+        PlayerData pd = fallbackHost.GetComponent<PlayerData>();
+        if (pd == null)
+            pd = fallbackHost.AddComponent<PlayerData>();
+
+        if (!pd.saveHydratedFromDisk)
+            pd.LoadPlayerData();
+        return pd;
+    }
+
+    /// <summary>取消延遲存檔並寫入；不會在已 hydrate 的記憶體上重載 CSV。</summary>
+    public static PlayerData ResolveForSaveWrite() => EnsureWritable();
+
     void Awake()
     {
         if (CardStore != null) CardStore.LoadCardData();
@@ -66,6 +111,7 @@ public class PlayerData : MonoBehaviour
             EnsureMinimumDeckSlotCount();
             LoadPlayerData();
             RefreshCoins();
+            RefreshGems();
         }
     }
 
@@ -105,6 +151,29 @@ public class PlayerData : MonoBehaviour
     {
         if (coinsText != null)
             coinsText.text = GetCoinsDisplayText();
+    }
+
+    public void RefreshGems()
+    {
+        // 部分場景共用 coinsText；有獨立 gems 欄位時可再擴充 SerializeField。
+    }
+
+    public string GetGemsDisplayText() => playerGems.ToString();
+
+    public bool TrySpendGems(int amount)
+    {
+        if (amount <= 0) return true;
+        if (playerGems < amount) return false;
+        playerGems -= amount;
+        RefreshGems();
+        return true;
+    }
+
+    public void AddGems(int amount)
+    {
+        if (amount <= 0) return;
+        playerGems += amount;
+        RefreshGems();
     }
 
     public string GetCoinsDisplayText()
@@ -270,7 +339,7 @@ public class PlayerData : MonoBehaviour
 
         EnsureMinimumDeckSlotCount();
         EnsureDeckSlotMaps();
-        ValuablesVaultState.InvalidateAllCaches();
+        saveHydratedFromDisk = false;
 
         playerCollection.Clear();
         for (int s = 0; s < deckSlotMaps.Length; s++)
@@ -284,6 +353,8 @@ public class PlayerData : MonoBehaviour
         {
             playerCoins = 100;
             totalCoins = playerCoins;
+            playerGems = 300;
+            saveHydratedFromDisk = true;
             SavePlayerData();
             return;
         }
@@ -312,6 +383,10 @@ public class PlayerData : MonoBehaviour
 
             if (!TryApplyLoadedPlayerDataRows(dataRow)) continue;
 
+            PlayerBirdDuelCdState.EnsureNewPlayerDefaults(activePlayerSlot);
+            saveHydratedFromDisk = true;
+            FinishLoadVaultCacheRefresh();
+
             Debug.Log("Load from persistent: " + candidatePath);
             Debug.Log("Loaded coins=" + playerCoins);
             return;
@@ -320,7 +395,18 @@ public class PlayerData : MonoBehaviour
         Debug.LogError("PlayerData: all save candidates failed to load; recreating defaults.");
         playerCoins = 100;
         totalCoins = playerCoins;
+        playerGems = 300;
+        PlayerBirdDuelCdState.EnsureNewPlayerDefaults(activePlayerSlot);
+        saveHydratedFromDisk = true;
         SavePlayerData();
+    }
+
+    /// <summary>CSV 已載入後再處理貴重品庫 dirty，避免以 0 金幣／寶石覆寫存檔。</summary>
+    private void FinishLoadVaultCacheRefresh()
+    {
+        if (ValuablesVaultState.HasPendingChanges)
+            SavePlayerData();
+        ValuablesVaultState.InvalidateAllCaches();
     }
 
     private bool TryApplyLoadedPlayerDataRows(string[] dataRow)
@@ -329,6 +415,7 @@ public class PlayerData : MonoBehaviour
         {
             activePlayerSlot = Mathf.Clamp(ReadActiveSlotFromRows(dataRow), 1, MaxPlayerSlots);
             cachedOtherSlotRows.Clear();
+            PlayerBirdDuelCdState.ClearAllCaches();
             bool hasDeckSlotData = false;
             bool hasSlotRows = false;
 
@@ -375,6 +462,15 @@ public class PlayerData : MonoBehaviour
             if (rowArray.Length < 2) return;
             playerCoins = int.Parse(rowArray[1].Trim());
             totalCoins = playerCoins;
+        }
+        else if (rowArray[0] == "gems")
+        {
+            if (rowArray.Length < 2) return;
+            playerGems = int.Parse(rowArray[1].Trim());
+        }
+        else if (rowArray[0] == "bird_cd")
+        {
+            PlayerBirdDuelCdState.ParseScopedRow(activePlayerSlot, rowArray);
         }
         else if (rowArray[0] == "card")
         {
@@ -594,6 +690,7 @@ public class PlayerData : MonoBehaviour
 
         var current = new List<string>();
         current.Add($"slot,{activePlayerSlot},coins,{playerCoins}");
+        current.Add($"slot,{activePlayerSlot},gems,{playerGems}");
         current.Add($"slot,{activePlayerSlot},selected_deck_slot,{selectedDeckSlot}");
         current.Add($"slot,{activePlayerSlot},slot_name,{SanitizeSlotName(activePlayerSlotName, activePlayerSlot)}");
 
@@ -643,6 +740,8 @@ public class PlayerData : MonoBehaviour
             current.Add($"slot,{activePlayerSlot},proficiency,m,{kv.Key},{progressText},{kv.Value.winsNormalDifficulty}");
         }
 
+        PlayerBirdDuelCdState.AppendSaveRows(activePlayerSlot, current);
+
         for (int i = 0; i < current.Count; i++) datas.Add(current[i]);
         EnsureAllSlotContainers(datas);
         for (int pi = 0; pi < preservedActiveSlotExtraRows.Count; pi++)
@@ -673,6 +772,8 @@ public class PlayerData : MonoBehaviour
         switch (slotKey)
         {
             case "coins":
+            case "gems":
+            case "bird_cd":
             case "selected_deck_slot":
             case "slot_name":
             case "card":
@@ -721,6 +822,7 @@ public class PlayerData : MonoBehaviour
     private static void EnsureAllSlotContainers(List<string> rows)
     {
         bool[] hasSlotCoins = new bool[MaxPlayerSlots + 1];
+        bool[] hasSlotGems = new bool[MaxPlayerSlots + 1];
         bool[] hasSlotSelect = new bool[MaxPlayerSlots + 1];
         bool[] hasSlotName = new bool[MaxPlayerSlots + 1];
         for (int i = 0; i < rows.Count; i++)
@@ -732,12 +834,14 @@ public class PlayerData : MonoBehaviour
             if (slot < 1 || slot > MaxPlayerSlots) continue;
             string key = c[2].Trim();
             if (key == "coins") hasSlotCoins[slot] = true;
+            else if (key == "gems") hasSlotGems[slot] = true;
             else if (key == "selected_deck_slot") hasSlotSelect[slot] = true;
             else if (key == "slot_name") hasSlotName[slot] = true;
         }
         for (int slot = 1; slot <= MaxPlayerSlots; slot++)
         {
             if (!hasSlotCoins[slot]) rows.Add($"slot,{slot},coins,100");
+            if (!hasSlotGems[slot]) rows.Add($"slot,{slot},gems,300");
             if (!hasSlotSelect[slot]) rows.Add($"slot,{slot},selected_deck_slot,0");
             if (!hasSlotName[slot]) rows.Add($"slot,{slot},slot_name,玩家{slot}");
         }

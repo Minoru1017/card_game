@@ -54,7 +54,6 @@ public class PackVideoController : MonoBehaviour
         if (videoPlayer.frame <= 0)
             return;
 
-        // loopPointReached �b���� Android / iOS �˸m�W��Ĳ�o�A��H����i�ק@���ƴ��C
         double length = videoPlayer.length;
         if (length > 0.5 && videoPlayer.time >= length - 0.08)
             SignalFinished();
@@ -78,11 +77,11 @@ public class PackVideoController : MonoBehaviour
         finishSignaled = true;
         if (videoPlayer != null && videoPlayer.isPlaying)
             videoPlayer.Stop();
-        SetOpenButtonInteractable(true);
+        SetPackUiLocked(false);
         HideVideoUi();
     }
 
-    /// <summary>�������v���h raycast�A���������b���񪺵e���C</summary>
+    /// <summary>確保未播放時不擋住新版面按鈕。</summary>
     public void EnsureUiDoesNotBlockInput()
     {
         CacheVideoRawImage();
@@ -95,7 +94,7 @@ public class PackVideoController : MonoBehaviour
     private IEnumerator CoPlayOnce()
     {
         finishSignaled = false;
-        SetOpenButtonInteractable(false);
+        SetPackUiLocked(true);
         ShowVideoUi();
 
         videoPlayer.isLooping = false;
@@ -148,7 +147,7 @@ public class PackVideoController : MonoBehaviour
 
         finishSignaled = true;
         HideVideoUi();
-        SetOpenButtonInteractable(true);
+        SetPackUiLocked(false);
         Finished?.Invoke();
     }
 
@@ -168,6 +167,7 @@ public class PackVideoController : MonoBehaviour
         CacheVideoRawImage();
         if (videoUIRoot != null)
             videoUIRoot.SetActive(false);
+        CardStoreGachaLayoutUi.RestorePackVideoLayer();
     }
 
     private void ShowVideoUi()
@@ -177,21 +177,11 @@ public class PackVideoController : MonoBehaviour
             return;
 
         videoUIRoot.SetActive(true);
-        videoUIRoot.transform.SetAsLastSibling();
+        CardStoreGachaLayoutUi.BringPackVideoToFront();
     }
 
-    private static void SetOpenButtonInteractable(bool interactable)
+    private static void SetPackUiLocked(bool locked)
     {
-        GameObject openGo = GameObject.Find("Open");
-        if (openGo == null)
-            return;
-
-        Button btn = openGo.GetComponent<Button>();
-        if (btn != null)
-            btn.interactable = interactable;
-
-        Image img = openGo.GetComponent<Image>();
-        if (img != null)
-            img.raycastTarget = interactable;
+        CardStoreGachaLayoutUi.SetCoinPoolInteractable(!locked);
     }
 }

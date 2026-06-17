@@ -77,5 +77,6 @@ MonoBehaviour:
   hallBgm: {fileID: 8300000, guid: c36f1288221619e4dac3e8ce9a959450, type: 3}
   buildbeckBgm: {fileID: 8300000, guid: 501107cad9594654e90d3dbcf43664b8, type: 3}
   cardStoreBgm: {fileID: 8300000, guid: c0514e72bbb7ab043afa6b1e3cc8cd67, type: 3}
+  birdDuelBgm: {fileID: 8300000, guid: 64691ed4e38b63446bc18cf54dcca6aa, type: 3}
   menuClickSfx: {fileID: 8300000, guid: 8dbfc0c4a49b96544bfa00b4c16ac70f, type: 3}
   typingSfx: {fileID: 8300000, guid: 0f8f909b48a801f438799c3c19bafda9, type: 3}

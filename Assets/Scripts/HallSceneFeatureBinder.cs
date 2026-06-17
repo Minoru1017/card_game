@@ -82,6 +82,9 @@ public class HallSceneFeatureBinder : MonoBehaviour
         string coinsText = playerData != null
             ? playerData.GetCoinsDisplayText()
             : (PlayerData.TryGetActiveSlotCoinsFromSave(out int coinsFromSave) ? coinsFromSave.ToString() : "0");
+        string gemsText = playerData != null
+            ? playerData.GetGemsDisplayText()
+            : "0";
         int selectedDeckCount = playerData != null ? playerData.GetSelectedDeckTotalCount() : 0;
 
         TextMeshProUGUI[] labels = resourceArea.GetComponentsInChildren<TextMeshProUGUI>(true);
@@ -92,6 +95,8 @@ public class HallSceneFeatureBinder : MonoBehaviour
             string normalized = t.text.Replace("：", ":");
             if (normalized.Contains("金幣") || normalized.Contains("Coins"))
                 t.text = "金幣: " + coinsText;
+            else if (normalized.Contains("寶石") || normalized.Contains("Gems"))
+                t.text = "寶石: " + gemsText;
             else if (normalized.Contains("牌組張數") || normalized.Contains("Deck"))
                 t.text = "牌組張數: " + selectedDeckCount;
         }

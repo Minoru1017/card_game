@@ -71,7 +71,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         }
 
         battleResultText = txtObj.GetComponent<Text>();
-        battleResultText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        battleResultText.font = UiFontResolver.ResolveLegacyUiFont();
         battleResultText.fontSize = useDebugPanelLayout ? Mathf.RoundToInt(18 * DebugUiChromeMul) : 56;
         battleResultText.alignment = TextAnchor.MiddleCenter;
         battleResultText.horizontalOverflow = HorizontalWrapMode.Wrap;
@@ -621,6 +621,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         EnsureBattleHistoryOverlay();
         if (battleHistoryOverlayRoot == null || battleHistoryContentRt == null) return;
 
+        ApplyBattleHistoryDialogScreenBounds();
         BuildBattleHistoryRowsFromEntries(battleManager.GetBattleHistoryEntriesNewestFirst());
         battleHistoryOverlayRoot.SetActive(true);
         battleHistoryOverlayRoot.transform.SetAsLastSibling();
@@ -824,6 +825,22 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         return s;
     }
 
+    private static Vector2 ComputeBattleHistoryDialogSize(float scale)
+    {
+        const float marginW = 32f;
+        const float marginH = 48f;
+        // 先依倍率放大，再 clamp 至螢幕內（不可先 clamp 再乘 scale，否則會超出畫面）。
+        return new Vector2(
+            Mathf.Min(1020f * scale, Mathf.Max(280f, Screen.width - marginW)),
+            Mathf.Min(780f * scale, Mathf.Max(240f, Screen.height - marginH)));
+    }
+
+    private void ApplyBattleHistoryDialogScreenBounds()
+    {
+        if (battleHistoryDialogRt == null) return;
+        battleHistoryDialogRt.sizeDelta = ComputeBattleHistoryDialogSize(BattleHistoryDialogScale);
+    }
+
     private void EnsureBattleHistoryOverlay()
     {
         if (battleHistoryOverlayRoot != null || uiRoot == null) return;
@@ -848,9 +865,8 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         dlgRt.anchorMax = new Vector2(0.5f, 0.5f);
         dlgRt.pivot = new Vector2(0.5f, 0.5f);
         dlgRt.anchoredPosition = Vector2.zero;
-        dlgRt.sizeDelta = new Vector2(
-            Mathf.Min(1020f, Screen.width - 32f) * s,
-            Mathf.Min(780f, Screen.height - 48f) * s);
+        dlgRt.sizeDelta = ComputeBattleHistoryDialogSize(s);
+        battleHistoryDialogRt = dlgRt;
         Image dlgBg = dlg.GetComponent<Image>();
         dlgBg.color = BattleUiColors.PanelMilk;
         dlgBg.raycastTarget = true;
@@ -890,7 +906,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         closeLblRt.offsetMin = Vector2.zero;
         closeLblRt.offsetMax = Vector2.zero;
         Text closeTxt = closeLbl.GetComponent<Text>();
-        closeTxt.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        closeTxt.font = UiFontResolver.ResolveLegacyUiFont();
         closeTxt.text = "關閉";
         closeTxt.fontSize = Mathf.RoundToInt(22f * s);
         closeTxt.alignment = TextAnchor.MiddleCenter;
@@ -1170,7 +1186,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
             nameRt.anchoredPosition = new Vector2(0f, nameBottomY);
             nameRt.sizeDelta = new Vector2(0f, Mathf.Round(nameFontSize * 1.15f));
             Text nameTxt = nameObj.GetComponent<Text>();
-            nameTxt.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            nameTxt.font = UiFontResolver.ResolveLegacyUiFont();
             nameTxt.fontSize = nameFontSize;
             nameTxt.fontStyle = FontStyle.Bold;
             nameTxt.alignment = TextAnchor.MiddleCenter;
@@ -1284,7 +1300,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         rt.anchoredPosition = Vector2.zero;
         rt.sizeDelta = new Vector2(0f, 120f);
         Text txt = placeholder.GetComponent<Text>();
-        txt.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        txt.font = UiFontResolver.ResolveLegacyUiFont();
         txt.fontSize = 28;
         txt.alignment = TextAnchor.MiddleCenter;
         txt.color = BattleUiColors.InkSoft;
@@ -1465,7 +1481,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         titleRect.offsetMin = new Vector2(24f, 0f);
         titleRect.offsetMax = new Vector2(-24f, -4f);
         endBattleTitleText = titleObj.GetComponent<Text>();
-        endBattleTitleText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        endBattleTitleText.font = UiFontResolver.ResolveLegacyUiFont();
         endBattleTitleText.fontSize = Mathf.RoundToInt(EndBattlePx(64f));
         endBattleTitleText.fontStyle = FontStyle.Bold;
         endBattleTitleText.alignment = TextAnchor.MiddleCenter;
@@ -1566,7 +1582,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         titleRt.offsetMin = new Vector2(18f, 0f);
         titleRt.offsetMax = new Vector2(-12f, -4f);
         Text titleTxt = titleObj.GetComponent<Text>();
-        titleTxt.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        titleTxt.font = UiFontResolver.ResolveLegacyUiFont();
         titleTxt.fontSize = Mathf.RoundToInt(EndBattlePx(36f));
         titleTxt.fontStyle = FontStyle.Bold;
         titleTxt.alignment = TextAnchor.MiddleLeft;
@@ -1581,7 +1597,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         hintRt.offsetMin = new Vector2(18f, 4f);
         hintRt.offsetMax = new Vector2(-12f, 0f);
         Text hintTxt = hintObj.GetComponent<Text>();
-        hintTxt.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        hintTxt.font = UiFontResolver.ResolveLegacyUiFont();
         hintTxt.fontSize = Mathf.RoundToInt(EndBattlePx(30f));
         hintTxt.fontStyle = FontStyle.Bold;
         hintTxt.alignment = TextAnchor.MiddleLeft;
@@ -1641,7 +1657,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         textRect.offsetMin = Vector2.zero;
         textRect.offsetMax = Vector2.zero;
         Text t = textObj.GetComponent<Text>();
-        t.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        t.font = UiFontResolver.ResolveLegacyUiFont();
         t.text = label;
         t.alignment = TextAnchor.MiddleCenter;
         t.fontSize = Mathf.RoundToInt(EndBattlePx(30f));

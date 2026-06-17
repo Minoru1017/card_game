@@ -18,28 +18,15 @@ public static class ValuablesVaultFonts
 
     public static TMP_FontAsset ResolveUIFont()
     {
-        TMP_FontAsset noto = SettingsUiFonts.ResolveParameterDetailsFont();
-        if (noto != null && SupportsVaultGlyphs(noto))
-            return noto;
-
-        TMP_FontAsset[] fonts = Resources.FindObjectsOfTypeAll<TMP_FontAsset>();
-        for (int i = 0; i < fonts.Length; i++)
-        {
-            TMP_FontAsset font = fonts[i];
-            if (font == null || string.IsNullOrEmpty(font.name)) continue;
-            string name = font.name;
-            if (name.IndexOf("NotoSansTC", System.StringComparison.OrdinalIgnoreCase) < 0 &&
-                name.IndexOf("Noto Sans TC", System.StringComparison.OrdinalIgnoreCase) < 0)
-                continue;
-            if (!SupportsVaultGlyphs(font)) continue;
+        TMP_FontAsset font = SettingsUiFonts.ResolveParameterDetailsFont();
+        if (font != null && SupportsVaultGlyphs(font))
             return font;
-        }
 
-        TMP_FontAsset buildbeck = BuildbeckUiFonts.ResolveBuildbeckButtonFont();
-        if (buildbeck != null && SupportsVaultGlyphs(buildbeck))
-            return buildbeck;
+        font = UiFontResolver.ResolveUiFont();
+        if (font != null && SupportsVaultGlyphs(font))
+            return font;
 
-        return noto != null ? noto : TMP_Settings.defaultFontAsset;
+        return font;
     }
 
     public static bool SupportsVaultGlyphs(TMP_FontAsset font) =>

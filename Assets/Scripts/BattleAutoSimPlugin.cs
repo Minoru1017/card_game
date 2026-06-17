@@ -523,7 +523,7 @@ public static class BattleAutoSimPlugin
             wrLblRt.offsetMin = new Vector2(8f, 2f);
             wrLblRt.offsetMax = new Vector2(-8f, -2f);
             TextMeshProUGUI wrTmp = wrLabel.GetComponent<TextMeshProUGUI>();
-            wrTmp.font = cachedUiFont != null ? cachedUiFont : TMP_Settings.defaultFontAsset;
+            wrTmp.font = cachedUiFont != null ? cachedUiFont : UiFontResolver.ResolveUiFont();
             wrTmp.fontSize = embedded ? 34f : 44f;
             wrTmp.fontStyle = FontStyles.Bold;
             wrTmp.alignment = TextAlignmentOptions.Center;
@@ -553,7 +553,7 @@ public static class BattleAutoSimPlugin
             lblRt.offsetMin = Vector2.zero;
             lblRt.offsetMax = Vector2.zero;
             TextMeshProUGUI lbl = btnLabel.GetComponent<TextMeshProUGUI>();
-            lbl.font = cachedUiFont != null ? cachedUiFont : TMP_Settings.defaultFontAsset;
+            lbl.font = cachedUiFont != null ? cachedUiFont : UiFontResolver.ResolveUiFont();
             lbl.fontSize = embedded ? 30f : 38f;
             lbl.alignment = TextAlignmentOptions.Center;
             lbl.color = Color.white;
@@ -676,7 +676,7 @@ public static class BattleAutoSimPlugin
             rt.anchoredPosition = anchoredPos;
             rt.sizeDelta = sizeDelta;
             TextMeshProUGUI tmp = go.GetComponent<TextMeshProUGUI>();
-            tmp.font = font != null ? font : TMP_Settings.defaultFontAsset;
+            tmp.font = font != null ? font : UiFontResolver.ResolveUiFont();
             tmp.richText = true;
             tmp.enableWordWrapping = true;
             tmp.fontSize = fontSize;
@@ -698,7 +698,7 @@ public static class BattleAutoSimPlugin
                 }
             }
 
-            return TMP_Settings.defaultFontAsset;
+            return UiFontResolver.ResolveUiFont();
         }
 
         private static bool IsPlayerSpellUnplayableNow(BattleSimulationManager b, SpellCard sp)

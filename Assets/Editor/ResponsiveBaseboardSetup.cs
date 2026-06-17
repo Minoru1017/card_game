@@ -9,7 +9,7 @@ using UnityEngine.UI;
 /// 建立中央保險區（SafeArea_1440），並完成接線與貼高度設定。
 ///
 /// 選單：Tools/UI/Setup Responsive Baseboards (selected or active Canvas)
-/// 底板容器內請自行放入底板美術（Image，anchor 設 stretch 充滿容器）。
+/// 底板容器內 Image 由 <see cref="ResponsiveBaseboardLayout"/> 自動套用 base plate（左右共用）。
 /// </summary>
 public static class ResponsiveBaseboardSetup
 {
@@ -62,7 +62,7 @@ public static class ResponsiveBaseboardSetup
 
         Debug.Log(
             $"ResponsiveBaseboardSetup: 已在 '{canvas.name}' 佈署底板（match=1 貼高度）。" +
-            "請在 Baseboard_Left / Baseboard_Right 內放入底板美術（Image，anchor 設 stretch）。");
+            "base plate 將由 ResponsiveBaseboardLayout 從 UiSpriteLibrary 自動套用。");
     }
 
     private static Canvas ResolveCanvas()

@@ -13,29 +13,17 @@ public static class SettingsUiFonts
         if (cachedParameterFont != null && SupportsCjk(cachedParameterFont))
             return cachedParameterFont;
 
-        TMP_FontAsset noto = FindNotoSansTcFont();
-        if (noto != null)
+        TMP_FontAsset font = UiFontResolver.ResolveUiFont();
+        if (font != null && SupportsCjk(font))
         {
-            cachedParameterFont = noto;
+            cachedParameterFont = font;
             return cachedParameterFont;
         }
 
-        TMP_FontAsset fromLabels = FindFontOnSceneLabels();
-        if (fromLabels != null)
-        {
-            cachedParameterFont = fromLabels;
-            return cachedParameterFont;
-        }
-
-        TMP_FontAsset buildbeck = BuildbeckUiFonts.ResolveBuildbeckButtonFont();
-        if (buildbeck != null && SupportsCjk(buildbeck))
-        {
-            cachedParameterFont = buildbeck;
-            return cachedParameterFont;
-        }
-
-        Debug.LogWarning("SettingsUiFonts: 找不到支援中文的 TMP 字型，Parameter details 可能無法顯示中文。");
-        return null;
+        cachedParameterFont = BuildbeckUiFonts.ResolveCjkFont(CjkProbe);
+        if (cachedParameterFont == null)
+            Debug.LogWarning("SettingsUiFonts: 找不到支援中文的 TMP 字型，Parameter details 可能無法顯示中文。");
+        return cachedParameterFont;
     }
 
     public static void ApplyTo(TextMeshProUGUI tmp)
@@ -58,42 +46,4 @@ public static class SettingsUiFonts
 
     private static bool SupportsCjk(TMP_FontAsset font) =>
         font != null && BuildbeckUiFonts.FontSupportsText(font, CjkProbe);
-
-    private static TMP_FontAsset FindNotoSansTcFont()
-    {
-        // 直接引用優先：UiFontLibrary 註冊表的 CJK 主字型。
-        UiFontLibrary library = UiFontLibrary.Instance;
-        if (library != null && library.CjkFont != null && SupportsCjk(library.CjkFont))
-            return library.CjkFont;
-
-        TMP_FontAsset[] fonts = Resources.FindObjectsOfTypeAll<TMP_FontAsset>();
-        for (int i = 0; i < fonts.Length; i++)
-        {
-            TMP_FontAsset font = fonts[i];
-            if (font == null) continue;
-            string name = font.name;
-            if (string.IsNullOrEmpty(name)) continue;
-            if (name.IndexOf("NotoSansTC", System.StringComparison.OrdinalIgnoreCase) < 0 &&
-                name.IndexOf("Noto Sans TC", System.StringComparison.OrdinalIgnoreCase) < 0)
-                continue;
-            if (!SupportsCjk(font)) continue;
-            return font;
-        }
-
-        return null;
-    }
-
-    private static TMP_FontAsset FindFontOnSceneLabels()
-    {
-        TextMeshProUGUI[] labels = Object.FindObjectsByType<TextMeshProUGUI>(FindObjectsSortMode.None);
-        for (int i = 0; i < labels.Length; i++)
-        {
-            TextMeshProUGUI label = labels[i];
-            if (label == null || label.font == null) continue;
-            if (!SupportsCjk(label.font)) continue;
-            return label.font;
-        }
-
-        return null;
-    }
 }

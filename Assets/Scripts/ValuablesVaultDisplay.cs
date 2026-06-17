@@ -16,6 +16,16 @@ public static class ValuablesVaultDisplay
         return name;
     }
 
+    public static string ResolveCdFragmentWalletLabel(string cdId, int quantity)
+    {
+        if (string.IsNullOrWhiteSpace(cdId) || quantity <= 0)
+            return string.Empty;
+
+        BirdDuelCdProfile profile = BirdDuelCdCatalog.Get(cdId);
+        string name = profile != null ? profile.DisplayName : cdId;
+        return name + " 碎片" + ValuablesVaultUiCopy.FormatQuantitySuffix(quantity);
+    }
+
     public static string ResolveDetailLine(int definitionId, int quantity)
     {
         if (definitionId <= 0)
@@ -64,17 +74,27 @@ public static class ValuablesVaultDisplay
                 false);
         }
 
+        if (ValuablesVaultCatalog.TryResolveCdIdFromDiscDefinition(definitionId, out string discCdId))
+            return ResolveCdDiscInfoPanel(discCdId, slotLine, definitionId, quantity);
+
+        if (ValuablesVaultCatalog.TryResolveCdIdFromFragmentDefinition(definitionId, out string cdId))
+            return ResolveCdFragmentInfoPanel(cdId, quantity, slotLine, definitionId);
+
         Card card = ResolveCard(definitionId);
         string name = card != null && !string.IsNullOrWhiteSpace(card.cardName)
             ? card.cardName.Trim()
             : "貴重品 #" + definitionId;
 
-        string body = "編號  " + definitionId;
+        string body = string.Empty;
         if (card != null)
-            body += "\n稀有度  " + card.rarity;
+            body = card.rarity + "  稀有度";
         if (quantity > 1)
-            body += "\n數量  " + quantity;
-        body += ValuablesVaultUiCopy.ReservedBodySuffix;
+            body += (body.Length > 0 ? "\n" : string.Empty) + "數量  " + quantity;
+        string gemLine = ValuablesVaultDiscard.FormatGemRefundLine(definitionId, quantity);
+        if (!string.IsNullOrEmpty(gemLine))
+            body += (body.Length > 0 ? "\n" : string.Empty) + gemLine;
+        else
+            body += (body.Length > 0 ? "\n" : string.Empty) + "丟棄返還至收藏";
 
         return new InfoPanelCopy(name, body, slotLine, true);
     }
@@ -93,6 +113,12 @@ public static class ValuablesVaultDisplay
         if (definitionId <= 0)
             return null;
 
+        if (ValuablesVaultCatalog.TryResolveCdIdFromDiscDefinition(definitionId, out string discCdId))
+            return ResolveCdDiscIcon(discCdId);
+
+        if (ValuablesVaultCatalog.TryResolveCdIdFromFragmentDefinition(definitionId, out string cdId))
+            return ResolveCdFragmentIcon(cdId);
+
         PlayerData pd = PlayerData.ResolveCanonical();
         CardStore store = pd != null ? pd.CardStore : null;
         if (store == null)
@@ -110,6 +136,22 @@ public static class ValuablesVaultDisplay
 
     private static string ResolveBaseName(int definitionId)
     {
+        if (ValuablesVaultCatalog.TryResolveCdIdFromDiscDefinition(definitionId, out string discCdId))
+        {
+            BirdDuelCdProfile profile = BirdDuelCdCatalog.Get(discCdId);
+            if (profile != null && !string.IsNullOrWhiteSpace(profile.DisplayName))
+                return profile.DisplayName.Trim();
+            return discCdId;
+        }
+
+        if (ValuablesVaultCatalog.TryResolveCdIdFromFragmentDefinition(definitionId, out string cdId))
+        {
+            BirdDuelCdProfile profile = BirdDuelCdCatalog.Get(cdId);
+            if (profile != null && !string.IsNullOrWhiteSpace(profile.DisplayName))
+                return profile.DisplayName.Trim() + " 碎片";
+            return cdId + " 碎片";
+        }
+
         PlayerData pd = PlayerData.ResolveCanonical();
         CardStore store = pd != null ? pd.CardStore : null;
         if (store == null)
@@ -122,5 +164,79 @@ public static class ValuablesVaultDisplay
         }
 
         return "貴重品 #" + definitionId;
+    }
+
+    private static InfoPanelCopy ResolveCdDiscInfoPanel(
+        string cdId,
+        string slotLine,
+        int definitionId,
+        int quantity)
+    {
+        BirdDuelCdProfile profile = BirdDuelCdCatalog.Get(cdId);
+        string name = profile != null && !string.IsNullOrWhiteSpace(profile.DisplayName)
+            ? profile.DisplayName.Trim()
+            : cdId;
+
+        string body = profile != null
+            ? profile.Rarity + "  ·  " + FactionLabel(profile.Faction)
+            : string.Empty;
+        string gemLine = ValuablesVaultDiscard.FormatGemRefundLine(definitionId, quantity);
+        if (!string.IsNullOrEmpty(gemLine))
+            body += (body.Length > 0 ? "\n" : string.Empty) + gemLine;
+
+        return new InfoPanelCopy(name, body, slotLine, true);
+    }
+
+    private static string FactionLabel(BirdDuelCdFaction faction)
+    {
+        switch (faction)
+        {
+            case BirdDuelCdFaction.King: return "國王";
+            case BirdDuelCdFaction.Church: return "教會";
+            default: return "通用";
+        }
+    }
+
+    private static UnityEngine.Sprite ResolveCdDiscIcon(string cdId) => ResolveCdFragmentIcon(cdId);
+
+    private static InfoPanelCopy ResolveCdFragmentInfoPanel(
+        string cdId,
+        int quantity,
+        string slotLine,
+        int definitionId)
+    {
+        BirdDuelCdProfile profile = BirdDuelCdCatalog.Get(cdId);
+        string name = profile != null && !string.IsNullOrWhiteSpace(profile.DisplayName)
+            ? profile.DisplayName.Trim() + " 碎片"
+            : cdId + " 碎片";
+
+        string body = profile != null ? profile.Rarity + "  稀有度" : string.Empty;
+        if (quantity > 1)
+            body += (body.Length > 0 ? "\n" : string.Empty) + "數量  " + quantity;
+        string gemLine = ValuablesVaultDiscard.FormatGemRefundLine(definitionId, quantity);
+        if (!string.IsNullOrEmpty(gemLine))
+            body += (body.Length > 0 ? "\n" : string.Empty) + gemLine;
+
+        return new InfoPanelCopy(name, body, slotLine, true);
+    }
+
+    private static UnityEngine.Sprite ResolveCdFragmentIcon(string cdId)
+    {
+        UnityEngine.Sprite cover = BirdDuelCdIcons.Resolve(cdId);
+        if (cover != null)
+            return cover;
+
+        BirdDuelCdProfile profile = BirdDuelCdCatalog.Get(cdId);
+        UiSpriteLibrary library = UiSpriteLibrary.Instance;
+        if (library == null || profile == null)
+            return null;
+
+        CardRarity cardRarity = profile.Rarity switch
+        {
+            BirdDuelCdRarity.R => CardRarity.R,
+            BirdDuelCdRarity.SR => CardRarity.SR,
+            _ => CardRarity.N,
+        };
+        return library.GetRarityFrame(cardRarity);
     }
 }

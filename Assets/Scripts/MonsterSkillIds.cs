@@ -7,4 +7,5 @@ public static class MonsterSkillIds
     public const int Nun = 17;
     public const int Queen = 12;
     public const int King = 13;
+    public const int SanctumKnight = 18;
 }

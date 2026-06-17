@@ -24,5 +24,5 @@ public static class HarborTrainingBattleCopy
         "<color=#43573A>簡單級前段較緩 約 10 回合內收尾 普通級可練可過、節奏略升 仍宜保留治療與拆場法術 穩血線再反擊</color>";
     public const string PreviewRightTitleRich = "<b>敵方特色</b>";
     public const string PreviewRightDetailRich =
-        "<color=#43573A><b>快攻型</b> 傾向早出場怪與直傷 壓迫感強 需善用防守與法術化解</color>";
+        "<color=#43573A><b>熱血同學</b>（<b>快攻型</b>） 傾向早出場怪與直傷 壓迫感強 需善用防守與法術化解</color>";
 }

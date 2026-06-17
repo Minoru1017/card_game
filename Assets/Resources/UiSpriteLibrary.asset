@@ -17,6 +17,7 @@ MonoBehaviour:
   coachSerious: {fileID: 0}
   coachEncourage: {fileID: 0}
   returnButton: {fileID: -995779289211046693, guid: cdfc494c6c52f6e4ea68f7181aaf981d, type: 3}
+  responsiveBasePlate: {fileID: -6612584489759726694, guid: a8234a5a361a2a94f9aee1ed630a60f4, type: 3}
   harborBayBackground: {fileID: 7635544513007904724, guid: 98d475c23bdfa884692c1197a89fa39e, type: 3}
   battlePreviewPanel: {fileID: 7725769104599324719, guid: 0264243783b371346b79b739c14d58a1, type: 3}
   difficultyIntro: {fileID: 7523385733433441043, guid: a4d7782115db81341916a073e5c41300, type: 3}
@@ -29,3 +30,4 @@ MonoBehaviour:
   rarityFrameSr: {fileID: -7324653253327430671, guid: d8b32cef90515dfb9533445566778899, type: 3}
   rarityFrameSsr: {fileID: 1014833402724443373, guid: e9c43df90626ecf06445566788990001, type: 3}
   rarityFrameUr: {fileID: 1460595860699020046, guid: a903bc714deb46389133445566778899, type: 3}
+  birdDuelCdHarborPractice: {fileID: -1851693404726464028, guid: 32bd7c9bdeb891b4384b7e82c6f02fe5, type: 3}
