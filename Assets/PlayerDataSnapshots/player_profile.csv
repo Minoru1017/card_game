@@ -1,14 +1,14 @@
-schema_version,1
+﻿schema_version,1
 uuid,9818680397494c9fb34cf02e3f25aabf
 role,遊戲測試員
-decks,撠曈?slot 3 deck_slot_na:30張 | 牌組2:30張 | 牌組3:11張 | 牌組4:0張 | ??5:1張
+decks,撠曈?slot 3 deck_slot_na:30張 | 牌組2:0張 | 牌組3:0張 | 牌組4:0張 | ??5:30張
 heroes,無
 start_date,2026-06-17
 wins,44
-losses,55
+losses,59
 draws,4
 quits,30
-last_result,?唳?
+last_result,戰敗
 battle_record,0,1,入門
 battle_record,1,1,困難
 battle_record,2,-1,困難
@@ -72,3 +72,8 @@ battle_record,59,-1,?仿?
 battle_record,60,-1,?仿?
 battle_record,61,-1,?仿?
 battle_record,62,-1,?仿?
+battle_record,63,-1,困難
+battle_record,64,-1,入門
+battle_record,65,-1,魔王
+battle_record,66,-1,入門
+battle_record,67,-1,入門

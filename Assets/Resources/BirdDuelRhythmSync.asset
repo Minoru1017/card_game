@@ -14,3 +14,20 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   bpm: 123
   firstDownbeatOffset: 0.19736962
+  cdEntries:
+  - cdId: court_march
+    bpm: 97.5
+    firstDownbeatOffset: 0.06965987
+    gridMode: 1
+    decisivePerfectWindowMul: 0.68
+    decisiveGoodWindowMul: 0.73
+    decisiveTelegraphLeadMul: 0.55
+    bgmLoopStartSeconds: 51.60635
+    bgmLoopLengthSeconds: 45.374695
+    basePerfectWindowMul: 0.92
+    baseGoodWindowMul: 0.94
+    baseTelegraphLeadMul: 0.88
+    closeToWinScoreMargin: 5
+    normalBeatsPerStep: 3
+    decisiveMinTriplets: 5
+    decisiveMaxTriplets: 20

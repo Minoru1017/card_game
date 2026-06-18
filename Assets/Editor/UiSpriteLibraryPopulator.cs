@@ -62,7 +62,8 @@ public static class UiSpriteLibraryPopulator
         library.EditorSetRarityFrames(rN, rR, rSr, rSsr, rUr);
 
         Sprite cdHarborPractice = LoadCdCoverSprite(BirdDuelCdCatalog.DefaultCoverAssetKey);
-        library.EditorSetBirdDuelCdCovers(cdHarborPractice);
+        Sprite cdCourtMarch = LoadCdCoverSprite(BirdDuelCdCatalog.CourtMarchCoverAssetKey);
+        library.EditorSetBirdDuelCdCovers(cdHarborPractice, cdCourtMarch);
 
         EditorUtility.SetDirty(library);
         AssetDatabase.SaveAssets();
@@ -76,7 +77,7 @@ public static class UiSpriteLibraryPopulator
             $"difficulty(intro={dIntro != null}, easy={dEasy != null}, normal={dNormal != null}, " +
             $"hard={dHard != null}, boss={dBoss != null}), " +
             $"rarity(N={rN != null}, R={rR != null}, SR={rSr != null}, SSR={rSsr != null}, UR={rUr != null}), " +
-            $"cdHarborPractice={cdHarborPractice != null} " +
+            $"cdHarborPractice={cdHarborPractice != null}, cdCourtMarch={cdCourtMarch != null} " +
             $"→ {LibraryAssetPath}");
     }
 

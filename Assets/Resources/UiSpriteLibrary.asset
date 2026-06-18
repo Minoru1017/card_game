@@ -31,3 +31,4 @@ MonoBehaviour:
   rarityFrameSsr: {fileID: 1014833402724443373, guid: e9c43df90626ecf06445566788990001, type: 3}
   rarityFrameUr: {fileID: 1460595860699020046, guid: a903bc714deb46389133445566778899, type: 3}
   birdDuelCdHarborPractice: {fileID: -1851693404726464028, guid: 32bd7c9bdeb891b4384b7e82c6f02fe5, type: 3}
+  birdDuelCdCourtMarch: {fileID: -6514247234673237188, guid: fce96921701850d4d9c2e08f2a3695aa, type: 3}

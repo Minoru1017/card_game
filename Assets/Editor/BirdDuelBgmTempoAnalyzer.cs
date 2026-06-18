@@ -3,26 +3,45 @@ using UnityEditor;
 using UnityEngine;
 
 /// <summary>
-/// 量測鬥鳥 BGM（feinsmecker - Come Again）的 BPM 與第一下拍偏移，寫入
-/// <c>Assets/Resources/BirdDuelRhythmSync.asset</c>，供執行期對齊節拍。
-///
-/// 作法：暫時把音檔匯入設為 PCM / Decompress On Load 以讀取 PCM 取樣，
-/// 計算能量包絡的 onset 強度 → 自相關求週期（BPM）→ 相位掃描求第一下拍偏移，量測後還原匯入設定。
-/// 對於有清楚鼓點的曲目（如此曲）相當穩定；數值可於 BirdDuelRhythmSync 資產微調。
+/// 量測鬥鳥 BGM 的 BPM 與第一下拍偏移，寫入 <c>Assets/Resources/BirdDuelRhythmSync.asset</c>。
+/// 庭訓進行曲（Risian - Stampede）額外標記 8／12 分音小節交替格。
 /// 選單：Tools/Audio/Analyze Bird Duel BGM Tempo
 /// </summary>
 public static class BirdDuelBgmTempoAnalyzer
 {
     private const string SyncAssetPath = "Assets/Resources/BirdDuelRhythmSync.asset";
+    private const string CourtMarchCdId = "court_march";
     private const float MinBpm = 80f;
     private const float MaxBpm = 170f;
     private const int Win = 1024;
     private const int Hop = 512;
 
-    [MenuItem("Tools/Audio/Analyze Bird Duel BGM Tempo")]
-    public static void Analyze()
+    [MenuItem("Tools/Audio/Analyze Bird Duel BGM Tempo (Default / Come Again)")]
+    public static void AnalyzeDefault()
     {
-        string clipPath = FightingBirdGameSceneController.ComeAgainAssetPath;
+        AnalyzeClip(
+            FightingBirdGameSceneController.ComeAgainAssetPath,
+            writeDefault: true,
+            cdId: null,
+            gridMode: BirdDuelRhythmSync.GridMode.QuarterBeat);
+    }
+
+    [MenuItem("Tools/Audio/Analyze Bird Duel BGM Tempo (Court March / Stampede)")]
+    public static void AnalyzeCourtMarch()
+    {
+        AnalyzeClip(
+            FightingBirdGameSceneController.StampedeAssetPath,
+            writeDefault: false,
+            cdId: CourtMarchCdId,
+            gridMode: BirdDuelRhythmSync.GridMode.AlternatingEighthTwelfth);
+    }
+
+    private static void AnalyzeClip(
+        string clipPath,
+        bool writeDefault,
+        string cdId,
+        BirdDuelRhythmSync.GridMode gridMode)
+    {
         var importer = AssetImporter.GetAtPath(clipPath) as AudioImporter;
         if (importer == null)
         {
@@ -76,9 +95,28 @@ public static class BirdDuelBgmTempoAnalyzer
 
             float bpm = EstimateBpm(onset, framesPerSec);
             float offset = EstimateFirstDownbeatOffset(onset, framesPerSec, bpm);
+            float eighthScore = ScoreSubdivision(onset, framesPerSec, bpm, 2);
+            float twelfthScore = ScoreSubdivision(onset, framesPerSec, bpm, 3);
 
-            Debug.Log($"[BirdDuel] 量測 BGM：BPM≈{bpm:F1}，第一下拍偏移≈{offset:F3}s（每拍 {60f / bpm:F3}s）。");
-            WriteSyncAsset(bpm, offset);
+            float referencePerformanceSeconds = MeasureReferencePerformanceSeconds();
+            float clipSeconds = clip.samples / (float)Mathf.Max(1, clip.frequency);
+            float loopStart = 0f;
+            float loopLength = 0f;
+            if (!writeDefault)
+            {
+                loopLength = referencePerformanceSeconds;
+                loopStart = EstimateBestLoopStart(onset, framesPerSec, loopLength, clipSeconds);
+            }
+
+            Debug.Log(
+                $"[BirdDuel] 量測 {clipPath}：BPM≈{bpm:F1}，第一下拍≈{offset:F3}s；" +
+                $"8分格={eighthScore:F1}，12分格={twelfthScore:F1}；" +
+                $"演奏循環={loopLength:F2}s @ {loopStart:F2}s。");
+
+            if (writeDefault)
+                WriteDefaultSync(bpm, offset);
+            else
+                WriteCdEntry(cdId, bpm, offset, gridMode, loopStart, loopLength);
         }
         finally
         {
@@ -89,6 +127,20 @@ public static class BirdDuelBgmTempoAnalyzer
                 importer.SaveAndReimport();
             }
         }
+    }
+
+    /// <summary>8 分音=每拍 2 格；12 分音=每拍 3 格（一節循環由執行期交替）。</summary>
+    private static float ScoreSubdivision(float[] onset, float framesPerSec, float bpm, int divisionsPerBeat)
+    {
+        float secPerBeat = 60f / bpm;
+        int periodFrames = Mathf.Max(1, Mathf.RoundToInt(secPerBeat * framesPerSec / divisionsPerBeat));
+        double sum = 0d;
+        for (int p = 0; p < periodFrames; p++)
+        {
+            for (int f = p; f < onset.Length; f += periodFrames)
+                sum += onset[f];
+        }
+        return (float)sum;
     }
 
     private static float[] ToMono(float[] raw, int samples, int channels)
@@ -108,7 +160,6 @@ public static class BirdDuelBgmTempoAnalyzer
         return mono;
     }
 
-    /// <summary>能量包絡的半波整流差分作為 onset 強度（frame 率 = sampleRate / Hop，由呼叫端計算）。</summary>
     private static float[] OnsetEnvelope(float[] mono)
     {
         int frames = Mathf.Max(0, (mono.Length - Win) / Hop);
@@ -155,7 +206,7 @@ public static class BirdDuelBgmTempoAnalyzer
         }
 
         float bpm = 60f * framesPerSec / bestLag;
-        while (bpm < 90f) bpm *= 2f;   // 折回常見範圍，避免抓到半速
+        while (bpm < 90f) bpm *= 2f;
         while (bpm > 180f) bpm /= 2f;
         return bpm;
     }
@@ -183,21 +234,111 @@ public static class BirdDuelBgmTempoAnalyzer
         return offset % secPerBeat;
     }
 
-    private static void WriteSyncAsset(float bpm, float offset)
+    private static float MeasureReferencePerformanceSeconds()
     {
-        var sync = AssetDatabase.LoadAssetAtPath<BirdDuelRhythmSync>(SyncAssetPath);
-        if (sync == null)
+        var reference = AssetDatabase.LoadAssetAtPath<AudioClip>(FightingBirdGameSceneController.ComeAgainAssetPath);
+        if (reference != null && reference.length > 0.01f)
+            return reference.length;
+        return BirdDuelRhythmSync.HarborPracticePerformanceSeconds;
+    }
+
+    /// <summary>在 onset 包絡中找與港灣練習帶等長、鼓點最密集的起點。</summary>
+    private static float EstimateBestLoopStart(
+        float[] onset,
+        float framesPerSec,
+        float loopLengthSeconds,
+        float clipLengthSeconds)
+    {
+        if (onset.Length < 8 || loopLengthSeconds <= 0.01f)
+            return 0f;
+
+        int windowFrames = Mathf.Max(1, Mathf.RoundToInt(loopLengthSeconds * framesPerSec));
+        windowFrames = Mathf.Min(windowFrames, onset.Length);
+        int maxStart = Mathf.Max(1, onset.Length - windowFrames);
+
+        double bestScore = -1d;
+        int bestStartFrame = 0;
+        for (int start = 0; start < maxStart; start++)
         {
-            if (!AssetDatabase.IsValidFolder("Assets/Resources"))
-                AssetDatabase.CreateFolder("Assets", "Resources");
-            sync = ScriptableObject.CreateInstance<BirdDuelRhythmSync>();
-            AssetDatabase.CreateAsset(sync, SyncAssetPath);
+            double sum = 0d;
+            for (int f = start; f < start + windowFrames; f++)
+                sum += onset[f];
+            if (sum > bestScore)
+            {
+                bestScore = sum;
+                bestStartFrame = start;
+            }
         }
 
+        float startSec = bestStartFrame / framesPerSec;
+        float maxStartSec = Mathf.Max(0f, clipLengthSeconds - loopLengthSeconds);
+        return Mathf.Clamp(startSec, 0f, maxStartSec);
+    }
+
+    private static void WriteDefaultSync(float bpm, float offset)
+    {
+        var sync = LoadOrCreateSyncAsset();
         sync.EditorSet(Mathf.Round(bpm * 10f) / 10f, offset);
+        SaveSync(sync, "預設（港灣練習帶）");
+    }
+
+    private static void WriteCdEntry(
+        string cdId,
+        float bpm,
+        float offset,
+        BirdDuelRhythmSync.GridMode gridMode,
+        float loopStartSeconds,
+        float loopLengthSeconds)
+    {
+        var sync = LoadOrCreateSyncAsset();
+        var entry = sync.EditorTryGetCdEntry(cdId, out var existing)
+            ? existing
+            : CreateDefaultCourtMarchDifficultyEntry(cdId);
+        entry.cdId = cdId;
+        entry.bpm = Mathf.Round(bpm * 10f) / 10f;
+        entry.firstDownbeatOffset = offset;
+        entry.gridMode = gridMode;
+        entry.bgmLoopStartSeconds = Mathf.Max(0f, loopStartSeconds);
+        entry.bgmLoopLengthSeconds = Mathf.Max(0f, loopLengthSeconds);
+        sync.EditorSetCdEntry(entry);
+        SaveSync(sync, "CD=" + cdId);
+    }
+
+    /// <summary>庭訓進行曲：比港灣練習帶略難（量測 BPM 後仍保留此梯度）。</summary>
+    private static BirdDuelRhythmSync.CdEntry CreateDefaultCourtMarchDifficultyEntry(string cdId) =>
+        new BirdDuelRhythmSync.CdEntry
+        {
+            cdId = cdId,
+            decisivePerfectWindowMul = 0.68f,
+            decisiveGoodWindowMul = 0.73f,
+            decisiveTelegraphLeadMul = 0.55f,
+            basePerfectWindowMul = 0.92f,
+            baseGoodWindowMul = 0.94f,
+            baseTelegraphLeadMul = 0.88f,
+            closeToWinScoreMargin = 5,
+            normalBeatsPerStep = 3,
+            decisiveMinTriplets = 5,
+            decisiveMaxTriplets = 20
+        };
+
+    private static BirdDuelRhythmSync LoadOrCreateSyncAsset()
+    {
+        var sync = AssetDatabase.LoadAssetAtPath<BirdDuelRhythmSync>(SyncAssetPath);
+        if (sync != null)
+            return sync;
+
+        if (!AssetDatabase.IsValidFolder("Assets/Resources"))
+            AssetDatabase.CreateFolder("Assets", "Resources");
+        sync = ScriptableObject.CreateInstance<BirdDuelRhythmSync>();
+        AssetDatabase.CreateAsset(sync, SyncAssetPath);
+        return sync;
+    }
+
+    private static void SaveSync(BirdDuelRhythmSync sync, string label)
+    {
         EditorUtility.SetDirty(sync);
         AssetDatabase.SaveAssets();
         AssetDatabase.Refresh();
-        Debug.Log("[BirdDuel] 已寫入 " + SyncAssetPath + "，執行期將自動套用對拍設定。");
+        Debug.Log("[BirdDuel] 已寫入 " + SyncAssetPath + "（" + label + "）。");
     }
 }

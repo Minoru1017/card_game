@@ -716,7 +716,7 @@ public static class PlayerProfileCsvService
         {
             Directory.CreateDirectory(ProjectSnapshotDir);
             string outPath = Path.Combine(ProjectSnapshotDir, fileName);
-            File.WriteAllLines(outPath, rows);
+            PlayerPersistSafeIO.WriteAllLines(outPath, rows);
         }
         catch (Exception ex)
         {

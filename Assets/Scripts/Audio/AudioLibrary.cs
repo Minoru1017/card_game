@@ -33,18 +33,24 @@ public sealed class AudioLibrary : ScriptableObject
     [SerializeField] private AudioClip buildbeckBgm;
     [SerializeField] private AudioClip cardStoreBgm;
     [SerializeField] private AudioClip birdDuelBgm;
+    [SerializeField] private AudioClip birdDuelHitSfxSource;
     [SerializeField] private AudioClip menuClickSfx;
     [SerializeField] private AudioClip typingSfx;
+
+    [Header("Bird Duel CD BGM（id = cdId，例 court_march）")]
+    [SerializeField] private NamedAudioClip[] birdDuelCdBgms = new NamedAudioClip[0];
 
     public AudioClip PlotBgm => plotBgm;
     public AudioClip HallBgm => hallBgm;
     public AudioClip BuildbeckBgm => buildbeckBgm;
     public AudioClip CardStoreBgm => cardStoreBgm;
     public AudioClip BirdDuelBgm => birdDuelBgm;
+    public AudioClip BirdDuelHitSfxSource => birdDuelHitSfxSource;
     public AudioClip MenuClickSfx => menuClickSfx;
     public AudioClip TypingSfx => typingSfx;
 
     private Dictionary<string, AudioClip> voiceLookup;
+    private Dictionary<string, AudioClip> birdDuelCdBgmLookup;
 
     private static AudioLibrary instance;
     private static bool instanceLoaded;
@@ -79,6 +85,35 @@ public sealed class AudioLibrary : ScriptableObject
         return voiceLookup.TryGetValue(id.Trim(), out AudioClip clip) ? clip : null;
     }
 
+    /// <summary>依 CD id 取得鬥鳥 BGM；找不到時回傳預設 <see cref="BirdDuelBgm"/>。</summary>
+    public AudioClip GetBirdDuelCdBgm(string cdId)
+    {
+        if (string.IsNullOrWhiteSpace(cdId))
+            return birdDuelBgm;
+
+        EnsureBirdDuelCdBgmLookup();
+        return birdDuelCdBgmLookup.TryGetValue(cdId.Trim(), out AudioClip clip) && clip != null
+            ? clip
+            : birdDuelBgm;
+    }
+
+    private void EnsureBirdDuelCdBgmLookup()
+    {
+        if (birdDuelCdBgmLookup != null)
+            return;
+
+        birdDuelCdBgmLookup = new Dictionary<string, AudioClip>();
+        if (birdDuelCdBgms == null)
+            return;
+
+        foreach (NamedAudioClip entry in birdDuelCdBgms)
+        {
+            if (string.IsNullOrWhiteSpace(entry.id) || entry.clip == null)
+                continue;
+            birdDuelCdBgmLookup[entry.id.Trim()] = entry.clip;
+        }
+    }
+
     private void EnsureVoiceLookup()
     {
         if (voiceLookup != null)
@@ -101,6 +136,7 @@ public sealed class AudioLibrary : ScriptableObject
     private void OnValidate()
     {
         voiceLookup = null;
+        birdDuelCdBgmLookup = null;
     }
 
     /// <summary>供 Editor 自動填表工具使用，請勿在執行期呼叫。</summary>
@@ -140,6 +176,18 @@ public sealed class AudioLibrary : ScriptableObject
     public void EditorSetBirdDuelBgm(AudioClip bgm)
     {
         birdDuelBgm = bgm;
+    }
+
+    public void EditorSetBirdDuelHitSfxSource(AudioClip clip)
+    {
+        birdDuelHitSfxSource = clip;
+    }
+
+    /// <summary>供 Editor 自動填表工具使用，請勿在執行期呼叫。</summary>
+    public void EditorSetBirdDuelCdBgms(NamedAudioClip[] entries)
+    {
+        birdDuelCdBgms = entries ?? new NamedAudioClip[0];
+        birdDuelCdBgmLookup = null;
     }
 #endif
 }

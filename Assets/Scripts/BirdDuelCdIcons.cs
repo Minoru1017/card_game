@@ -1,6 +1,6 @@
 using UnityEngine;
 
-/// <summary>鬥鳥 CD 光碟封面圖（Assets/UI/CD/CD_1.jpg，經 <see cref="UiSpriteLibrary"/> 註冊）。</summary>
+/// <summary>鬥鳥 CD 光碟封面圖（Assets/UI/CD/，經 <see cref="UiSpriteLibrary"/> 註冊）。</summary>
 public static class BirdDuelCdIcons
 {
     public static Sprite Resolve(string cdId)

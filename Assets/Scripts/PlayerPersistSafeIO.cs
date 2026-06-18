@@ -1,15 +1,20 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Text;
 using UnityEngine;
 
 /// <summary>
 /// Atomic-style writes, rotating backups, and read fallback for local player CSV saves.
+/// 一律使用 UTF-8（含 BOM）讀寫，避免 Windows 預設編碼導致牌組名稱等中文亂碼。
 /// </summary>
 public static class PlayerPersistSafeIO
 {
     public const int BackupTierCount = 3;
     public const string TempSuffix = ".tmp";
+
+    /// <summary>playerdata / profile CSV 固定 UTF-8 BOM。</summary>
+    public static readonly Encoding SaveFileEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: true);
 
     public static IEnumerable<string> EnumerateLoadCandidates(string primaryPath)
     {
@@ -77,7 +82,7 @@ public static class PlayerPersistSafeIO
             if (!File.Exists(p)) continue;
             try
             {
-                lines = File.ReadAllLines(p);
+                lines = ReadAllLines(p);
                 if (LooksLikePlayerDataCsv(lines))
                 {
                     resolvedPath = p;
@@ -103,7 +108,7 @@ public static class PlayerPersistSafeIO
             if (!File.Exists(p)) continue;
             try
             {
-                lines = File.ReadAllLines(p);
+                lines = ReadAllLines(p);
                 if (LooksLikePlayerProfileCsv(lines))
                 {
                     resolvedPath = p;
@@ -144,11 +149,41 @@ public static class PlayerPersistSafeIO
             Debug.LogWarning("PlayerPersistSafeIO: could not clear stale temp -> " + ex.Message);
         }
 
-        File.WriteAllLines(tmp, lines);
+        WriteAllLines(tmp, lines);
         RotateBackupsBeforeReplace(primaryPath);
         TryDeleteFile(primaryPath);
         File.Move(tmp, primaryPath);
     }
+
+    public static string[] ReadAllLines(string path)
+    {
+        if (string.IsNullOrEmpty(path) || !File.Exists(path))
+            return Array.Empty<string>();
+
+        string[] utf8Lines = File.ReadAllLines(path, SaveFileEncoding);
+        if (LooksLikePlayerDataCsv(utf8Lines) || LooksLikePlayerProfileCsv(utf8Lines))
+            return utf8Lines;
+
+        try
+        {
+            string[] legacyLines = File.ReadAllLines(path, Encoding.Default);
+            if (LooksLikePlayerDataCsv(legacyLines) || LooksLikePlayerProfileCsv(legacyLines))
+            {
+                Debug.LogWarning(
+                    "PlayerPersistSafeIO: loaded with legacy system encoding (will re-save as UTF-8) -> " + path);
+                return legacyLines;
+            }
+        }
+        catch (Exception ex)
+        {
+            Debug.LogWarning("PlayerPersistSafeIO: legacy encoding fallback failed -> " + ex.Message);
+        }
+
+        return utf8Lines;
+    }
+
+    public static void WriteAllLines(string path, IReadOnlyList<string> lines) =>
+        File.WriteAllLines(path, lines, SaveFileEncoding);
 
     private static void RotateBackupsBeforeReplace(string primaryPath)
     {

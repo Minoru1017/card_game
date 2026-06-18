@@ -35,6 +35,13 @@ public enum BirdDuelBonusId
     FullDraw,        // 滿弓待發：HP +6 ＋ 開局多抽 2 ＋ 解除首回合禁攻
     LastStand,       // 背水（詛咒型）：HP 設為 12 ＋ 開局多抽 2 ＋ 解除首回合禁攻 ＋ 順風
 
+    // 國王 CD 專屬（庭訓進行曲 draft 池；不與港灣練習帶六項重名／同卡）
+    CourtDecree,     // 庭訓號令：解除首回合禁攻 ＋ 開戰揭示敵方手牌 1 張
+    RoyalPhalanx,    // 王權方陣：起始 HP +4 ＋ 整場敵方傷害 −12%
+    VanguardRecon,   // 前鋒偵察：開局多抽 1 ＋ 揭示敵方手牌 2 張
+    CrownGuard,      // 御前護衛：起始 HP +3 ＋ 開局天氣「訓練薄霧」
+    WarDrumCharge,   // 戰鼓齊進：解除首回合禁攻 ＋ 開局多抽 1 張
+
     // 敵方小強化（風險 B）
     EnemyMorale,     // 敵·士氣：敵方起始 HP +2
     EnemyDraw,       // 敵·搶手：敵方首回合多抽 1
@@ -73,6 +80,13 @@ public static class BirdDuelBonusCatalog
         Make(BirdDuelBonusId.Providence, BirdDuelBonusPool.Rare, "天時地利", "開局天氣「訓練薄霧」（英雄受擊 −50%）"),
         Make(BirdDuelBonusId.FullDraw, BirdDuelBonusPool.Rare, "滿弓待發", "HP +6 ＋ 開局多抽 2 ＋ 解除首回合禁攻"),
         Make(BirdDuelBonusId.LastStand, BirdDuelBonusPool.Rare, "背水", "起始 HP 降為 12，換得開局多抽 2 ＋ 解除首回合禁攻 ＋ 順風"),
+
+        // 國王 CD 專屬（庭訓進行曲）
+        Make(BirdDuelBonusId.CourtDecree, BirdDuelBonusPool.Enhanced, "庭訓號令", "解除我方首回合禁攻 ＋ 開戰揭示敵方手牌 1 張"),
+        Make(BirdDuelBonusId.RoyalPhalanx, BirdDuelBonusPool.Enhanced, "王權方陣", "起始 HP +4 ＋ 整場敵方傷害 −12%"),
+        Make(BirdDuelBonusId.VanguardRecon, BirdDuelBonusPool.Enhanced, "前鋒偵察", "開局多抽 1 張 ＋ 揭示敵方手牌 2 張"),
+        Make(BirdDuelBonusId.CrownGuard, BirdDuelBonusPool.Enhanced, "御前護衛", "起始 HP +3 ＋ 開局天氣「訓練薄霧」（英雄受擊 −50%）"),
+        Make(BirdDuelBonusId.WarDrumCharge, BirdDuelBonusPool.Enhanced, "戰鼓齊進", "解除我方首回合禁攻 ＋ 開局多抽 1 張"),
 
         // 敵方小強化
         Make(BirdDuelBonusId.EnemyMorale, BirdDuelBonusPool.EnemyBuff, "敵·士氣", "敵方起始 HP +2"),

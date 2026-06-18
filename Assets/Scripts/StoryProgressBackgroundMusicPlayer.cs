@@ -163,6 +163,9 @@ public class StoryProgressBackgroundMusicPlayer : MonoBehaviour
         bool started = false;
         for (int i = 0; i < 60; i++)
         {
+            if (!shouldKeepPlaying)
+                yield break;
+
             audioSource.Play();
             if (audioSource.isPlaying)
             {
@@ -176,7 +179,7 @@ public class StoryProgressBackgroundMusicPlayer : MonoBehaviour
             yield return null;
         }
 
-        if (!started)
+        if (!started && shouldKeepPlaying)
             Debug.LogWarning("StoryProgressBackgroundMusicPlayer: Play() did not start. loadState=" +
                              clip.loadState);
 

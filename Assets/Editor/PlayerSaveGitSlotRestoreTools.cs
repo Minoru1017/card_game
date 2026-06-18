@@ -45,7 +45,7 @@ public static class PlayerSaveGitSlotRestoreTools
             "active_slot," + MinoruSlot
         };
         export.AddRange(slotLines);
-        File.WriteAllLines(exportPath, export, new UTF8Encoding(true));
+        PlayerPersistSafeIO.WriteAllLines(exportPath, export);
         AssetDatabase.Refresh();
 
         EditorUtility.DisplayDialog(
@@ -224,14 +224,14 @@ public static class PlayerSaveGitSlotRestoreTools
         {
             string quarantine = primaryPath + ".before-slot-restore-" + DateTime.Now.ToString("yyyyMMdd-HHmmss");
             File.Copy(primaryPath, quarantine, true);
-            merged = MergeLines(File.ReadAllLines(primaryPath, Encoding.UTF8), slotLines, slot, setActiveSlot);
+            merged = MergeLines(PlayerPersistSafeIO.ReadAllLines(primaryPath), slotLines, slot, setActiveSlot);
         }
         else
         {
             merged = MergeLines(Array.Empty<string>(), slotLines, slot, setActiveSlot);
         }
 
-        File.WriteAllLines(primaryPath, merged, new UTF8Encoding(true));
+        PlayerPersistSafeIO.WriteAllLines(primaryPath, merged);
         TrySummarizeSlotLines(slotLines, out int coins, out int gems, out string slotName);
         message = "已還原 slot " + slot + "（" + slotName + "）至主檔。\n" +
                   "金幣 " + coins + " / 寶石 " + FormatOptional(gems) + "\n" +
@@ -315,7 +315,7 @@ public static class PlayerSaveGitSlotRestoreTools
         if (!File.Exists(path))
             return;
 
-        string[] lines = File.ReadAllLines(path, Encoding.UTF8);
+        string[] lines = PlayerPersistSafeIO.ReadAllLines(path);
         for (int i = 0; i < lines.Length; i++)
         {
             string line = lines[i];

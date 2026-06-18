@@ -1246,6 +1246,7 @@ public class GlobalNavRuntime : MonoBehaviour
             string newName = playerSlotNameInput != null ? playerSlotNameInput.text : string.Empty;
             PlayerData.SetActivePlayerSlotName(newName);
             RefreshPlayerInfoOverlayContent();
+            SceneToast.Show("玩家名稱已儲存");
         });
 
         rowY -= rowHeight + PlayerInfoLineGap;

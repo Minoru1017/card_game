@@ -38,6 +38,8 @@ public static class AudioLibraryPopulator
         AudioClip buildbeckBgm = AssetDatabase.LoadAssetAtPath<AudioClip>(BuildbeckBackgroundMusicPlayer.EtherealDreamsAssetPath);
         AudioClip cardStoreBgm = AssetDatabase.LoadAssetAtPath<AudioClip>(CardStoreBackgroundMusicPlayer.AdventuryMoodyAssetPath);
         AudioClip birdDuelBgm = AssetDatabase.LoadAssetAtPath<AudioClip>(FightingBirdGameSceneController.ComeAgainAssetPath);
+        AudioClip courtMarchBgm = AssetDatabase.LoadAssetAtPath<AudioClip>(FightingBirdGameSceneController.StampedeAssetPath);
+        AudioClip birdDuelHitSfx = AssetDatabase.LoadAssetAtPath<AudioClip>(BirdDuelHitSfxBank.SourceAssetPath);
         AudioClip menuClick = AssetDatabase.LoadAssetAtPath<AudioClip>(PlotMenuClickSfx.MenuClickClipAssetPath);
         AudioClip typing = AssetDatabase.LoadAssetAtPath<AudioClip>(PlotDialogueTypewriterSfx.TypingClipAssetPath);
         library.EditorSetSingletons(bgm, menuClick, typing);
@@ -45,6 +47,11 @@ public static class AudioLibraryPopulator
         library.EditorSetBuildbeckBgm(buildbeckBgm);
         library.EditorSetCardStoreBgm(cardStoreBgm);
         library.EditorSetBirdDuelBgm(birdDuelBgm);
+        library.EditorSetBirdDuelHitSfxSource(birdDuelHitSfx);
+        library.EditorSetBirdDuelCdBgms(new[]
+        {
+            new AudioLibrary.NamedAudioClip { id = "court_march", clip = courtMarchBgm }
+        });
 
         EditorUtility.SetDirty(library);
         AssetDatabase.SaveAssets();
@@ -54,6 +61,7 @@ public static class AudioLibraryPopulator
             $"AudioLibraryPopulator: 填入 {voices.Length} 個 NPC 語音；" +
             $"BGM={(bgm != null)}, HallBGM={(hallBgm != null)}, BuildbeckBGM={(buildbeckBgm != null)}, " +
             $"CardStoreBGM={(cardStoreBgm != null)}, BirdDuelBGM={(birdDuelBgm != null)}, " +
+            $"CourtMarchBGM={(courtMarchBgm != null)}, BirdDuelHitSfx={(birdDuelHitSfx != null)}, " +
             $"MenuClick={(menuClick != null)}, Typing={(typing != null)} → {LibraryAssetPath}");
 
         if (bgm == null || hallBgm == null || buildbeckBgm == null || cardStoreBgm == null || birdDuelBgm == null || menuClick == null || typing == null)

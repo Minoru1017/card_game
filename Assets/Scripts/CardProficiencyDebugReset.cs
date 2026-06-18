@@ -60,7 +60,7 @@ public static class CardProficiencyDebugReset
         if (string.IsNullOrWhiteSpace(csvPath) || !File.Exists(csvPath))
             return 0;
 
-        string[] lines = File.ReadAllLines(csvPath);
+        string[] lines = PlayerPersistSafeIO.ReadAllLines(csvPath);
         var kept = new List<string>(lines.Length);
         int removed = 0;
 
@@ -77,7 +77,7 @@ public static class CardProficiencyDebugReset
         }
 
         if (removed > 0)
-            File.WriteAllLines(csvPath, kept);
+            PlayerPersistSafeIO.WriteAllLines(csvPath, kept);
 
         return removed;
     }

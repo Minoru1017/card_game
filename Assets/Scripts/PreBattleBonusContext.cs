@@ -189,6 +189,27 @@ public static class PreBattleBonusContext
                 e.OpeningWeather = BirdDuelOpeningWeather.Gale;
                 break;
 
+            case BirdDuelBonusId.CourtDecree:
+                e.UnlockPlayerOpeningAttack = true;
+                e.RevealEnemyHandCount = Mathf.Max(e.RevealEnemyHandCount, 1);
+                break;
+            case BirdDuelBonusId.RoyalPhalanx:
+                e.PlayerHpDelta += 4;
+                e.EnemyDamageMultiplier *= 0.88f;
+                break;
+            case BirdDuelBonusId.VanguardRecon:
+                e.OpeningExtraDraw += 1;
+                e.RevealEnemyHandCount = Mathf.Max(e.RevealEnemyHandCount, 2);
+                break;
+            case BirdDuelBonusId.CrownGuard:
+                e.PlayerHpDelta += 3;
+                e.OpeningWeather = BirdDuelOpeningWeather.Fog;
+                break;
+            case BirdDuelBonusId.WarDrumCharge:
+                e.UnlockPlayerOpeningAttack = true;
+                e.OpeningExtraDraw += 1;
+                break;
+
             case BirdDuelBonusId.EnemyMorale: e.EnemyHpDelta += 2; break;
             case BirdDuelBonusId.EnemyDraw: e.EnemyExtraOpeningDraw += 1; break;
             case BirdDuelBonusId.EnemyOffense: e.EnemyDamageMultiplier *= 1.1f; break;

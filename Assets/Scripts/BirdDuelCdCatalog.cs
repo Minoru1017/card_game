@@ -7,15 +7,20 @@ public static class BirdDuelCdCatalog
 
     /// <summary>封面圖檔名（Assets/UI/CD/{key}.jpg），對應 <see cref="UiSpriteLibrary.GetBirdDuelCdCover"/>。</summary>
     public const string DefaultCoverAssetKey = "CD_1";
+    public const string CourtMarchCoverAssetKey = "CD_2";
 
-    private static readonly BirdDuelBonusId[] KingDraftIds =
+    /// <summary>
+    /// 庭訓進行曲勝利 draft 白名單：國王專屬命名與組合，
+    /// 不含港灣練習帶的養精蓄銳／連抽／壓制／看破·全局等六項。
+    /// </summary>
+    private static readonly BirdDuelBonusId[] CourtMarchDraftIds =
     {
-        BirdDuelBonusId.MorningPractice,
-        BirdDuelBonusId.SteadyStance,
-        BirdDuelBonusId.DeepRest,
-        BirdDuelBonusId.FirstStrike,
-        BirdDuelBonusId.Suppress,
-        BirdDuelBonusId.InsightFull
+        BirdDuelBonusId.CourtDecree,
+        BirdDuelBonusId.RoyalPhalanx,
+        BirdDuelBonusId.VanguardRecon,
+        BirdDuelBonusId.CrownGuard,
+        BirdDuelBonusId.WarDrumCharge,
+        BirdDuelBonusId.LastStand,
     };
 
     private static readonly BirdDuelBonusId[] ChurchDraftIds =
@@ -39,7 +44,7 @@ public static class BirdDuelCdCatalog
 
         Register(BirdDuelCdProfile.Create(
             "court_march", "庭訓進行曲", BirdDuelCdRarity.R, BirdDuelCdFaction.King, true,
-            KingDraftIds));
+            CourtMarchDraftIds));
 
         Register(BirdDuelCdProfile.Create(
             "morning_prayer", "晨禱", BirdDuelCdRarity.R, BirdDuelCdFaction.Church, true,

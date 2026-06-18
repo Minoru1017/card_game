@@ -44,6 +44,8 @@ public sealed class UiSpriteLibrary : ScriptableObject
     [Header("鬥鳥 CD 封面")]
     [Tooltip("《港灣練習帶》— Assets/UI/CD/CD_1")]
     [SerializeField] private Sprite birdDuelCdHarborPractice;
+    [Tooltip("《庭訓進行曲》— Assets/UI/CD/CD_2")]
+    [SerializeField] private Sprite birdDuelCdCourtMarch;
 
     public Sprite ReturnButton => returnButton;
     /// <summary>響應式左右底板（361×1080）；右側以水平翻轉共用同一張。</summary>
@@ -94,6 +96,9 @@ public sealed class UiSpriteLibrary : ScriptableObject
 
         if (string.Equals(cdId.Trim(), BirdDuelCdCatalog.DefaultCdId, System.StringComparison.Ordinal))
             return birdDuelCdHarborPractice;
+
+        if (string.Equals(cdId.Trim(), "court_march", System.StringComparison.OrdinalIgnoreCase))
+            return birdDuelCdCourtMarch;
 
         return null;
     }
@@ -171,9 +176,10 @@ public sealed class UiSpriteLibrary : ScriptableObject
     }
 
     /// <summary>供 Editor 填表工具使用，請勿在執行期呼叫。</summary>
-    public void EditorSetBirdDuelCdCovers(Sprite harborPracticeTape)
+    public void EditorSetBirdDuelCdCovers(Sprite harborPracticeTape, Sprite courtMarch = null)
     {
         birdDuelCdHarborPractice = harborPracticeTape;
+        birdDuelCdCourtMarch = courtMarch;
     }
 #endif
 }

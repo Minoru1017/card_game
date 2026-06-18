@@ -16,6 +16,7 @@ public static class PlayerSaveCoordinator
         string path = PlayerData.GetPlayerSaveCsvPath();
         Directory.CreateDirectory(Application.persistentDataPath);
         PlayerPersistSafeIO.WriteAllLinesWithAtomicRotateBackups(path, lines);
+        PlayerSaveIntegrityMonitor.NotifyPlayerDataWritten(lines, "WritePlayerDataCsv");
     }
 
     /// <summary>讀取現有主檔列（含備份 fallback），供合併／修補用。</summary>

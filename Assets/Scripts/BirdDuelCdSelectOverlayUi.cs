@@ -435,12 +435,20 @@ public static class BirdDuelCdSelectOverlayUi
         if (profile == null)
             return rules;
 
-        string factionHint = profile.Faction switch
+        string factionHint;
+        if (string.Equals(profile.CdId, "court_march", StringComparison.OrdinalIgnoreCase))
         {
-            BirdDuelCdFaction.King => "勝利 draft 偏向國王陣營加成。",
-            BirdDuelCdFaction.Church => "勝利 draft 偏向教會陣營加成。",
-            _ => "勝利 draft 使用通用強化池。",
-        };
+            factionHint = "勝利 draft：庭訓號令／王權方陣／前鋒偵察／御前護衛／戰鼓齊進／背水（與港灣池不同）。";
+        }
+        else
+        {
+            factionHint = profile.Faction switch
+            {
+                BirdDuelCdFaction.King => "勝利 draft 國王專屬（庭訓號令、王權方陣…，與港灣池不同）。",
+                BirdDuelCdFaction.Church => "勝利 draft 偏向教會陣營加成。",
+                _ => "勝利 draft 使用通用強化池。",
+            };
+        }
 
         return rules + "\n\n" + factionHint;
     }

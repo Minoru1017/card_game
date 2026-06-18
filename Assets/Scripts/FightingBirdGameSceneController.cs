@@ -23,7 +23,9 @@ public sealed class FightingBirdGameSceneController : MonoBehaviour
 #if UNITY_EDITOR
     // BGM 實體檔在 Assets/Music/（不放 Resources）；AudioLibraryPopulator 依此路徑填表。
     public const string ComeAgainAssetPath = "Assets/Music/feinsmecker - Come Again.mp3";
+    public const string StampedeAssetPath = "Assets/Music/Risian - Stampede.mp3";
 #endif
+    public const string HitSfxAssetPath = BirdDuelHitSfxBank.SourceAssetPath;
 
     private const float BgmVolume = 0.7f;
 
@@ -32,20 +34,45 @@ public sealed class FightingBirdGameSceneController : MonoBehaviour
     private const int CountInBeats = 4;          // 開場數拍（落在 BGM 拍點）
     private const int BeatsPerBar = 4;           // 節拍器小節長度（下拍加重用）
     private const int NormalBeatsPerStep = 4;    // 一般每步 4 拍（命中落在小節下拍）
-    private const float TelegraphLeadBeats = 2f; // 對手預備動作提前幾拍出現
 
     // 玩家快要贏時，每步間隔在 2~8 拍之間隨機，打亂節奏、增添臨門一腳的緊張感。
     private const int CloseToWinScoreMargin = 4;  // 距勝門檻 <= 此值視為「快要贏」
     private const int CloseToWinMinBeats = 2;     // 快要贏時每步最短拍數
     private const int CloseToWinMaxBeats = 8;     // 快要贏時每步最長拍數
+    private const int TripletsPerBeat = 3;        // 決勝拍 3 連音（每拍 3 格）
+    private const int TripletsPerBar = 12;        // 4/4 一小節 12 個三連音格
+    private const int DecisiveMinTriplets = 6;    // 決勝最短 ≈ 2 拍（6 連音）
+    private const int DecisiveMaxTriplets = 24;   // 決勝最長 ≈ 8 拍（24 連音）
+    private const int FakeScareMinGapTriplets = 10;       // 休息 ≥ 此格數才考慮假 scare（≈3.3 拍）
+    private const float FakeScareLeadBeats = 2.8f;        // 假 scare 外框收束比平常更長、更明顯
+    private const float FakeScareMinScale = 0.62f;        // 收束終點（約鼓面大小）
+    private const float FakeScareFrameSize = 256f;        // 方形外框基準邊長（配合程式生成 sprite）
+    private const int FakeScareFrameThicknessPx = 11;
+    private const int CourtMarchFakeScaresPerMatch = 1;   // 《庭訓進行曲》每局至少嚇 1 次
     private const float PostGrace = 0.16f;       // 命中後仍接受正確輸入的寬限（秒）
-    private const float PerfectWindow = 0.11f;   // 命中容差（秒）
-    private const float GoodWindow = 0.24f;
+    private const float BasePerfectWindow = 0.11f;   // 命中容差（秒）
+    private const float BaseGoodWindow = 0.24f;
+    private const float BaseTelegraphLeadBeats = 2f;
     private const double ScheduleLeadSeconds = 0.25; // BGM 排程提前量，讓硬體有時間備妥
     private const float DraftButtonBottomOffset = 230f; // 加成／魔王級選項卡距面板底部的偏移（避開下方手勢列）
+    private static readonly Vector2 BeatPadAnchor = new Vector2(0f, -60f);
+    private const float PerfectBeatShakeDuration = 0.22f;
+    private const float PerfectBeatShakeStrength = 13f;
 
     private float bpm = BirdDuelRhythmSync.DefaultBpm;
     private float firstDownbeatOffset = BirdDuelRhythmSync.DefaultFirstDownbeatOffset;
+    private BirdDuelRhythmSync.GridMode rhythmGrid = BirdDuelRhythmSync.GridMode.QuarterBeat;
+    private BirdDuelRhythmSync.Profile rhythmProfile = BirdDuelRhythmSync.Profile.Default;
+    private float perfectWindow = BasePerfectWindow;
+    private float goodWindow = BaseGoodWindow;
+    private float telegraphLeadBeats = BaseTelegraphLeadBeats;
+    private string activeCdId = BirdDuelCdCatalog.DefaultCdId;
+    private float bgmLoopStartSeconds;
+    private float bgmLoopLengthSeconds;
+    private int activeCloseToWinScoreMargin = BirdDuelRhythmSync.HarborCloseToWinScoreMargin;
+    private int activeNormalBeatsPerStep = BirdDuelRhythmSync.HarborNormalBeatsPerStep;
+    private int activeDecisiveMinTriplets = BirdDuelRhythmSync.HarborDecisiveMinTriplets;
+    private int activeDecisiveMaxTriplets = BirdDuelRhythmSync.HarborDecisiveMaxTriplets;
     private float SecondsPerBeat => 60f / Mathf.Max(1f, bpm);
 
     private static readonly Color ColorBg = new Color(0.10f, 0.12f, 0.16f, 1f);
@@ -61,6 +88,7 @@ public sealed class FightingBirdGameSceneController : MonoBehaviour
     private static readonly Color ColorBeatPadIdle = new Color(0.85f, 0.88f, 0.95f, 0.85f);
     private static readonly Color ColorShrinkIdle = new Color(1f, 1f, 1f, 0.20f);
     private static readonly Color ColorDecisive = new Color(0.98f, 0.55f, 0.20f, 1f); // 決勝拍：熱橙色提示
+    private static readonly Color ColorFakeScareRing = new Color(1f, 1f, 1f, 1f);     // 假 scare：白色方形外框
 
     private static bool subscribed;
 
@@ -73,6 +101,8 @@ public sealed class FightingBirdGameSceneController : MonoBehaviour
     private TextMeshProUGUI opponentName;
     private RectTransform shrinkIndicator;
     private Image shrinkIndicatorImage;
+    private RectTransform fakeScareRing;
+    private Image fakeScareRingImage;
     private Image beatPad;
     private RectTransform scoreFill;
     private RectTransform insightFill;
@@ -90,6 +120,13 @@ public sealed class FightingBirdGameSceneController : MonoBehaviour
 
     private bool decisiveMode; // 玩家快要贏 → 已顯示決勝拍視覺提示
     private bool shrinkIdle = true; // 收束框是否已在閒置狀態（避免每幀重寫 transform）
+    private int courtMarchFakeScaresRemaining;
+    private bool fakeScareActive;
+    private double fakeScareHitDsp;
+    private float fakeScareLeadSeconds;
+    private float fakeScareEdgeScale = 14f;
+    private bool fakeScareImpactFired;
+    private static Sprite fakeScareRingSprite;
 
     // 戰前模式：由戰前預覽進入時為 true，結束後接續戰鬥（而非返回 hall）。
     private bool preBattleMode;
@@ -126,9 +163,13 @@ public sealed class FightingBirdGameSceneController : MonoBehaviour
     private bool clockRunning;
     private int matchFirstBeat;
     private int lastTickBeat = -1;
+    private int lastTickSubdivision = -1;
 
     private Coroutine matchRoutine;
+    private Coroutine beatPadShakeRoutine;
     private AudioSource audioSource;
+    private AudioSource hitSfxSource;
+    private BirdDuelHitSfxBank hitSfxBank;
     private AudioClip tickClip;
     private AudioClip downbeatClip;
 
@@ -201,14 +242,21 @@ public sealed class FightingBirdGameSceneController : MonoBehaviour
     private void Update()
     {
         UpdateMetronome();
+        MaintainBgmLoopRegion();
         UpdateBeatVisual();
         HandleKeyboard();
     }
 
-    /// <summary>節拍器：在每個音樂拍（對齊 BGM 拍點）播放 tick 並脈動拍點，與判定流程解耦。</summary>
+    /// <summary>節拍器：在每個音樂拍（或 8／12 分音格）播放 tick 並脈動拍點。</summary>
     private void UpdateMetronome()
     {
         if (!clockRunning) return;
+
+        if (rhythmGrid == BirdDuelRhythmSync.GridMode.AlternatingEighthTwelfth)
+        {
+            UpdateMetronomeSubdivisionGrid();
+            return;
+        }
 
         double elapsed = AudioSettings.dspTime - (songStartDsp + firstDownbeatOffset);
         if (elapsed < 0d) return;
@@ -221,6 +269,46 @@ public sealed class FightingBirdGameSceneController : MonoBehaviour
         PlayTick(downbeat);
         PulseBeatPad();
     }
+
+    /// <summary>8 分／12 分音小節交替；決勝拍改為全程 3 連音（12 格／小節）。</summary>
+    private void UpdateMetronomeSubdivisionGrid()
+    {
+        double elapsedBeats = (AudioSettings.dspTime - (songStartDsp + firstDownbeatOffset)) / SecondsPerBeat;
+        if (elapsedBeats < matchFirstBeat) return;
+
+        elapsedBeats -= matchFirstBeat;
+        int bar = (int)System.Math.Floor(elapsedBeats / BeatsPerBar);
+        double beatInBar = elapsedBeats - bar * BeatsPerBar;
+        int subs = UsesDecisiveTripletGrid() ? TripletsPerBar : SubdivisionsInBar(bar);
+        double subDuration = BeatsPerBar / subs;
+        int sub = (int)System.Math.Floor(beatInBar / subDuration);
+        sub = Mathf.Clamp(sub, 0, subs - 1);
+
+        int linearId = bar * 16 + sub;
+        if (linearId == lastTickSubdivision) return;
+
+        lastTickSubdivision = linearId;
+        bool accent = sub == 0 || sub % TripletsPerBeat == 0;
+        PlayTick(accent);
+        PulseBeatPad();
+    }
+
+    private bool UsesDecisiveTripletGrid() =>
+        decisiveMode && rhythmGrid == BirdDuelRhythmSync.GridMode.AlternatingEighthTwelfth;
+
+    private double TripletUnitBeats => BeatsPerBar / (double)TripletsPerBar;
+
+    private double SnapToTripletGrid(double beatFraction)
+    {
+        double unit = TripletUnitBeats;
+        return System.Math.Ceiling(beatFraction / unit - 1e-9) * unit;
+    }
+
+    private static int SubdivisionsInBar(int barIndex) =>
+        (barIndex & 1) == 0 ? 8 : 12;
+
+    private double BeatFractionDsp(double beatFraction) =>
+        songStartDsp + firstDownbeatOffset + beatFraction * SecondsPerBeat;
 
     private void ComputeBarMaxes()
     {
@@ -326,7 +414,25 @@ public sealed class FightingBirdGameSceneController : MonoBehaviour
             new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero,
             ColorBeatPadIdle, false);
         beatPad.rectTransform.sizeDelta = new Vector2(150f, 150f);
-        beatPad.rectTransform.anchoredPosition = new Vector2(0f, -60f);
+        beatPad.rectTransform.anchoredPosition = BeatPadAnchor;
+
+        BuildFakeScareRing(root);
+    }
+
+    /// <summary>庭訓假 scare：白色方形外框，自螢幕邊緣收束至鼓面（呼應 ShrinkIndicator 方形收束）。</summary>
+    private void BuildFakeScareRing(Transform root)
+    {
+        Image ring = CreateImage("FakeScareFrame", root,
+            new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero,
+            ColorFakeScareRing, false);
+        ring.sprite = GetFakeScareFrameSprite();
+        ring.type = Image.Type.Simple;
+        ring.preserveAspect = true;
+        ring.rectTransform.sizeDelta = new Vector2(FakeScareFrameSize, FakeScareFrameSize);
+        ring.rectTransform.anchoredPosition = new Vector2(0f, -60f);
+        fakeScareRing = ring.rectTransform;
+        fakeScareRingImage = ring;
+        ring.gameObject.SetActive(false);
     }
 
     private void BuildBars(Transform root)
@@ -479,15 +585,18 @@ public sealed class FightingBirdGameSceneController : MonoBehaviour
         IReadOnlyList<BirdGesture> pattern = npc.beatPattern;
         // 首步判定需与 count-in「開始！」拉开整段 NormalBeatsPerStep，否则玩家跟 GO 抢按会固定 Miss。
         // count-in 结束在 beat (matchFirstBeat + CountInBeats - 1)；首步命中在其后 NormalBeatsPerStep 拍。
-        int beatCursor = matchFirstBeat + CountInBeats - 1 + NormalBeatsPerStep;
+        double beatCursor = matchFirstBeat + CountInBeats - 1 + activeNormalBeatsPerStep;
         for (int step = 0; step < pattern.Count; step++)
         {
+            if (UsesDecisiveTripletGrid())
+                beatCursor = SnapToTripletGrid(beatCursor);
+
             BirdGesture opp = pattern[step];
-            double hitDsp = BeatDsp(beatCursor);
+            double hitDsp = BeatFractionDsp(beatCursor);
             currentBeatDsp = hitDsp;
 
             // 提前 TelegraphLeadBeats 拍揭露對手鳥勢。
-            double telegraphDsp = hitDsp - TelegraphLeadBeats * SecondsPerBeat;
+            double telegraphDsp = hitDsp - telegraphLeadBeats * SecondsPerBeat;
             while (AudioSettings.dspTime < telegraphDsp)
                 yield return null;
 
@@ -501,13 +610,13 @@ public sealed class FightingBirdGameSceneController : MonoBehaviour
             beatWindowOpen = true;
 
             // 預告期間只顯示收束提示，不接受輸入（避免一看到鳥勢就搶按 → 固定 Miss）。
-            double inputOpenDsp = hitDsp - GoodWindow;
+            double inputOpenDsp = hitDsp - goodWindow;
             while (AudioSettings.dspTime < inputOpenDsp)
                 yield return null;
 
             inputWindowOpen = true;
 
-            double inputCloseDsp = hitDsp + GoodWindow;
+            double inputCloseDsp = hitDsp + goodWindow;
             while (AudioSettings.dspTime < inputCloseDsp && !inputLocked)
                 yield return null;
 
@@ -519,18 +628,29 @@ public sealed class FightingBirdGameSceneController : MonoBehaviour
             BirdGesture? input = inputLocked ? pendingInput : (BirdGesture?)null;
 
             BirdBeatJudgement judgement = BirdDuelCore.Judge(
-                opp, input, timingError, passRewardAvailable, PerfectWindow, GoodWindow);
+                opp, input, timingError, passRewardAvailable, perfectWindow, goodWindow);
 
             ApplyJudgement(opp, input, judgement);
             ShowFeedback(judgement);
             ClearTelegraph();
 
             // 玩家快要贏：首次跨過門檻時給視覺提示，並開始拉長／隨機化步距。
-            if (!decisiveMode && step < pattern.Count - 1 && score >= npc.winThreshold - CloseToWinScoreMargin)
+            if (!decisiveMode && step < pattern.Count - 1 && score >= npc.winThreshold - activeCloseToWinScoreMargin)
                 EnterDecisiveMode();
 
-            // 依目前分數決定到下一步的間隔（快要贏 → 2~8 拍隨機，打亂節奏）。
-            beatCursor += ResolveNextStepBeats();
+            // 依目前分數決定到下一步的間隔（快要贏 → 2~8 拍或 8／12 分格隨機）。
+            if (step < pattern.Count - 1)
+            {
+                double nextGapBeats = ResolveNextStepBeatDelta();
+                beatCursor += nextGapBeats;
+                double nextHitDsp = BeatFractionDsp(beatCursor);
+
+                if (TryPickCourtMarchFakeScareHit(
+                        hitDsp, nextHitDsp, nextGapBeats, pattern.Count - 1 - step, out double fakeHitDsp))
+                {
+                    yield return RunCourtMarchFakeScare(fakeHitDsp);
+                }
+            }
         }
 
         clockRunning = false;
@@ -538,14 +658,17 @@ public sealed class FightingBirdGameSceneController : MonoBehaviour
         matchRoutine = null;
     }
 
-    /// <summary>進入決勝拍：以熱橙色提示（副標、拍點、收束框）並脈動，告知玩家節奏即將變化。</summary>
+    /// <summary>進入決勝拍：視覺提示並收緊判定窗口／預告時間。</summary>
     private void EnterDecisiveMode()
     {
         decisiveMode = true;
+        ApplyDecisiveDifficulty();
 
         if (subtitleText != null)
         {
-            subtitleText.text = "決勝拍！節奏開始變化——抓準鼓點！";
+            subtitleText.text = UsesDecisiveTripletGrid() || rhythmGrid == BirdDuelRhythmSync.GridMode.AlternatingEighthTwelfth
+                ? "決勝拍！3 連音——抓準節奏！"
+                : "決勝拍！節奏開始變化——抓準鼓點！";
             subtitleText.color = ColorDecisive;
         }
         if (beatPad != null)
@@ -557,17 +680,185 @@ public sealed class FightingBirdGameSceneController : MonoBehaviour
             shrinkIndicatorImage.color = c;
         }
         PulseBeatPad();
+        lastTickSubdivision = -1;
     }
 
-    /// <summary>到下一個判定步驟的音樂拍數。一般 4 拍；玩家快要贏時於 2~8 拍之間隨機。</summary>
-    private int ResolveNextStepBeats()
+    private void ApplyDecisiveDifficulty()
     {
-        bool closeToWin = score >= npc.winThreshold - CloseToWinScoreMargin;
+        perfectWindow = BasePerfectWindow * rhythmProfile.BasePerfectWindowMul * rhythmProfile.DecisivePerfectWindowMul;
+        goodWindow = BaseGoodWindow * rhythmProfile.BaseGoodWindowMul * rhythmProfile.DecisiveGoodWindowMul;
+        telegraphLeadBeats = BaseTelegraphLeadBeats * rhythmProfile.BaseTelegraphLeadMul * rhythmProfile.DecisiveTelegraphLeadMul;
+    }
+
+    private void ResetJudgementWindows()
+    {
+        perfectWindow = BasePerfectWindow * rhythmProfile.BasePerfectWindowMul;
+        goodWindow = BaseGoodWindow * rhythmProfile.BaseGoodWindowMul;
+        telegraphLeadBeats = BaseTelegraphLeadBeats * rhythmProfile.BaseTelegraphLeadMul;
+    }
+
+    /// <summary>到下一判定步的音樂拍長。庭訓決勝段以 3 連音格隨機 6~24 格（≈2~8 拍）。</summary>
+    private double ResolveNextStepBeatDelta()
+    {
+        bool closeToWin = score >= npc.winThreshold - activeCloseToWinScoreMargin;
         if (!closeToWin)
-            return NormalBeatsPerStep;
+            return activeNormalBeatsPerStep;
+
+        if (rhythmGrid == BirdDuelRhythmSync.GridMode.AlternatingEighthTwelfth)
+        {
+            int triplets = UnityEngine.Random.Range(activeDecisiveMinTriplets, activeDecisiveMaxTriplets + 1);
+            return triplets * TripletUnitBeats;
+        }
 
         return UnityEngine.Random.Range(CloseToWinMinBeats, CloseToWinMaxBeats + 1);
     }
+
+    /// <summary>庭訓決勝 3 連音長休息：假 scare 大光圈收束（無判定），每局至少 1 次。</summary>
+    private bool TryPickCourtMarchFakeScareHit(
+        double lastHitDsp,
+        double nextHitDsp,
+        double gapBeats,
+        int stepsUntilLast,
+        out double fakeHitDsp)
+    {
+        fakeHitDsp = 0d;
+        if (!UsesDecisiveTripletGrid() || !IsCourtMarchCd())
+            return false;
+
+        float leadSec = FakeScareLeadBeats * SecondsPerBeat;
+        double restStart = lastHitDsp + goodWindow;
+        double restEnd = nextHitDsp - telegraphLeadBeats * SecondsPerBeat;
+        if (restEnd - restStart < leadSec + 0.12d)
+            return false;
+
+        double gapTriplets = gapBeats / TripletUnitBeats;
+        bool mustPlay = courtMarchFakeScaresRemaining > 0;
+        bool longRest = gapTriplets >= FakeScareMinGapTriplets;
+        bool lastChance = mustPlay && stepsUntilLast <= 2;
+        if (!longRest && !lastChance)
+            return false;
+        if (!mustPlay && UnityEngine.Random.value > 0.28f)
+            return false;
+
+        double earliest = restStart + leadSec;
+        double latest = restEnd - 0.06d;
+        if (latest <= earliest)
+            fakeHitDsp = (restStart + restEnd) * 0.5d;
+        else
+            fakeHitDsp = restStart + (restEnd - restStart) * UnityEngine.Random.Range(0.34f, 0.56f);
+
+        fakeHitDsp = System.Math.Max(earliest, System.Math.Min(latest, fakeHitDsp));
+        if (mustPlay)
+            courtMarchFakeScaresRemaining--;
+        return true;
+    }
+
+    private IEnumerator RunCourtMarchFakeScare(double fakeHitDsp)
+    {
+        fakeScareLeadSeconds = FakeScareLeadBeats * SecondsPerBeat;
+        double startDsp = fakeHitDsp - fakeScareLeadSeconds;
+
+        while (AudioSettings.dspTime < startDsp)
+            yield return null;
+
+        fakeScareActive = true;
+        fakeScareHitDsp = fakeHitDsp;
+        fakeScareImpactFired = false;
+        fakeScareEdgeScale = ResolveFakeScareEdgeScale();
+        if (fakeScareRing != null)
+        {
+            fakeScareRing.gameObject.SetActive(true);
+            fakeScareRing.localScale = Vector3.one * fakeScareEdgeScale;
+        }
+        if (fakeScareRingImage != null)
+        {
+            Color c = ColorFakeScareRing;
+            c.a = 0.92f;
+            fakeScareRingImage.color = c;
+        }
+
+        while (AudioSettings.dspTime < fakeHitDsp + 0.14d)
+            yield return null;
+
+        fakeScareActive = false;
+        fakeScareHitDsp = 0d;
+        HideFakeScareRing();
+        if (beatPad != null && decisiveMode)
+            beatPad.color = ColorDecisive;
+    }
+
+    private void HideFakeScareRing()
+    {
+        if (fakeScareRing == null) return;
+        fakeScareRing.gameObject.SetActive(false);
+        fakeScareRing.localScale = Vector3.one;
+        if (fakeScareRingImage != null)
+            fakeScareRingImage.color = ColorFakeScareRing;
+    }
+
+    private float ResolveFakeScareEdgeScale()
+    {
+        if (gameCanvas == null || beatPad == null)
+            return 14f;
+
+        RectTransform canvasRt = gameCanvas.transform as RectTransform;
+        Vector2 beatPos = beatPad.rectTransform.anchoredPosition;
+        float halfW = canvasRt.rect.width * 0.5f;
+        float halfH = canvasRt.rect.height * 0.5f;
+        Vector2[] corners =
+        {
+            new Vector2(-halfW, -halfH),
+            new Vector2(-halfW, halfH),
+            new Vector2(halfW, halfH),
+            new Vector2(halfW, -halfH),
+        };
+
+        float maxHalfSide = 0f;
+        for (int i = 0; i < corners.Length; i++)
+        {
+            float dx = Mathf.Abs(beatPos.x - corners[i].x);
+            float dy = Mathf.Abs(beatPos.y - corners[i].y);
+            maxHalfSide = Mathf.Max(maxHalfSide, Mathf.Max(dx, dy));
+        }
+
+        return maxHalfSide * 2.08f / (FakeScareFrameSize * 0.5f);
+    }
+
+    private static Sprite GetFakeScareFrameSprite()
+    {
+        if (fakeScareRingSprite != null)
+            return fakeScareRingSprite;
+
+        const int size = 256;
+        var tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
+        tex.wrapMode = TextureWrapMode.Clamp;
+        tex.filterMode = FilterMode.Bilinear;
+        float center = size * 0.5f;
+        float outerHalf = center - 1.5f;
+        float innerHalf = outerHalf - FakeScareFrameThicknessPx;
+        for (int y = 0; y < size; y++)
+        {
+            for (int x = 0; x < size; x++)
+            {
+                float ax = Mathf.Abs(x + 0.5f - center);
+                float ay = Mathf.Abs(y + 0.5f - center);
+                bool inOuter = ax <= outerHalf && ay <= outerHalf;
+                bool inInner = ax <= innerHalf && ay <= innerHalf;
+                tex.SetPixel(x, y, inOuter && !inInner ? Color.white : Color.clear);
+            }
+        }
+
+        tex.Apply(false, true);
+        fakeScareRingSprite = Sprite.Create(
+            tex,
+            new Rect(0f, 0f, size, size),
+            new Vector2(0.5f, 0.5f),
+            100f);
+        return fakeScareRingSprite;
+    }
+
+    private bool IsCourtMarchCd() =>
+        string.Equals(activeCdId, "court_march", System.StringComparison.OrdinalIgnoreCase);
 
     private void ResetState()
     {
@@ -582,7 +873,15 @@ public sealed class FightingBirdGameSceneController : MonoBehaviour
         clockRunning = false;
         currentBeatDsp = 0d;
         lastTickBeat = -1;
+        lastTickSubdivision = -1;
         decisiveMode = false;
+        ResetJudgementWindows();
+        courtMarchFakeScaresRemaining = IsCourtMarchCd() ? CourtMarchFakeScaresPerMatch : 0;
+        fakeScareActive = false;
+        fakeScareHitDsp = 0d;
+        fakeScareImpactFired = false;
+        HideFakeScareRing();
+        StopBeatPadShake();
         shrinkIdle = false; // 強制下一幀重設閒置 transform
         if (subtitleText != null) subtitleText.color = ColorSubtitle;
         if (beatPad != null) beatPad.color = ColorBeatPadIdle;
@@ -603,6 +902,11 @@ public sealed class FightingBirdGameSceneController : MonoBehaviour
         // 成功築巢（反制振翅）→ 取得看破，下一拍提早揭露對手鳥勢。
         if (judgement.isBestCounter && opp == BirdGesture.Wing)
             insightPeekActive = true;
+
+        if (judgement.outcome == BirdBeatOutcome.Perfect)
+            PlayPerfectBeatShake();
+
+        PlayHitOutcomeSfx(judgement.outcome);
 
         UpdateBars();
     }
@@ -887,7 +1191,7 @@ public sealed class FightingBirdGameSceneController : MonoBehaviour
         if (!inputWindowOpen || inputLocked || currentBeatDsp <= 0d) return;
 
         float timingErrorNow = Mathf.Abs((float)(AudioSettings.dspTime - currentBeatDsp));
-        if (timingErrorNow > GoodWindow) return;
+        if (timingErrorNow > goodWindow) return;
 
         pendingInput = gesture;
         pendingInputDsp = AudioSettings.dspTime;
@@ -962,11 +1266,40 @@ public sealed class FightingBirdGameSceneController : MonoBehaviour
 
     private void UpdateBeatVisual()
     {
+        if (fakeScareActive && fakeScareHitDsp > 0d && fakeScareRing != null)
+        {
+            float lead = Mathf.Max(0.0001f, fakeScareLeadSeconds);
+            float remaining = (float)(fakeScareHitDsp - AudioSettings.dspTime);
+            float linearT = Mathf.Clamp01(remaining / lead);
+            float easedT = linearT * linearT * linearT; // 後段加速收束，營造「猛然」感
+            float scale = Mathf.Lerp(FakeScareMinScale, fakeScareEdgeScale, easedT);
+            fakeScareRing.localScale = new Vector3(scale, scale, 1f);
+
+            if (fakeScareRingImage != null)
+            {
+                float alpha = Mathf.Lerp(0.18f, 0.98f, Mathf.Pow(linearT, 0.55f));
+                Color c = ColorFakeScareRing;
+                c.a = alpha;
+                fakeScareRingImage.color = c;
+            }
+
+            if (remaining <= 0f && !fakeScareImpactFired)
+            {
+                fakeScareImpactFired = true;
+                PulseBeatPad();
+                PlayTick(true);
+                if (beatPad != null)
+                    beatPad.color = Color.white;
+            }
+
+            return;
+        }
+
         if (shrinkIndicator == null) return;
 
         if (beatWindowOpen && currentBeatDsp > 0d)
         {
-            float lead = TelegraphLeadBeats * SecondsPerBeat;
+            float lead = telegraphLeadBeats * SecondsPerBeat;
             float remaining = (float)(currentBeatDsp - AudioSettings.dspTime);
             float t = Mathf.Clamp01(remaining / Mathf.Max(0.0001f, lead)); // 1 → 0
             float scale = Mathf.Lerp(1f, 2.4f, t);
@@ -983,12 +1316,67 @@ public sealed class FightingBirdGameSceneController : MonoBehaviour
             // 只在進入閒置時寫一次，避免每幀變更 transform 而反覆觸發 Canvas 重新批次。
             shrinkIndicator.localScale = Vector3.one * 2.4f;
             shrinkIdle = true;
+            if (shrinkIndicatorImage != null && decisiveMode)
+            {
+                Color c = ColorDecisive;
+                c.a = 0.20f;
+                shrinkIndicatorImage.color = c;
+            }
+            else if (shrinkIndicatorImage != null)
+            {
+                shrinkIndicatorImage.color = ColorShrinkIdle;
+            }
+            if (beatPad != null && decisiveMode)
+                beatPad.color = ColorDecisive;
         }
     }
 
     private void PulseBeatPad()
     {
         if (beatPad != null) StartCoroutine(PulseRoutine(beatPad.rectTransform));
+    }
+
+    private void PlayPerfectBeatShake()
+    {
+        if (beatPad == null) return;
+        if (beatPadShakeRoutine != null)
+            StopCoroutine(beatPadShakeRoutine);
+        beatPadShakeRoutine = StartCoroutine(PerfectBeatShakeRoutine(beatPad.rectTransform));
+    }
+
+    private void StopBeatPadShake()
+    {
+        if (beatPadShakeRoutine != null)
+        {
+            StopCoroutine(beatPadShakeRoutine);
+            beatPadShakeRoutine = null;
+        }
+
+        if (beatPad != null)
+            beatPad.rectTransform.anchoredPosition = BeatPadAnchor;
+    }
+
+    private IEnumerator PerfectBeatShakeRoutine(RectTransform rt)
+    {
+        if (rt == null) yield break;
+
+        Vector2 origin = BeatPadAnchor;
+        rt.anchoredPosition = origin;
+        float t = 0f;
+        while (t < PerfectBeatShakeDuration && rt != null)
+        {
+            t += Time.deltaTime;
+            float damper = 1f - Mathf.Clamp01(t / PerfectBeatShakeDuration);
+            float phase = t * 52f;
+            float x = Mathf.Sin(phase) * PerfectBeatShakeStrength * damper;
+            float y = Mathf.Cos(phase * 1.15f) * PerfectBeatShakeStrength * 0.38f * damper;
+            rt.anchoredPosition = origin + new Vector2(x, y);
+            yield return null;
+        }
+
+        if (rt != null)
+            rt.anchoredPosition = origin;
+        beatPadShakeRoutine = null;
     }
 
     private IEnumerator PulseRoutine(RectTransform rt)
@@ -1048,10 +1436,43 @@ public sealed class FightingBirdGameSceneController : MonoBehaviour
     {
         audioSource = gameObject.AddComponent<AudioSource>();
         audioSource.playOnAwake = false;
+        audioSource.spatialBlend = 0f;
         tickClip = BuildClickClip(900f, 0.05f);
         downbeatClip = BuildClickClip(500f, 0.07f);
 
+        hitSfxSource = gameObject.AddComponent<AudioSource>();
+        hitSfxSource.playOnAwake = false;
+        hitSfxSource.spatialBlend = 0f;
+        hitSfxSource.bypassListenerEffects = true;
+        hitSfxSource.ignoreListenerPause = true;
+        hitSfxBank = BirdDuelHitSfxBank.TryCreate(ResolveHitSfxSourceClip());
+
         SetupBgm();
+    }
+
+    private AudioClip ResolveHitSfxSourceClip()
+    {
+        AudioLibrary library = AudioLibrary.Instance;
+        if (library != null && library.BirdDuelHitSfxSource != null)
+            return library.BirdDuelHitSfxSource;
+
+#if UNITY_EDITOR
+        return UnityEditor.AssetDatabase.LoadAssetAtPath<AudioClip>(HitSfxAssetPath);
+#else
+        return null;
+#endif
+    }
+
+    private void PlayHitOutcomeSfx(BirdBeatOutcome outcome)
+    {
+        if (hitSfxSource == null || hitSfxBank == null || !hitSfxBank.IsReady)
+            return;
+
+        AudioClip clip = hitSfxBank.ResolveClip(outcome);
+        if (clip == null)
+            return;
+
+        hitSfxSource.PlayOneShot(clip, BirdDuelHitSfxBank.ResolveVolume(outcome));
     }
 
     /// <summary>鬥鳥預設曲：feinsmecker - Come Again。建立並備妥音源；實際排程於每場開始時 <see cref="RestartSongAndClock"/>。</summary>
@@ -1062,13 +1483,14 @@ public sealed class FightingBirdGameSceneController : MonoBehaviour
 
         if (bgmClip == null)
         {
-            Debug.LogWarning("FightingBirdGameSceneController: 找不到鬥鳥 BGM（feinsmecker - Come Again），節拍將靜音進行。");
+            Debug.LogWarning(
+                "FightingBirdGameSceneController: 找不到鬥鳥 BGM（cd=" + activeCdId + "），節拍將靜音進行。");
             return;
         }
 
         bgmSource = gameObject.AddComponent<AudioSource>();
         bgmSource.playOnAwake = false;
-        bgmSource.loop = true;
+        bgmSource.loop = !rhythmProfile.UsesCustomBgmLoop;
         bgmSource.spatialBlend = 0f;
         bgmSource.bypassListenerEffects = true;
         bgmSource.ignoreListenerPause = true;
@@ -1090,21 +1512,44 @@ public sealed class FightingBirdGameSceneController : MonoBehaviour
             return;
 
         bgmSource.Stop();
-        bgmSource.time = 0f;
+        bgmSource.time = rhythmProfile.UsesCustomBgmLoop ? bgmLoopStartSeconds : 0f;
         bgmSource.PlayScheduled(songStartDsp);
+    }
+
+    /// <summary>自訂循環區：每圈長度對齊港灣練習帶，避免長曲前奏過短的有效演奏感。</summary>
+    private void MaintainBgmLoopRegion()
+    {
+        if (bgmSource == null || !bgmSource.isPlaying || bgmLoopLengthSeconds <= 0.01f)
+            return;
+
+        if (bgmSource.time >= bgmLoopStartSeconds + bgmLoopLengthSeconds)
+            bgmSource.time = bgmLoopStartSeconds;
     }
 
     private void LoadRhythmSync()
     {
-        BirdDuelRhythmSync sync = BirdDuelRhythmSync.Instance;
-        if (sync != null)
-        {
-            bpm = sync.Bpm;
-            firstDownbeatOffset = sync.FirstDownbeatOffset;
-        }
+        activeCdId = ResolveActiveCdId();
+        rhythmProfile = BirdDuelRhythmSync.ResolveForCd(activeCdId);
+        bpm = rhythmProfile.Bpm;
+        firstDownbeatOffset = rhythmProfile.FirstDownbeatOffset;
+        rhythmGrid = rhythmProfile.Grid;
+        bgmLoopStartSeconds = rhythmProfile.BgmLoopStartSeconds;
+        bgmLoopLengthSeconds = rhythmProfile.BgmLoopLengthSeconds;
+        activeCloseToWinScoreMargin = rhythmProfile.CloseToWinScoreMargin;
+        activeNormalBeatsPerStep = rhythmProfile.NormalBeatsPerStep;
+        activeDecisiveMinTriplets = rhythmProfile.DecisiveMinTriplets;
+        activeDecisiveMaxTriplets = rhythmProfile.DecisiveMaxTriplets;
+        ResetJudgementWindows();
     }
 
-    /// <summary>第 beatIndex 個音樂拍的 dsp 命中時間。</summary>
+    private static string ResolveActiveCdId()
+    {
+        if (PreBattleCdContext.HasSelection)
+            return PreBattleCdContext.SelectedCdId;
+        return BirdDuelCdCatalog.DefaultCdId;
+    }
+
+    /// <summary>第 beatIndex 個整拍的 dsp 命中時間（count-in 用）。</summary>
     private double BeatDsp(int beatIndex) =>
         songStartDsp + firstDownbeatOffset + beatIndex * SecondsPerBeat;
 
@@ -1115,11 +1560,16 @@ public sealed class FightingBirdGameSceneController : MonoBehaviour
 
         AudioLibrary library = AudioLibrary.Instance;
         if (library != null)
-            bgmClip = library.BirdDuelBgm;
+            bgmClip = library.GetBirdDuelCdBgm(activeCdId);
 
 #if UNITY_EDITOR
         if (bgmClip == null)
-            bgmClip = AssetDatabase.LoadAssetAtPath<AudioClip>(ComeAgainAssetPath);
+        {
+            string path = string.Equals(activeCdId, "court_march", System.StringComparison.OrdinalIgnoreCase)
+                ? StampedeAssetPath
+                : ComeAgainAssetPath;
+            bgmClip = AssetDatabase.LoadAssetAtPath<AudioClip>(path);
+        }
 #endif
     }
 
@@ -1127,6 +1577,8 @@ public sealed class FightingBirdGameSceneController : MonoBehaviour
     {
         if (bgmSource != null && bgmSource.isPlaying)
             bgmSource.Stop();
+        hitSfxBank?.Release();
+        hitSfxBank = null;
     }
 
     private void PlayTick(bool downbeat)

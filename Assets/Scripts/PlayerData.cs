@@ -365,7 +365,7 @@ public class PlayerData : MonoBehaviour
             string[] dataRow;
             try
             {
-                dataRow = File.ReadAllLines(candidatePath);
+                dataRow = PlayerPersistSafeIO.ReadAllLines(candidatePath);
             }
             catch (Exception ex)
             {
@@ -1184,6 +1184,13 @@ public class PlayerData : MonoBehaviour
 
     public static string GetActivePlayerSlotName()
     {
+        PlayerData pd = ResolveCanonical();
+        if (pd != null && pd.IsSaveHydratedFromDisk)
+        {
+            int slot = Mathf.Clamp(pd.activePlayerSlot, 1, MaxPlayerSlots);
+            return SanitizeSlotName(pd.activePlayerSlotName, slot);
+        }
+
         string path = GetPlayerDataPath();
         if (!PlayerPersistSafeIO.TryReadPlayerDataLines(path, out string[] rows, out _))
             return "玩家1";
@@ -1201,36 +1208,13 @@ public class PlayerData : MonoBehaviour
 
     public static void SetActivePlayerSlotName(string name)
     {
-        string path = GetPlayerDataPath();
-        string dir = Application.persistentDataPath;
-        Directory.CreateDirectory(dir);
-        string[] existing = PlayerPersistSafeIO.TryReadPlayerDataLines(path, out string[] read, out _)
-            ? read
-            : Array.Empty<string>();
-        int active = Mathf.Clamp(ReadActiveSlotFromRows(existing), 1, MaxPlayerSlots);
+        int active = GetActivePlayerSlotOrDefault();
         string safeName = SanitizeSlotName(name, active);
 
-        var rows = new List<string>(existing.Length + 2);
-        bool wrote = false;
-        for (int i = 0; i < existing.Length; i++)
-        {
-            string row = existing[i];
-            if (string.IsNullOrWhiteSpace(row)) { rows.Add(row); continue; }
-            string[] c = row.Split(',');
-            if (c.Length >= 4 && c[0].Trim() == "slot" && int.TryParse(c[1].Trim(), out int slot) && slot == active && c[2].Trim() == "slot_name")
-            {
-                if (!wrote)
-                {
-                    rows.Add($"slot,{active},slot_name,{safeName}");
-                    wrote = true;
-                }
-                continue;
-            }
-            rows.Add(row);
-        }
-        if (!wrote) rows.Add($"slot,{active},slot_name,{safeName}");
-        EnsureAllSlotContainers(rows);
-        PlayerSaveCoordinator.WritePlayerDataCsv(rows);
+        PlayerData pd = ResolveForSaveWrite();
+        pd.activePlayerSlot = Mathf.Clamp(active, 1, MaxPlayerSlots);
+        pd.activePlayerSlotName = safeName;
+        pd.SavePlayerData();
     }
 
     private static string SanitizeSlotName(string name, int slot)

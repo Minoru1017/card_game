@@ -46,7 +46,7 @@ public static class PlayerSaveBackupRestoreTools
 
         try
         {
-            string[] lines = File.ReadAllLines(path);
+            string[] lines = PlayerPersistSafeIO.ReadAllLines(path);
             if (!PlayerPersistSafeIO.LooksLikePlayerDataCsv(lines))
                 return false;
 
