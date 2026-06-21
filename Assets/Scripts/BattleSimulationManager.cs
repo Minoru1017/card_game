@@ -257,6 +257,18 @@ public partial class BattleSimulationManager : MonoBehaviour
             return;
         }
 
+        if (BattleLaunchContext.IsM12CoachPracticeBattle)
+        {
+            SceneLoader.ApplyM12RuntimeConfigToManager(this);
+            return;
+        }
+
+        if (BattleLaunchContext.IsM12TrioTutorialBattle)
+        {
+            SceneLoader.ApplyM12RuntimeConfigToManager(this);
+            return;
+        }
+
         string label = BattleLaunchContext.ResolveForBattleRecord();
         if (string.IsNullOrWhiteSpace(label))
             label = BattleDifficultyRuntime.CurrentLabelZh;
@@ -324,6 +336,8 @@ public partial class BattleSimulationManager : MonoBehaviour
     private int bonusPlayerExtraDrawPerTurn;
     private int bonusEnemyOpeningExtraDraw;
     private bool bonusEnemyOpeningDrawConsumed;
+    private bool bonusPlayerHeroShieldRemaining;
+    private int bonusPlayerRarityDrawMaxRound;
     private string pendingBirdDuelBonusAnnouncement;
     private string pendingBirdDuelInsightReveal;
 
@@ -339,6 +353,8 @@ public partial class BattleSimulationManager : MonoBehaviour
     public bool IsWeatherSystemEnabledForBattle()
     {
         if (BattleLaunchContext.IsIntroTutorialBattle)
+            return false;
+        if (BattleLaunchContext.IsM12TrioTutorialBattle)
             return false;
 
         return runtimeEnemyAiPlayStyle != EnemyAiPlayStyle.IntroGreedy;
@@ -408,6 +424,8 @@ public partial class BattleSimulationManager : MonoBehaviour
     public event System.Action<int> BattleEnded;
     /// <summary>規則阻斷訊息變更（非空時結算區顯示提示而非結算面板）。</summary>
     public event System.Action<string> BattleRuleMessageChanged;
+    /// <summary>聖盾禱告：本次對英雄傷害被抵銷時通知 UI 播放護盾破碎。</summary>
+    public event System.Action PlayerHeroShieldConsumed;
 
     private bool deferEnemyFieldUiClearAfterPlayerFireballKill;
     private bool deferPlayerFieldUiClearAfterEnemyFireballKill;
@@ -1520,6 +1538,10 @@ public partial class BattleSimulationManager : MonoBehaviour
         playerData.LoadPlayerData(); // ensure battle uses latest saved deck data
         if (BattleLaunchContext.IsIntroTutorialBattle)
             TutorialDeckApplicator.EnsureIntroTutorialDeckReady(playerData);
+        else if (BattleLaunchContext.IsM12TrioTutorialBattle)
+            M12PhaseDeckApplicator.ApplyPhaseADeck(playerData);
+        else if (BattleLaunchContext.IsM12CoachPracticeBattle)
+            M12PhaseDeckApplicator.ApplyPhaseBDeck(playerData);
 
         battleHistoryLines.Clear();
         battleHistoryEntries.Clear();
@@ -1604,6 +1626,8 @@ public partial class BattleSimulationManager : MonoBehaviour
         bonusPlayerExtraDrawPerTurn = Mathf.Max(0, birdDuelBonus.PlayerExtraDrawPerTurn);
         bonusEnemyOpeningExtraDraw = Mathf.Max(0, birdDuelBonus.EnemyExtraOpeningDraw);
         bonusEnemyOpeningDrawConsumed = false;
+        bonusPlayerHeroShieldRemaining = birdDuelBonus.PlayerHeroShieldActive;
+        bonusPlayerRarityDrawMaxRound = Mathf.Max(0, birdDuelBonus.PlayerRarityDrawMaxRound);
         ApplyBonusOpeningWeather(birdDuelBonus.OpeningWeather);
 
         BuildPlayerDeck();
@@ -1623,6 +1647,8 @@ public partial class BattleSimulationManager : MonoBehaviour
         playerHp = Mathf.Max(1, playerHp);
         if (BattleLaunchContext.IsIntroTutorialBattle)
             enemyHp = IntroTutorialBattleRules.EnemyStartHealth;
+        else if (BattleLaunchContext.IsM12TrioTutorialBattle)
+            enemyHp = M12PhaseABattleRules.EnemyStartHealth;
         else if (HarborTrainingDifficultyRuntime.TryGetEnemyStartHealth(out int harborEnemyHp))
             enemyHp = harborEnemyHp;
         else
@@ -2149,10 +2175,8 @@ public partial class BattleSimulationManager : MonoBehaviour
             }
             int directDmg = ScaleContextualEnemyDamage(
                 ModifyDirectDamageToPlayerHero(enemyField.attack));
-            int hpBefore = playerHp;
-            playerHp -= directDmg;
-            LogBattleHistory("敵方場地上 怪物牌 " + enemyField.cardName + " 對我方英雄造成" + directDmg + " 點傷害");
-            RecordPlayerHeroHpLossHistory(hpBefore, playerHp, directDmg, "敵方場地怪獸直擊");
+            int dealt = DealDamageToPlayerHero(directDmg, "敵方場地怪獸直擊");
+            LogBattleHistory("敵方場地上 怪物牌 " + enemyField.cardName + " 對我方英雄造成" + dealt + " 點傷害");
             AttackPerformed?.Invoke(new AttackVisualData
             {
                 attackerIsPlayer = false,
@@ -2458,9 +2482,7 @@ public partial class BattleSimulationManager : MonoBehaviour
             case 2:
                 return ApplyEnemySpellLinGaze(spell);
             default:
-                int hpBefore = playerHp;
-                playerHp -= 2;
-                RecordPlayerHeroHpLossHistory(hpBefore, playerHp, 2, "敵方法術效果");
+                DealDamageToPlayerHero(2, "敵方法術效果");
                 return true;
         }
     }
@@ -2527,41 +2549,97 @@ public partial class BattleSimulationManager : MonoBehaviour
     private void ApplyEnemySpellFireball(SpellCard spell)
     {
         int dmg = ScaleContextualEnemyDamage(ApplyWeatherSpellPowerBonus(20, false));
-        int deal;
         if (playerField != null)
         {
             int toMonster = ModifyDamageToPlayerMonster(dmg);
-            deal = Mathf.Min(toMonster, Mathf.Max(0, playerField.currentHp));
+            int deal = Mathf.Min(toMonster, Mathf.Max(0, playerField.currentHp));
             playerField.currentHp -= deal;
             if (playerField.currentHp <= 0) playerField = null;
+            LogBattleHistory("敵方咒術區 法術牌 " + spell.cardName + " 對我方造成" + deal + "點傷害");
+            return;
         }
-        else
+
+        if (enemyDirectAttackBlockedByPlayerSanctumThisEnemyTurn)
         {
-            if (enemyDirectAttackBlockedByPlayerSanctumThisEnemyTurn)
-            {
-                ShowBattleToast("聖院騎士·護聖：敵方本回合無法以火球直擊我方英雄。", 2.6f);
-                LogBattleHistory("護聖：敵方本回合無法以火球直擊我方英雄");
-                return;
-            }
-            int toHero = ModifyDirectDamageToPlayerHero(dmg);
-            int before = playerHp;
-            playerHp = Mathf.Max(0, playerHp - toHero);
-            deal = before - playerHp;
-            if (deal > 0)
-                RecordPlayerHeroHpLossHistory(before, playerHp, deal, "敵方法術 " + spell.cardName);
+            ShowBattleToast("聖院騎士·護聖：敵方本回合無法以火球直擊我方英雄。", 2.6f);
+            LogBattleHistory("護聖：敵方本回合無法直擊我方英雄");
+            return;
         }
-        LogBattleHistory("敵方咒術區 法術牌 " + spell.cardName + " 對我方造成" + deal + "點傷害");
+
+        int toHero = ModifyDirectDamageToPlayerHero(dmg);
+        int dealt = DealDamageToPlayerHero(toHero, "敵方法術 " + spell.cardName);
+        LogBattleHistory("敵方咒術區 法術牌 " + spell.cardName + " 對我方造成" + dealt + "點傷害");
+    }
+
+    /// <summary>對我方英雄結算傷害；聖盾禱告可抵銷整場首次有效傷害。</summary>
+    private int DealDamageToPlayerHero(int damage, string sourceLabel)
+    {
+        int dmg = Mathf.Max(0, damage);
+        if (dmg <= 0) return 0;
+
+        if (bonusPlayerHeroShieldRemaining)
+        {
+            bonusPlayerHeroShieldRemaining = false;
+            ShowBattleToast("聖盾禱告：本次對英雄的傷害已抵銷。", 2.8f);
+            LogBattleHistory("聖盾禱告：抵銷對我方英雄的傷害（" + sourceLabel + "，原 " + dmg + " 點）");
+            PlayerHeroShieldConsumed?.Invoke();
+            return 0;
+        }
+
+        int hpBefore = playerHp;
+        playerHp = Mathf.Max(0, playerHp - dmg);
+        RecordPlayerHeroHpLossHistory(hpBefore, playerHp, dmg, sourceLabel);
+        return dmg;
     }
 
     private void DrawCard(List<Card> fromDeck, List<Card> toHand, string owner)
     {
         if (fromDeck.Count == 0) return;
 
-        Card c = fromDeck[0];
-        fromDeck.RemoveAt(0);
+        Card c = owner == "Player" && ShouldUsePlayerRarityPriorityDraw()
+            ? DrawHighestRarityCard(fromDeck)
+            : DrawTopCard(fromDeck);
         toHand.Add(c);
         CardDrawn?.Invoke(owner == "Player", c);
         BattleVerbose(owner + " draws: " + c.cardName);
+    }
+
+    private bool ShouldUsePlayerRarityPriorityDraw() =>
+        bonusPlayerRarityDrawMaxRound > 0 && currentRound <= bonusPlayerRarityDrawMaxRound;
+
+    private static Card DrawTopCard(List<Card> fromDeck)
+    {
+        Card c = fromDeck[0];
+        fromDeck.RemoveAt(0);
+        return c;
+    }
+
+    private static Card DrawHighestRarityCard(List<Card> fromDeck)
+    {
+        int bestRank = CardRarityUtility.GetRank(fromDeck[0].rarity);
+        int pickIndex = 0;
+        int tieCount = 1;
+
+        for (int i = 1; i < fromDeck.Count; i++)
+        {
+            int rank = CardRarityUtility.GetRank(fromDeck[i].rarity);
+            if (rank > bestRank)
+            {
+                bestRank = rank;
+                pickIndex = i;
+                tieCount = 1;
+            }
+            else if (rank == bestRank)
+            {
+                tieCount++;
+                if (UnityEngine.Random.Range(0, tieCount) == 0)
+                    pickIndex = i;
+            }
+        }
+
+        Card picked = fromDeck[pickIndex];
+        fromDeck.RemoveAt(pickIndex);
+        return picked;
     }
 
     private void DrawPlayerCards(int count)
@@ -3298,6 +3376,8 @@ public partial class BattleSimulationManager : MonoBehaviour
         int baseCount;
         if (BattleLaunchContext.IsIntroTutorialBattle)
             baseCount = IntroTutorialBattleRules.EnemyDrawPerTurn;
+        else if (BattleLaunchContext.IsM12TrioTutorialBattle)
+            baseCount = M12PhaseABattleRules.EnemyDrawPerTurn;
         else if (HarborTrainingDifficultyRuntime.IsHarborBattleActive)
             baseCount = HarborTrainingDifficultyRuntime.GetEnemyDrawPerTurn(currentRound);
         else
@@ -3323,6 +3403,12 @@ public partial class BattleSimulationManager : MonoBehaviour
             scaled = Mathf.Max(
                 1,
                 Mathf.RoundToInt(rawDamage * IntroTutorialBattleRules.EnemyDamageMultiplier));
+        }
+        else if (BattleLaunchContext.IsM12TrioTutorialBattle)
+        {
+            scaled = Mathf.Max(
+                1,
+                Mathf.RoundToInt(rawDamage * M12PhaseABattleRules.EnemyDamageMultiplier));
         }
         else if (HarborTrainingDifficultyRuntime.IsHarborBattleActive)
         {
@@ -4049,6 +4135,8 @@ public partial class BattleSimulationManager : MonoBehaviour
     public bool DoesEnemyStrikeFirstThisRound() => !DoesPlayerStrikeFirstThisRound();
 
     public int GetPlayerHeroHp() { return playerHp; }
+
+    public bool HasPlayerHeroShieldRemaining => bonusPlayerHeroShieldRemaining;
 
     #region Harbor combat coach (read-only damage estimates)
 

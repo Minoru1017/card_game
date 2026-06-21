@@ -138,6 +138,10 @@ public static class TutorialPlotBattleTransition
                 {
                     if (StoryProgressSession.IsTutorialPlotEpilogueActive)
                         StoryProgressSession.EndTutorialPlotEpilogueSession();
+                    else if (StoryProgressSession.IsHarborCombatClearBridgeActive)
+                        StoryProgressSession.EndHarborCombatClearBridgeSession();
+                    else if (StoryProgressSession.IsM12VictoryEpilogueActive)
+                        StoryProgressSession.EndM12VictoryEpilogueSession();
                 },
                 onTargetSceneMissing: null);
         }

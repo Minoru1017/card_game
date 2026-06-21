@@ -129,6 +129,18 @@ public class GlobalNavRuntime : MonoBehaviour
         return instance.OpenValuablesVaultOverlay();
     }
 
+    /// <summary>玩家資訊面板已開啟時，刷新「牌組」摘要列（Buildbeck 改名後用）。</summary>
+    public static void TryRefreshPlayerInfoDeckSummaryIfOpen(string deckSummary)
+    {
+        if (string.IsNullOrWhiteSpace(deckSummary)) return;
+        EnsureInitialized();
+        if (instance == null || instance.playerInfoOverlayRoot == null || !instance.playerInfoOverlayRoot.activeSelf)
+            return;
+        if (instance.playerInfoDeckSummaryText == null) return;
+        instance.playerInfoDeckSummaryText.text = FormatDeckSummaryForDisplay(deckSummary);
+        FitProfileValueTextHeight(instance.playerInfoDeckSummaryText, 26f, 30f);
+    }
+
     private static GlobalNavConfigData LoadConfig()
     {
         TextAsset json = Resources.Load<TextAsset>(ConfigResourcePath);
@@ -755,12 +767,12 @@ public class GlobalNavRuntime : MonoBehaviour
         if (dm == null) return;
         DeckManager deck = dm.GetComponent<DeckManager>();
         if (deck != null)
-            deck.RefreshBuildbeckDeckNameLabelsIfActive();
+            deck.RefreshBuildbeckDeckNameDisplayFromMemory();
     }
 
     private void RefreshPlayerInfoOverlayContent()
     {
-        PlayerProfileCsvService.PlayerProfile p = PlayerProfileCsvService.RefreshProfileFromRuntime();
+        PlayerProfileCsvService.PlayerProfile p = PlayerProfileCsvService.LoadProfileForPlayerInfoDisplay();
         PlayerData pd = PlayerData.ResolveCanonical();
         int coins = pd != null ? pd.playerCoins : (PlayerData.TryGetActiveSlotCoinsFromSave(out int coinsFromSave) ? coinsFromSave : 0);
         string slotName = PlayerData.GetActivePlayerSlotName();

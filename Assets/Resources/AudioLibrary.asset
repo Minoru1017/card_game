@@ -84,3 +84,5 @@ MonoBehaviour:
   birdDuelCdBgms:
   - id: court_march
     clip: {fileID: 8300000, guid: 798a926c3312d464394a0e4dfa537ac8, type: 3}
+  - id: morning_prayer
+    clip: {fileID: 8300000, guid: c2853616855feb14b8a99fa49e73bf5e, type: 3}

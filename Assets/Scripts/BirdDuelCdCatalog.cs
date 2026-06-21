@@ -23,13 +23,17 @@ public static class BirdDuelCdCatalog
         BirdDuelBonusId.LastStand,
     };
 
-    private static readonly BirdDuelBonusId[] ChurchDraftIds =
+    /// <summary>
+    /// 《晨禱》勝利 draft：教會專屬六項（情報／天氣／續航），不含先聲奪人。
+    /// </summary>
+    private static readonly BirdDuelBonusId[] MorningPrayerDraftIds =
     {
-        BirdDuelBonusId.Tailwind,
-        BirdDuelBonusId.InsightOpening,
-        BirdDuelBonusId.Regroup,
-        BirdDuelBonusId.InsightFull,
-        BirdDuelBonusId.Providence
+        BirdDuelBonusId.PrayerVigil,
+        BirdDuelBonusId.VeiledSight,
+        BirdDuelBonusId.QuietRegroup,
+        BirdDuelBonusId.GalePsalm,
+        BirdDuelBonusId.SacredShield,
+        BirdDuelBonusId.HiddenPath,
     };
 
     private static readonly Dictionary<string, BirdDuelCdProfile> ById =
@@ -48,12 +52,12 @@ public static class BirdDuelCdCatalog
 
         Register(BirdDuelCdProfile.Create(
             "morning_prayer", "晨禱", BirdDuelCdRarity.R, BirdDuelCdFaction.Church, true,
-            ChurchDraftIds));
+            MorningPrayerDraftIds));
 
         Register(BirdDuelCdProfile.Create(
             "dawn_hymn", "破曉聖詠", BirdDuelCdRarity.SR, BirdDuelCdFaction.Church, true,
-            BirdDuelBonusId.Providence, BirdDuelBonusId.FullDraw, BirdDuelBonusId.InsightFull,
-            BirdDuelBonusId.Regroup, BirdDuelBonusId.Tailwind));
+            BirdDuelBonusId.Providence, BirdDuelBonusId.VeiledSight, BirdDuelBonusId.SacredShield,
+            BirdDuelBonusId.PrayerVigil, BirdDuelBonusId.QuietRegroup, BirdDuelBonusId.GalePsalm));
     }
 
     private static void Register(BirdDuelCdProfile profile)

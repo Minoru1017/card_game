@@ -19,7 +19,9 @@
 
 | 模組 | 功能描述 | 主要類別/函式 | 典型輸入 | 典型輸出 |
 | --- | --- | --- | --- | --- |
-| 玩家資料庫 | 玩家金幣/收藏/牌組槽位讀寫 | `PlayerData` / `LoadPlayerData()` / `SavePlayerData()` / `SavePlayerDataDebounced()` / `GetCollectionCount()` / `SetDeckCount()` | 卡牌ID、槽位、存檔資料 | 經 `PlayerSaveCoordinator` 寫入 `playerdata.csv` |
+| 玩家資料庫 | 玩家金幣/收藏/牌組槽位讀寫 | `PlayerData` / `LoadPlayerData()` / `SavePlayerData()` / `GetCollectionCount()` / `SetDeckCount()` | 卡牌ID、槽位、存檔資料 | 經 `PlayerSaveCoordinator` 寫入 `playerdata.csv` |
+| 牌組顯示名稱 | 3 玩家槽 × 5 槽 raw 名、CSV、污染清理、Buildbeck 確定 | `PlayerDeckSlotNameStorage` / `ConfirmBuildbeckRename()` / `RepairPersistedDeckSlotNamePollutionIfNeeded()` | 自訂名、解散還原 | `deck_slot_name` 列；UI fallback「牌組n」 |
+| 玩家 profile 摘要 | 戰績 CSV；牌組摘要來自 runtime | `PlayerProfileCsvService` / `LoadProfileForPlayerInfoDisplay()` / `SyncDeckSummaryFromRuntime()` | 開面板（只讀）vs 持久化 | `profile_decks` 列 |
 | 存檔協調 | 主檔唯一寫入、旗標 Upsert、離場前 flush | `PlayerSaveCoordinator` / `PlayerSaveDebouncer` | — | 勿直接 `PlayerPersistSafeIO.Write…` 寫主檔 |
 | 卡牌資料庫 | 載入卡牌主資料、查詢、隨機抽取 | `CardStore` / `Card` `MonsterCard` `SpellCard` / `GetCardById()` / `LoadCardData()` / `RandomCard()` | 卡牌CSV/ID | `Card` 物件與卡牌清單 |
 | 劇本資料庫 | 劇情步驟、分支選項與跳轉 | `MainPlotSceneController` / `PlotStep` / `ShowStep()` / `OnChoiceClicked()` | 步驟索引、玩家選項 | 劇情畫面切換、下一步更新 |
@@ -33,7 +35,7 @@
 | --- | --- | --- | --- | --- |
 | 使用者介面（UI） | 戰鬥HUD、手牌區、場面區、結算/暫停；除錯半屏預設關閉 | `BattleSimulationDebugUI`（partial：Settlement、WeatherRuntime、FieldCards…）/ `BattleEnded` 訂閱結算 | 戰鬥狀態事件 | UI元件顯示與動畫 |
 | 場地牌狀態 | 場上怪獸徽章、傷害浮字、凝視護盾等狀態對照 | `FIELD_CARD_STATUS_INDEX.md` / `FieldCardStatusIndex` / `GetPlayerFieldMonsterStatusBadge()` | 規則旗標、回合數 | 中央徽章與瞬時 FX |
-| 戰前預覽謎題 | 訓練場魔王解謎（PZ01）、難度拱門與解鎖序 | `BATTLE_PREVIEW_PUZZLE_INDEX.md` / `BattlePreviewPuzzleIndex` / `SceneLoader.BattlePreview` | 難度點選、預覽開關 | 魔王級揭示、開戰難度 |
+| 戰前預覽謎題 | 訓練場魔王解謎（PZ01）、難度拱門與解鎖序（**謎題已停用**） | `BATTLE_PREVIEW_PUZZLE_INDEX.md` / `BattlePreviewPuzzleIndex` / `SceneLoader.BattlePreview` | 難度點選、預覽開關 | 預覽 UI；開戰前改走鬥鳥（見 §I） |
 | 使用者體驗（UX） | 縮放、懸浮、長按、拖曳、點擊回饋 | `ZoomUI` / `BattleHandHoverPreview` / `BattleHandLongPressTooltip` / `BattleHandDiscardDrag` / `ClickCard` | Pointer事件 | 視覺回饋、互動狀態 |
 | 卡牌顯示 | 將卡牌資料映射成畫面元素 | `CardDisplay` / `SetCard()` / `ShowCard()` / `CardCounter` | `Card` 物件、數值 | 卡面文字/圖像更新 |
 
@@ -54,6 +56,25 @@
 
 **啟用**：`BattleLaunchContext.IsHarborTrainingGroundBattle`（與 `TutorialBattleCoachUi` 互斥）。
 
+---
+
+## I. 鬥鳥暖身賽（戰前節奏小遊戲）
+
+> 企劃：[`Docs/鬥鳥手勢小遊戲企劃.md`](../../Docs/鬥鳥手勢小遊戲企劃.md) · 節奏資料：`Assets/Resources/BirdDuelRhythmSync.asset`
+
+| 模組 | 功能描述 | 主要類別/函式 | 典型輸入 | 典型輸出 |
+| --- | --- | --- | --- | --- |
+| 核心規則 | 鳥勢反制、計分、看破、PASS、勝負與情報層級（純 C#） | `BirdDuelCore` / `ResolveJudgement()` / `ResolveIntelTier()` | 對手鳥勢、玩家輸入、時序 | `BirdBeatJudgement`、分數／看破增量 |
+| 場景控制器 | BGM 鼓點 UI、判定、假 scare、加成 draft；**partial** 分檔 | `FightingBirdGameSceneController`（`.UiBuild` `.MatchFlow` `.Draft` `.Audio` `.Visuals` `.Input` …） | `PreBattleDuelContext`、NPC profile | `PreBattleBonusContext`、返回戰鬥 |
+| 節奏同步 | BGM BPM、首拍偏移、CD 難度 grid | `BirdDuelRhythmSync` / `ResolveForCd()` | `cdId`、grid mode | 判定窗口、步距 |
+| 戰前上下文 | 開戰難度、魔王級、港灣英雄 | `PreBattleDuelContext` / `PreBattleBonusContext` / `PreBattleCdContext` | 預覽 modal 選項 | 鬥鳥→戰鬥帶入 |
+| 場景載入 | 預覽後進鬥鳥、結束接戰 | `SceneLoader.BirdDuel` / `LaunchBirdDuelThenBattle()` / `ResumeBattleAfterBirdDuel()` | 難度檔、港灣旗標 | `Fighting bird game` → `BattleSimulation` |
+| 判定音效 | Hi-Hat 母帶依 Perfect/Good/Guard/Miss 切片 | `BirdDuelHitSfxBank` / `AudioLibrary.birdDuelHitSfxSource` | 判定結果 | 單次 SFX |
+| CD 資料 | 光碟檔、陣營、勝利 draft 池 | `BirdDuelCdCatalog` / `BirdDuelCdSelectOverlayUi` | CD id | draft 白名單 |
+| Editor 量測 | BGM BPM 寫入 RhythmSync | `BirdDuelBgmTempoAnalyzer` | `Assets/Music/*.mp3` | `BirdDuelRhythmSync.asset` |
+
+**流程摘要**：戰前預覽確認難度 → `LaunchBirdDuelThenBattle` → 鬥鳥（情報／加成 draft）→ `ResumeBattleAfterBirdDuel` → 正式對戰。
+
 ## H. 港灣訓練場難度（1-1 實戰三檔）
 
 | 職責 | 類別／API | 備註 |
@@ -69,10 +90,11 @@
 
 | 模組 | 功能描述 | 主要類別/函式 | 典型輸入 | 典型輸出 |
 | --- | --- | --- | --- | --- |
-| 場景流程/導航 | 場景切換與前置條件檢查 | `SceneLoader` / `SceneLoader.BattlePreview` / `BattleSceneBootstrap` / `EnterBattle()` | 切換請求、組牌狀態 | 場景載入、戰前預覽 |
+| 場景流程/導航 | 場景切換與前置條件檢查 | `SceneLoader` / `SceneLoader.BattlePreview` / `SceneLoader.BirdDuel` / `SceneLoader.HarborTraining` / `BattleSceneBootstrap` / `EnterBattle()` | 切換請求、組牌狀態 | 場景載入、戰前預覽→鬥鳥→戰鬥 |
 | 開發日誌 | Editor 保留、Release 不洗版 | `GameDevLog` | 訊息字串 | Console 輸出 |
 | EditMode 測試 | 熟練度／牌組名稱煙霧測試 | `Assets/Editor/CardGameEditModeTests.cs` | NUnit | 斷言通過 |
-| 存檔重置/維運 | 由全域玩家資訊面板執行重置流程 | `GlobalNavRuntime` / `TryOpenPlayerInfoOverlay()` | 玩家資訊面板互動 | 玩家資料重置與刷新 |
+| Bug 場景（牌組名） | 存檔／跨槽／污染手動驗收 | `BugHandlingDeckSlotNameScenario` / `Bug handling scenarios` | Play Mode UI | 對照 `Docs/DECK_SLOT_NAME_BUG_CHECKLIST.md` |
+| 存檔重置/維運 | 由全域玩家資訊面板執行重置流程 | `GlobalNavRuntime` / `LoadProfileForPlayerInfoDisplay()` | 開面板只讀；關閉 Buildbeck 刷新名稱 | 勿用 `RefreshProfileFromRuntime` 開面板 |
 | 貴重品庫 | 4×6 儲存格、每槽存檔、全局選單視窗 | `ValuablesVaultState` / `GlobalNavValuablesVaultOverlay` / `TryOpenValuablesVaultOverlay()` | 格子索引、definitionId | playerdata `slot,N,valuable,...` |
 | 自動模擬/測試 | 批次自動對戰與勝率統計 | `BattleAutoSimPlugin` / `Run()` / `EnsureProgressUi()` / `TryAutoPlayOneCard()` | 模擬參數、回合數 | 勝率統計、進度與結果 |
 

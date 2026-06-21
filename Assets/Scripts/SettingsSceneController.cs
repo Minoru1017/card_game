@@ -38,7 +38,10 @@ public class SettingsSceneController : MonoBehaviour
 
     private static bool subscribed;
 
+    private GameObject canvasRoot;
     private GameObject displayRatioRoot;
+    private GameObject imageQualityRoot;
+    private GameObject leaveButton;
     private GameObject displayRatioDetailBg;
     private GameObject presetSetButton;
     private GameObject battleSceneLabel;
@@ -96,9 +99,9 @@ public class SettingsSceneController : MonoBehaviour
 
     private void Awake()
     {
+        CacheUiRefs();
         FixCanvasScale();
         FixSettingsCanvasNonInteractiveRaycasts();
-        CacheUiRefs();
         settingsUiFont = ResolveSettingsUiFont();
         EnsureParameterFeedbackUi();
         BuildPresetNestedUi();
@@ -113,9 +116,8 @@ public class SettingsSceneController : MonoBehaviour
 
     private void FixCanvasScale()
     {
-        GameObject canvasGo = GameObject.Find("Canvas");
-        if (canvasGo == null) return;
-        RectTransform canvasRt = canvasGo.GetComponent<RectTransform>();
+        if (canvasRoot == null) return;
+        RectTransform canvasRt = canvasRoot.GetComponent<RectTransform>();
         if (canvasRt != null && canvasRt.localScale.sqrMagnitude < 0.001f)
             canvasRt.localScale = Vector3.one;
     }
@@ -125,10 +127,9 @@ public class SettingsSceneController : MonoBehaviour
     /// </summary>
     private void FixSettingsCanvasNonInteractiveRaycasts()
     {
-        GameObject canvasGo = GameObject.Find("Canvas");
-        if (canvasGo != null)
+        if (canvasRoot != null)
         {
-            Transform rootBg = canvasGo.transform.Find("BG");
+            Transform rootBg = canvasRoot.transform.Find("BG");
             if (rootBg != null)
             {
                 Image img = rootBg.GetComponent<Image>();
@@ -136,7 +137,6 @@ public class SettingsSceneController : MonoBehaviour
             }
         }
 
-        GameObject aboutRoot = GameObject.Find(AboutRootName);
         if (aboutRoot != null)
         {
             Transform aboutBg = aboutRoot.transform.Find(AboutBgChildName);
@@ -161,8 +161,10 @@ public class SettingsSceneController : MonoBehaviour
 
     private void CacheUiRefs()
     {
+        if (canvasRoot == null) canvasRoot = GameObject.Find("Canvas");
         displayRatioRoot = GameObject.Find(DisplayRatioName);
-        GameObject imageQualityRoot = GameObject.Find(ImageQualityName);
+        imageQualityRoot = GameObject.Find(ImageQualityName);
+        leaveButton = GameObject.Find(LeaveButtonName);
 
         if (displayRatioRoot != null)
         {
@@ -181,12 +183,11 @@ public class SettingsSceneController : MonoBehaviour
 
     private void WireNavigationButtons()
     {
-        BindButton(GameObject.Find(LeaveButtonName), OnLeaveClicked);
+        BindButton(leaveButton, OnLeaveClicked);
 
         if (displayRatioRoot != null)
             BindButton(ResolveNavHitArea(displayRatioRoot), OnDisplayRatioNavClicked);
 
-        GameObject imageQualityRoot = GameObject.Find(ImageQualityName);
         if (imageQualityRoot != null)
             BindButton(ResolveNavHitArea(imageQualityRoot), OnImageQualityNavClicked);
 
@@ -394,42 +395,37 @@ public class SettingsSceneController : MonoBehaviour
         SettingsUiFonts.ApplyTo(tmp);
     }
 
-    private static TMP_FontAsset ResolveSettingsUiFont()
+    private TMP_FontAsset ResolveSettingsUiFont()
     {
         TMP_FontAsset parameterFont = SettingsUiFonts.ResolveParameterDetailsFont();
         if (parameterFont != null) return parameterFont;
 
         const string cjkProbe = BattleCardTuningPresetDisplay.CjkFontProbe;
+        TMP_FontAsset fromDisplay = ResolveCjkFontFromRoot(displayRatioRoot, cjkProbe);
+        if (fromDisplay != null) return fromDisplay;
 
-        GameObject displayRatioRoot = GameObject.Find(DisplayRatioName);
-        if (displayRatioRoot != null)
-        {
-            TextMeshProUGUI[] labels = displayRatioRoot.GetComponentsInChildren<TextMeshProUGUI>(true);
-            for (int i = 0; i < labels.Length; i++)
-            {
-                TMP_FontAsset font = labels[i] != null ? labels[i].font : null;
-                if (font != null && BuildbeckUiFonts.FontSupportsText(font, cjkProbe))
-                    return font;
-            }
-        }
-
-        GameObject imageQualityRoot = GameObject.Find(ImageQualityName);
-        if (imageQualityRoot != null)
-        {
-            TextMeshProUGUI[] labels = imageQualityRoot.GetComponentsInChildren<TextMeshProUGUI>(true);
-            for (int i = 0; i < labels.Length; i++)
-            {
-                TMP_FontAsset font = labels[i] != null ? labels[i].font : null;
-                if (font != null && BuildbeckUiFonts.FontSupportsText(font, cjkProbe))
-                    return font;
-            }
-        }
+        TMP_FontAsset fromQuality = ResolveCjkFontFromRoot(imageQualityRoot, cjkProbe);
+        if (fromQuality != null) return fromQuality;
 
         TMP_FontAsset resolved = BuildbeckUiFonts.ResolveBuildbeckButtonFont();
         if (resolved != null && BuildbeckUiFonts.FontSupportsText(resolved, cjkProbe))
             return resolved;
 
         return UiFontResolver.ResolveUiFont();
+    }
+
+    private static TMP_FontAsset ResolveCjkFontFromRoot(GameObject root, string cjkProbe)
+    {
+        if (root == null) return null;
+        TextMeshProUGUI[] labels = root.GetComponentsInChildren<TextMeshProUGUI>(true);
+        for (int i = 0; i < labels.Length; i++)
+        {
+            TMP_FontAsset font = labels[i] != null ? labels[i].font : null;
+            if (font != null && BuildbeckUiFonts.FontSupportsText(font, cjkProbe))
+                return font;
+        }
+
+        return null;
     }
 
     private void OnLeaveClicked()
@@ -594,12 +590,11 @@ public class SettingsSceneController : MonoBehaviour
             SetActive(parameterDetailsPanel, false);
         }
 
-        GameObject canvasGo = GameObject.Find("Canvas");
-        if (canvasGo == null) return;
+        if (canvasRoot == null) return;
 
-        applyFeedbackToast = FindDeepChild(canvasGo.transform, ApplyFeedbackToastName);
+        applyFeedbackToast = FindDeepChild(canvasRoot.transform, ApplyFeedbackToastName);
         if (applyFeedbackToast == null)
-            applyFeedbackToast = CreateApplyFeedbackToast(canvasGo.transform);
+            applyFeedbackToast = CreateApplyFeedbackToast(canvasRoot.transform);
 
         applyFeedbackToastText = applyFeedbackToast != null
             ? applyFeedbackToast.GetComponentInChildren<TextMeshProUGUI>(true)
@@ -611,7 +606,6 @@ public class SettingsSceneController : MonoBehaviour
 
     private void EnsureAboutSaveInfoUi()
     {
-        if (aboutRoot == null) aboutRoot = GameObject.Find(AboutRootName);
         if (aboutRoot == null) return;
 
         if (aboutDetailBg == null)
@@ -981,7 +975,6 @@ public class SettingsSceneController : MonoBehaviour
 
     private void RewriteQualitySectionAsFps()
     {
-        GameObject imageQualityRoot = GameObject.Find(ImageQualityName);
         if (imageQualityRoot == null) return;
         TextMeshProUGUI[] labels = imageQualityRoot.GetComponentsInChildren<TextMeshProUGUI>(true);
         for (int i = 0; i < labels.Length; i++)

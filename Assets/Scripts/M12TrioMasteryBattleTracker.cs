@@ -20,6 +20,12 @@ public static class M12TrioMasteryBattleTracker
 
     public static void NotifyKingDecreeTriggered() => kingDecreeTriggered = true;
 
+    public static bool QueryMilitiaTriggered() => militiaFormationTriggered;
+
+    public static bool QueryQueenTriggered() => queenShelterTriggered;
+
+    public static bool QueryKingTriggered() => kingDecreeTriggered;
+
     public static bool QueryAllTrioSkillsTriggered() =>
         militiaFormationTriggered && queenShelterTriggered && kingDecreeTriggered;
 

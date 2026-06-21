@@ -45,13 +45,15 @@
 
 | 檔案 | 職責 |
 |------|------|
-| `Assets/Scripts/PlayerData.cs` | 記憶體模型、CSV 讀寫、`deck_slot_name` / `deckslot` 解析 |
+| `Assets/Scripts/PlayerDeckSlotNameStorage.cs` | **牌組顯示名稱**讀寫、CSV 列、Buildbeck 確定流程、存檔污染清理、profile 摘要橋接 |
+| `Assets/Scripts/PlayerData.cs`（含 `Load`/`Save` partial） | 記憶體模型、`deckslot` / `card` 解析；名稱 API 轉接至 `PlayerDeckSlotNameStorage` |
 | `Assets/Scripts/DeckManager.cs` | 分頁切換、改名 UI、保存牌組按鈕、Buildbeck 進出場景 |
-| `Assets/Scripts/BuildbeckLayoutAutoBinder.cs` | 依場景節點名稱自動綁定五個牌組按鈕與名稱文字 |
-| `Assets/Scripts/PlayerProfileCsvService.cs` | 玩家資訊；`RefreshProfileFromRuntime` 會觸發存檔與 profile 列合併 |
+| `Assets/Scripts/BuildbeckLayoutAutoBinder.cs` | 依場景節點名稱自動綁定五個牌組按鈕與名稱文字（優先 `EditDeckNameButton` 子節點） |
+| `Assets/Scripts/PlayerProfileCsvService.cs` | 玩家資訊 profile；**開啟面板**用 `LoadProfileForPlayerInfoDisplay()`（不寫檔） |
+| `Assets/Scripts/GlobalNavRuntime.cs` | 玩家資訊浮層；關閉後 `RefreshBuildbeckDeckNameDisplayFromMemory()` |
+| `Assets/Scripts/PlayerSaveCoordinator.cs` | 唯一寫入 `playerdata.csv` 的協調器 |
 | `Assets/Scripts/SceneLoader.cs` | 進戰鬥前可 `LoadPlayerData`；改名後應傳 `reloadFromDisk: false` |
 | `Assets/Scripts/PlayerPersistSafeIO.cs` | 原子寫入與備份輪替讀取 |
-| `Assets/Scripts/PlayerSaveCoordinator.cs` | **唯一**應寫入 `playerdata.csv` 的入口 |
 | `Assets/Scripts/PlayerSaveDebouncer.cs` | Buildbeck 高頻編輯的延遲合併存檔 |
 | `Assets/Scripts/ValuablesVaultState.cs` | 貴重品庫記憶體快取；完整存檔時由 `SavePlayerData` 一併寫入 |
 | `Assets/prefabs/DataManager.prefab` | `deckSlotCount` 應為 **5**（與 UI 一致） |
@@ -210,7 +212,7 @@ sequenceDiagram
 **組裝順序（現玩家槽 `current` 列表）：**
 
 1. `coins`, `selected_deck_slot`, `slot_name`
-2. **五筆** `deck_slot_name,0..4`（空名稱也會寫入，讀取時 fallback 為「牌組n」）
+2. **五筆** `deck_slot_name,0..4`（**僅寫 raw 自訂名**；未自訂時為**空白**，UI 顯示 fallback「牌組n」）
 3. `card`（收藏）
 4. `deckslot`（每槽所有卡牌）
 5. `deck`（僅 `selectedDeckSlot`）
@@ -231,7 +233,8 @@ sequenceDiagram
 | 步驟 | 方法 | 說明 |
 |------|------|------|
 | 開啟編輯 | `DeckManager.ShowDeckNameEditDialog` | 讀取 `GetDeckSlotDisplayName(selectedDeckSlot)` 填入輸入框 |
-| 確認 | `DeckManager.ConfirmDeckNameEdit` | `ResolveCanonical()` → `EnsureMinimumDeckSlotCount()` → `SetDeckSlotDisplayName(nameSlot, text)` → `SavePlayerData()` |
+| 確認 | `DeckManager.ConfirmDeckNameEdit` | `PlayerDeckSlotNameStorage.ConfirmBuildbeckRename` → 記憶體 + `SavePlayerData` + `SyncDeckSummaryFromRuntime` + UI 刷新 |
+| 解散牌組 | `DeckManager.PerformResetDeckForRebuild` | 清空該槽卡牌並 `ResetSelectedDeckSlotNameToDefault` + 存檔 |
 | 刷新 UI | `RefreshDeckSlotTabVisual` | 更新五個分頁按鈕文字與中央牌組名稱 TMP |
 
 `SetDeckSlotDisplayName` 僅改記憶體陣列；**必須**再呼叫 `SavePlayerData()` 才會進 CSV。
@@ -261,10 +264,12 @@ sequenceDiagram
 | 切換牌組分頁 | `SavePlayerDataDebounced()` | 同上 |
 | 按「保存牌組」 | `SavePlayerData()` | 立即寫入 |
 | 確認改名 | `SavePlayerData()` | 立即寫入 |
-| 解散牌組 | `SavePlayerData()` | 立即寫入 |
+| 解散牌組 | `SavePlayerData()` + profile sync | 立即寫入；名稱還原預設 |
 | 離開 Buildbeck 場景 | `FlushDebouncedThenSavePlayerData()` | 先取消延遲再完整存檔 |
 | 進入戰鬥預覽 | `FlushDebouncedThenSavePlayerData()` + `LoadPlayerData()` | 避免延遲存檔尚未落盤 |
-| 開啟玩家資訊浮層 | `FlushDebounced…` + `SavePlayerData()` | 經 `RefreshProfileFromRuntime` |
+| **開啟玩家資訊浮層** | `LoadProfileForPlayerInfoDisplay()` | **僅讀** runtime 組摘要，**不** `RefreshProfileFromRuntime` |
+| **關閉玩家資訊（Buildbeck）** | `RefreshBuildbeckDeckNameDisplayFromMemory()` | 只刷新 UI，不重綁場景、不 Load |
+| 需寫入 profile 戰績等 | `RefreshProfileFromRuntime()` | 完整存檔 + `SyncProfileIntoActiveSlotRows` |
 
 ### 8.3 進入戰鬥
 
@@ -274,28 +279,40 @@ sequenceDiagram
 
 ## 9. 玩家資訊與 `PlayerProfileCsvService`
 
-開啟 GlobalNav「玩家資訊」時：
+### 9.1 開啟玩家資訊（顯示用，2026-06 定案）
 
 ```
 RefreshPlayerInfoOverlayContent()
-  → PlayerProfileCsvService.RefreshProfileFromRuntime()
-       → playerData.SavePlayerData()     // 完整寫入含 deck_slot_name
-       → BuildDeckSummary(playerData)    // 摘要字串給 profile_decks
-       → Save(player_profile.csv)
-       → SyncProfileIntoActiveSlotRows()
+  → PlayerProfileCsvService.LoadProfileForPlayerInfoDisplay()
+       → 合併 profile 列（讀取）
+       → p.decks = BuildDeckSummaryLine(runtime)   // 不寫 playerdata.csv
+  → 更新浮層 UI
+  → RefreshBuildbeckDeckNameDisplayFromMemory()   // Buildbeck 僅刷新標籤
+```
+
+**不得**在開啟面板時呼叫 `RefreshProfileFromRuntime()`，否則 `SavePlayerData` / profile merge 可能觸發 `LoadPlayerData()`，覆寫剛改好的牌組名稱。
+
+### 9.2 需持久化 profile 時（戰績更新、SetRole 等）
+
+```
+RefreshProfileFromRuntime()
+  → BuildDeckSummaryLine(runtime)
+  → playerData.SavePlayerData()
+  → Save(player_profile.csv)
+  → SyncProfileIntoActiveSlotRows()
 ```
 
 **`SyncProfileIntoActiveSlotRows` 行為：**
 
 1. 讀取現有 `playerdata.csv`
 2. 刪除現玩家槽的 `profile_*`、`battle_record`、**以及舊的 `deck_slot_name` 列**
-3. 若 runtime 有 `PlayerData`：依記憶體重新寫入 5 列 `deck_slot_name`
+3. 若 runtime 有 `PlayerData`：依**記憶體**重新寫入 5 列 `deck_slot_name`（**不在 merge 內 LoadPlayerData**）
 4. 若無 runtime：保留檔案內原本的 `deck_slot_name` 列
 5. 寫回 `profile_*` 與戰績列
 
-因此玩家資訊流程**依賴**前面先執行完整 `SavePlayerData()`，避免僅合併 profile 時把名稱洗回預設值。
+改名確認後請用 `SyncDeckSummaryFromRuntime()` 更新 `profile_decks` 摘要。
 
-關閉玩家資訊且仍在 Buildbeck 時，`GlobalNavRuntime` 會呼叫 `DeckManager.RefreshBuildbeckDeckNameLabelsIfActive()` 重綁 UI 並刷新標籤。
+關閉玩家資訊且仍在 Buildbeck 時，`GlobalNavRuntime` 呼叫 `DeckManager.RefreshBuildbeckDeckNameDisplayFromMemory()`（非 `InvalidateAndRewire`）。
 
 ---
 
@@ -345,7 +362,9 @@ flowchart TD
 | 現象 | 可能原因 | 檢查方式 |
 |------|----------|----------|
 | 第 4、5 槽無法改名 | `deckSlotCount < 5` 導致 clamp | 確認 prefab、`EnsureMinimumDeckSlotCount`、CSV 是否有 `deck_slot_name,3` / `,4` |
-| 改名後切場景又變回預設 | 離開 Buildbeck 未存檔；或玩家資訊 Sync 覆寫 | 查 `playerdata.csv` 的 `deck_slot_name`；確認 `sceneUnloaded` 有觸發 |
+| 改名後切場景又變回預設 | 離開 Buildbeck 未存檔；或開玩家資訊曾用 `RefreshProfileFromRuntime` | 查 CSV；確認 §9.1 路徑；`P0_MANUAL_REGRESSION` §C |
+| 開玩家資訊後名稱回溯 | 面板開啟觸發 Save+Load | 應為 `LoadProfileForPlayerInfoDisplay`（2026-06 已修） |
+| CSV 亂碼／`deck_slot_na` 污染 | 舊版錯誤寫入 | `RepairPersistedDeckSlotNamePollutionIfNeeded` 於 `LoadPlayerData` 前；見 `Docs/DECK_SLOT_NAME_BUG_CHECKLIST.md` |
 | UI 顯示牌組1～5 但資料是別的名 | UI 未重綁，仍顯示場景預設文字 | 進 Buildbeck 後是否執行 `RefreshDeckSlotTabVisual` |
 | 存檔有名稱但進戰鬥是舊牌 | 進戰鬥前未按保存／未切槽觸發存檔 | `EnterBattle` 會 `LoadPlayerData` 讀磁碟 |
 
@@ -363,8 +382,9 @@ flowchart TD
 |------|------|
 | 讀檔 | `PlayerData.LoadPlayerData()` |
 | 存檔 | `PlayerData.SavePlayerData()` |
-| 改某槽名稱 | `PlayerData.SetDeckSlotDisplayName(slot, name)` + `SavePlayerData()` |
-| 讀某槽名稱 | `PlayerData.GetDeckSlotDisplayName(slot)` |
+| 改某槽名稱 | `PlayerDeckSlotNameStorage.ConfirmRenameAndPersist` 或 `SetCustomName` + `SavePlayerData()` |
+| 讀某槽 raw 名稱 | `PlayerDeckSlotNameStorage.GetRawName` / `PlayerData.GetDeckSlotDisplayNameRaw` |
+| 讀某槽顯示名稱 | `PlayerData.GetDeckSlotDisplayName(slot)`（含「牌組n」fallback） |
 | 選中槽 | `PlayerData.SetSelectedDeckSlot` / `DeckManager.SelectDeckSlot` |
 | 改某槽卡牌 | `PlayerData.SetDeckCount(slot, id, count)` 等 |
 | 取得 canonical | `PlayerData.ResolveCanonical()` |
@@ -376,6 +396,7 @@ flowchart TD
 - 牌組槽數以 **`PlayerData.MinDeckSlotCount = 5`** 為準；`DataManager.prefab` 的 `deckSlotCount` 應為 5。
 - 舊存檔若僅 3 槽資料，升級後會在載入／存檔時擴充為 5 槽；第 4、5 槽名稱需使用者重新命名一次以寫入正確索引。
 - 本文對應程式約 2025～2026 年 Buildbeck 存檔修正後行為；若調整 CSV 欄位請同步更新 `ParsePlayerRow` / `SavePlayerData` 與本文件。
+- **2026-06 牌組名稱定案**：驗收清單 [`Docs/DECK_SLOT_NAME_BUG_CHECKLIST.md`](Docs/DECK_SLOT_NAME_BUG_CHECKLIST.md)；手動回歸 [`P0_MANUAL_REGRESSION.md`](P0_MANUAL_REGRESSION.md) §C；Bug 場景 `Bug handling scenarios` + `BugHandlingDeckSlotNameScenario.cs`。
 
 ## 15. 貴重品庫與協調器（2026-05）
 

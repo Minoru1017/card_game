@@ -18,7 +18,8 @@ public static class HarborTrainingBattleBackground
                 UnityEngine.SceneManagement.SceneManager.GetActiveScene().name))
             return;
 
-        if (BattleLaunchContext.IsHarborTrainingGroundBattle)
+        if (BattleLaunchContext.IsHarborTrainingGroundBattle ||
+            BattleLaunchContext.IsM12CoachPracticeBattle)
             ApplyHarborBackground();
         else
             RestoreDefaultBackground();

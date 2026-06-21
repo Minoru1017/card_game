@@ -30,6 +30,7 @@ flowchart TB
         PERS["Persistent<br/>backpack / hub"]
         STORE["CardStore<br/>pack open · shop"]
         SET["Settings<br/>battle UI scale · quality"]
+        BIRD["Fighting bird game<br/>rhythm pre-battle · draft"]
         BATTLE["BattleSimulation<br/>turn battle · weather · AI"]
         PLOT["MainPlot<br/>story (if enabled)"]
     end
@@ -43,7 +44,8 @@ flowchart TB
 
     %% --- Data flow ---
     PD <-->|"LoadPlayerData / SavePlayerData"| PD_CSV
-    GNR -->|"RefreshProfileFromRuntime<br/>Save first, then SyncProfile"| PD
+    GNR -->|"LoadProfileForPlayerInfoDisplay<br/>(read-only deck summary)"| PD
+    GNR -->|"RefreshProfileFromRuntime<br/>(stats persist only)"| PD
     GNR --> PROF_CSV
 
     CS -->|"GetCardById / LoadCardData"| PD
@@ -69,7 +71,8 @@ flowchart TB
     BUILD --> BBB
     BBB --> DMGR
     SL -->|"return / EnterPersistent"| PERS
-    SL -->|"ready → preview → EnterBattle"| BATTLE
+    SL -->|"preview → LaunchBirdDuelThenBattle"| BIRD
+    BIRD -->|"ResumeBattleAfterBirdDuel"| BATTLE
 
     PERS --> HALL
     PERS --> BUILD
@@ -86,7 +89,7 @@ flowchart TB
     classDef nav fill:#4a2c5c,stroke:#2e1a3a,color:#fff
 
     class PD,DM,DMGR core
-    class LOGIN,HALL,BUILD,PERS,STORE,SET,BATTLE,PLOT scene
+    class LOGIN,HALL,BUILD,PERS,STORE,SET,BIRD,BATTLE,PLOT scene
     class PD_CSV,PROF_CSV disk
     class GNR nav
 ```
@@ -110,13 +113,14 @@ flowchart TB
 | hall | Backpack | Persistent |
 | hall | Shop | CardStore |
 | Buildbeck | Back | Persistent (`SceneLoader.EnterPersistent`) |
-| Buildbeck | Battle ready | BattleSimulation (via preview modal) |
+| Buildbeck | Battle ready | Fighting bird game → BattleSimulation（戰前預覽→鬥鳥→開戰；見 `SceneLoader.BirdDuel`） |
 | Any (≡ menu) | Home / Settings / Login | hall / Settings / login |
-| Any (≡ menu) | Player info | **Overlay** (same scene); triggers `SavePlayerData` |
+| Any (≡ menu) | Player info | **Overlay** (same scene); **read-only** `LoadProfileForPlayerInfoDisplay`（不寫 `playerdata.csv`） |
 
 ## Save / load timing (summary)
 
-- **Write**: save deck, switch deck slot, confirm rename, leave Buildbeck, open player info, `PlayerProfileCsvService.RefreshProfileFromRuntime`
+- **Write**: save deck, switch deck slot, confirm rename (`PlayerDeckSlotNameStorage`), leave Buildbeck, profile stats update via `RefreshProfileFromRuntime`
+- **Read-only UI**: open player info → `LoadProfileForPlayerInfoDisplay`（Buildbeck 關閉後 `RefreshBuildbeckDeckNameDisplayFromMemory`）
 - **Read**: `PlayerData.Awake`, Buildbeck UI reload, hall resource bar, `EnterBattle` (forces disk read before battle)
 - **Avoid stale overwrite**: after rename / save deck, call `SceneLoader.RefreshEnterBattleState(false)`
 
@@ -126,5 +130,6 @@ flowchart TB
 - [PLANNING_MASTER_TABLE.md](./PLANNING_MASTER_TABLE.md) — planning overview by domain
 - [PLANNING_OPEN_ITEMS.md](./PLANNING_OPEN_ITEMS.md) — open design questions
 - [LEVEL_DESIGN_GDD.md](./LEVEL_DESIGN_GDD.md) — level design (chapter 1-1)
+- [Docs/鬥鳥手勢小遊戲企劃.md](./Docs/鬥鳥手勢小遊戲企劃.md) — pre-battle rhythm minigame (replaces puzzle unlock)
 - [DIFFICULTY_AND_AI_DESIGN.md](./DIFFICULTY_AND_AI_DESIGN.md) — battle difficulty tiers and enemy AI (report chapter)
 - [ENEMY_AI_DECISION_TREE.md](./ENEMY_AI_DECISION_TREE.md) — detailed play decision tree

@@ -31,6 +31,8 @@ public static class PlayerSaveCoordinator
     {
         if (rowMatches == null) throw new ArgumentNullException(nameof(rowMatches));
 
+        EnsurePersistedBeforeDiskMerge();
+
         playerSlot = Mathf.Clamp(playerSlot, 1, PlayerData.MaxPlayerSlots);
         string[] existing = TryReadPlayerDataLines(out string[] read, out _)
             ? read
@@ -61,6 +63,18 @@ public static class PlayerSaveCoordinator
     /// <summary>延遲存檔尚未落盤，或貴重品庫記憶體變更尚未寫入。</summary>
     public static bool HasUnpersistedPlayerChanges() =>
         PlayerSaveDebouncer.HasPendingDebouncedSave || ValuablesVaultState.HasPendingChanges;
+
+    /// <summary>
+    /// 以磁碟 CSV 為基礎合併列（Upsert／切換槽位）前，先把記憶體中的未落盤變更寫入，
+    /// 避免覆蓋 Buildbeck 牌組編輯等延遲存檔。
+    /// </summary>
+    public static void EnsurePersistedBeforeDiskMerge()
+    {
+        if (!HasUnpersistedPlayerChanges())
+            return;
+
+        FlushDebouncedThenSavePlayerData();
+    }
 
     /// <summary>僅在有未落盤變更時寫入（App 切背景／結束用）。</summary>
     public static void FlushPendingPlayerDataIfNeeded()

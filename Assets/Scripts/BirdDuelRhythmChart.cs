@@ -1,0 +1,49 @@
+using System;
+using System.Collections.Generic;
+
+/// <summary>
+/// 鬥鳥 CD 專屬采音谱面：鳥勢序列、步距（拍）、段落屏息。
+/// 無專列時退回 NPC profile 與 RhythmSync 預設步距。
+/// </summary>
+public static partial class BirdDuelRhythmChart
+{
+    public const string MorningPrayerCdId = "morning_prayer";
+    public const double MorningPrayerSuspenseBeats = 2d;
+
+    public static IReadOnlyList<BirdGesture> ResolveBeatPattern(string cdId, IReadOnlyList<BirdGesture> fallback)
+    {
+        if (IsMorningPrayer(cdId))
+            return MorningPrayerPattern;
+        return fallback ?? Array.Empty<BirdGesture>();
+    }
+
+    public static bool TryGetNormalStepGap(string cdId, int stepIndex, out double gapBeats)
+    {
+        gapBeats = 0d;
+        if (!IsMorningPrayer(cdId))
+            return false;
+
+        if (stepIndex < 0 || stepIndex >= MorningPrayerStepGaps.Length)
+            return false;
+
+        gapBeats = MorningPrayerStepGaps[stepIndex];
+        return true;
+    }
+
+    public static bool ShouldSuspenseAfterStep(string cdId, int completedStepIndex)
+    {
+        if (!IsMorningPrayer(cdId))
+            return false;
+
+        for (int i = 0; i < MorningPrayerSuspenseAfterStepIndices.Length; i++)
+        {
+            if (MorningPrayerSuspenseAfterStepIndices[i] == completedStepIndex)
+                return true;
+        }
+
+        return false;
+    }
+
+    public static bool IsMorningPrayer(string cdId) =>
+        string.Equals(cdId, MorningPrayerCdId, StringComparison.OrdinalIgnoreCase);
+}

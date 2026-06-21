@@ -4,7 +4,7 @@ using System.IO;
 using TMPro;
 using System;
 
-public class PlayerData : MonoBehaviour
+public partial class PlayerData : MonoBehaviour
 {
     public const int MaxPlayerSlots = 3;
     /// <summary>Buildbeck UI 固定 5 個牌組分頁；須與場景按鈕數一致。</summary>
@@ -22,7 +22,7 @@ public class PlayerData : MonoBehaviour
     public string activePlayerSlotName = "玩家1";
 
     private Dictionary<int, int>[] deckSlotMaps;
-    /// <summary>Per deck-slot display names (Buildbeck UI). Empty entry falls back to 「牌組{n}」.</summary>
+    /// <summary>Per deck-slot custom names; empty → UI fallback 「牌組N」（見 <see cref="PlayerDeckSlotNameStorage"/>）。</summary>
     private string[] deckSlotDisplayNames;
     /// <summary>怪物牌熟練度勝場（key = monster id）。</summary>
     private readonly Dictionary<int, CardProficiencyWins> cardProficiencyWins = new Dictionary<int, CardProficiencyWins>();
@@ -38,14 +38,8 @@ public class PlayerData : MonoBehaviour
     /// </summary>
     public static PlayerData ResolveCanonical()
     {
-        GameObject dmGo = GameObject.Find("DataManager");
-        if (dmGo != null)
-        {
-            PlayerData onDm = dmGo.GetComponent<PlayerData>();
-            if (onDm != null) return onDm;
-        }
-
         PlayerData[] all = UnityEngine.Object.FindObjectsByType<PlayerData>(FindObjectsSortMode.None);
+        PlayerData onDataManager = null;
         PlayerData withDeckManager = null;
         PlayerData any = null;
         for (int i = 0; i < all.Length; i++)
@@ -53,10 +47,13 @@ public class PlayerData : MonoBehaviour
             PlayerData p = all[i];
             if (p == null) continue;
             any ??= p;
+            if (p.gameObject.name == "DataManager")
+                onDataManager = p;
             if (p.GetComponent<DeckManager>() != null)
                 withDeckManager = p;
         }
 
+        if (onDataManager != null) return onDataManager;
         if (withDeckManager != null) return withDeckManager;
         return any;
     }
@@ -83,12 +80,21 @@ public class PlayerData : MonoBehaviour
 
         if (fallbackHost == null)
         {
-            fallbackHost = GameObject.Find(FallbackHostName);
-            if (fallbackHost == null)
+            PlayerData[] all = UnityEngine.Object.FindObjectsByType<PlayerData>(FindObjectsSortMode.None);
+            for (int i = 0; i < all.Length; i++)
             {
-                fallbackHost = new GameObject(FallbackHostName);
-                UnityEngine.Object.DontDestroyOnLoad(fallbackHost);
+                if (all[i] != null && all[i].gameObject.name == FallbackHostName)
+                {
+                    fallbackHost = all[i].gameObject;
+                    break;
+                }
             }
+        }
+
+        if (fallbackHost == null)
+        {
+            fallbackHost = new GameObject(FallbackHostName);
+            UnityEngine.Object.DontDestroyOnLoad(fallbackHost);
         }
 
         PlayerData pd = fallbackHost.GetComponent<PlayerData>();
@@ -122,18 +128,18 @@ public class PlayerData : MonoBehaviour
             deckSlotCount = MinDeckSlotCount;
     }
 
-    void Start()
-    {
-    }
-
-    void Update()
-    {
-    }
-
     /// <summary>手機切背景／來電、PC 失焦時：將延遲存檔與貴重品變更落盤。</summary>
     private void OnApplicationPause(bool pauseStatus)
     {
         if (!pauseStatus || ResolveCanonical() != this)
+            return;
+
+        PlayerSaveCoordinator.FlushPendingPlayerDataIfNeeded();
+    }
+
+    private void OnApplicationFocus(bool hasFocus)
+    {
+        if (hasFocus || ResolveCanonical() != this)
             return;
 
         PlayerSaveCoordinator.FlushPendingPlayerDataIfNeeded();
@@ -328,525 +334,6 @@ public class PlayerData : MonoBehaviour
         cardProficiencyWins[monsterId] = w;
     }
 
-    public void LoadPlayerData()
-    {
-        PlayerData canonical = ResolveCanonical();
-        if (canonical != null && canonical != this)
-        {
-            canonical.LoadPlayerData();
-            return;
-        }
-
-        EnsureMinimumDeckSlotCount();
-        EnsureDeckSlotMaps();
-        saveHydratedFromDisk = false;
-
-        playerCollection.Clear();
-        for (int s = 0; s < deckSlotMaps.Length; s++)
-            deckSlotMaps[s].Clear();
-        cardProficiencyWins.Clear();
-        deckSlotDisplayNames = null;
-
-        string path = GetPlayerDataPath();
-
-        if (!PlayerPersistSafeIO.ExistsAnyWithBackups(path))
-        {
-            playerCoins = 100;
-            totalCoins = playerCoins;
-            playerGems = 300;
-            saveHydratedFromDisk = true;
-            SavePlayerData();
-            return;
-        }
-
-        foreach (string candidatePath in PlayerPersistSafeIO.EnumerateLoadCandidates(path))
-        {
-            if (!File.Exists(candidatePath)) continue;
-            string[] dataRow;
-            try
-            {
-                dataRow = PlayerPersistSafeIO.ReadAllLines(candidatePath);
-            }
-            catch (Exception ex)
-            {
-                Debug.LogWarning("PlayerData: could not read " + candidatePath + " -> " + ex.Message);
-                continue;
-            }
-
-            if (!PlayerPersistSafeIO.LooksLikePlayerDataCsv(dataRow)) continue;
-
-            playerCollection.Clear();
-            for (int s = 0; s < deckSlotMaps.Length; s++)
-                deckSlotMaps[s].Clear();
-            cardProficiencyWins.Clear();
-            deckSlotDisplayNames = null;
-
-            if (!TryApplyLoadedPlayerDataRows(dataRow)) continue;
-
-            PlayerBirdDuelCdState.EnsureNewPlayerDefaults(activePlayerSlot);
-            saveHydratedFromDisk = true;
-            FinishLoadVaultCacheRefresh();
-
-            Debug.Log("Load from persistent: " + candidatePath);
-            Debug.Log("Loaded coins=" + playerCoins);
-            return;
-        }
-
-        Debug.LogError("PlayerData: all save candidates failed to load; recreating defaults.");
-        playerCoins = 100;
-        totalCoins = playerCoins;
-        playerGems = 300;
-        PlayerBirdDuelCdState.EnsureNewPlayerDefaults(activePlayerSlot);
-        saveHydratedFromDisk = true;
-        SavePlayerData();
-    }
-
-    /// <summary>CSV 已載入後再處理貴重品庫 dirty，避免以 0 金幣／寶石覆寫存檔。</summary>
-    private void FinishLoadVaultCacheRefresh()
-    {
-        if (ValuablesVaultState.HasPendingChanges)
-            SavePlayerData();
-        ValuablesVaultState.InvalidateAllCaches();
-    }
-
-    private bool TryApplyLoadedPlayerDataRows(string[] dataRow)
-    {
-        try
-        {
-            activePlayerSlot = Mathf.Clamp(ReadActiveSlotFromRows(dataRow), 1, MaxPlayerSlots);
-            cachedOtherSlotRows.Clear();
-            PlayerBirdDuelCdState.ClearAllCaches();
-            bool hasDeckSlotData = false;
-            bool hasSlotRows = false;
-
-            foreach (var row in dataRow)
-            {
-                string[] rowArray = row.Split(',');
-                if (rowArray == null || rowArray.Length == 0) continue;
-                if (rowArray[0] == "#") continue;
-
-                if (rowArray[0] == "slot")
-                {
-                    hasSlotRows = true;
-                    if (rowArray.Length < 4) continue;
-                    if (!int.TryParse(rowArray[1].Trim(), out int slotIndex)) continue;
-                    if (slotIndex != activePlayerSlot)
-                    {
-                        cachedOtherSlotRows.Add(row);
-                        continue;
-                    }
-                    string[] scoped = new string[rowArray.Length - 2];
-                    Array.Copy(rowArray, 2, scoped, 0, scoped.Length);
-                    ParsePlayerRow(scoped, ref hasDeckSlotData);
-                    continue;
-                }
-
-                if (!hasSlotRows)
-                    ParsePlayerRow(rowArray, ref hasDeckSlotData);
-            }
-
-            return true;
-        }
-        catch (Exception ex)
-        {
-            Debug.LogWarning("PlayerData: parse failed for candidate save -> " + ex.Message);
-            return false;
-        }
-    }
-
-    private void ParsePlayerRow(string[] rowArray, ref bool hasDeckSlotData)
-    {
-        if (rowArray == null || rowArray.Length == 0) return;
-        if (rowArray[0] == "coins")
-        {
-            if (rowArray.Length < 2) return;
-            playerCoins = int.Parse(rowArray[1].Trim());
-            totalCoins = playerCoins;
-        }
-        else if (rowArray[0] == "gems")
-        {
-            if (rowArray.Length < 2) return;
-            playerGems = int.Parse(rowArray[1].Trim());
-        }
-        else if (rowArray[0] == "bird_cd")
-        {
-            PlayerBirdDuelCdState.ParseScopedRow(activePlayerSlot, rowArray);
-        }
-        else if (rowArray[0] == "card")
-        {
-            if (!TryParseCollectionRow(rowArray, out int key, out int num)) return;
-            SetCollectionCount(key, num);
-        }
-        else if (rowArray[0] == "deck")
-        {
-            if (hasDeckSlotData) return;
-            if (!TryParseDeckRow(rowArray, out int key, out int num)) return;
-            SetDeckCount(0, key, num);
-        }
-        else if (rowArray[0] == "deckslot")
-        {
-            if (rowArray.Length < 4) return;
-            int slot = int.Parse(rowArray[1].Trim());
-            if (slot < 0 || slot >= deckSlotCount) return;
-
-            if (rowArray.Length >= 5 && (rowArray[2] == "m" || rowArray[2] == "s"))
-            {
-                hasDeckSlotData = true;
-                if (!TryParseTypedDeckslotRow(rowArray, out int key, out int num)) return;
-                SetDeckCount(slot, key, num);
-            }
-            else
-            {
-                hasDeckSlotData = true;
-                int legacyId = int.Parse(rowArray[2].Trim());
-                int num = int.Parse(rowArray[3].Trim());
-                int key = NormalizeLegacyUnifiedRowId(legacyId);
-                SetDeckCount(slot, key, num);
-            }
-        }
-        else if (rowArray[0] == "selected_deck_slot")
-        {
-            if (rowArray.Length < 2) return;
-            selectedDeckSlot = Mathf.Clamp(int.Parse(rowArray[1].Trim()), 0, deckSlotCount - 1);
-        }
-        else if (rowArray[0] == "deck_slot_name")
-        {
-            if (rowArray.Length < 3) return;
-            if (!int.TryParse(rowArray[1].Trim(), out int deckSlotIdx)) return;
-            EnsureDeckSlotMaps();
-            EnsureDeckSlotNamesBuffer();
-            deckSlotIdx = Mathf.Clamp(deckSlotIdx, 0, deckSlotCount - 1);
-            // 名稱可含逗號：存檔以逗號 split 後需自索引 2 起整段接回。
-            string rawLabel = rowArray[2];
-            if (rowArray.Length > 3)
-            {
-                for (int ri = 3; ri < rowArray.Length; ri++)
-                    rawLabel = rawLabel + "," + rowArray[ri];
-            }
-            deckSlotDisplayNames[deckSlotIdx] = SanitizeDeckSlotName(rawLabel);
-        }
-        else if (rowArray[0] == "slot_name")
-        {
-            if (rowArray.Length < 2) return;
-            activePlayerSlotName = string.IsNullOrWhiteSpace(rowArray[1]) ? ("玩家" + activePlayerSlot) : rowArray[1].Trim();
-        }
-        else if (rowArray[0] == "proficiency")
-        {
-            if (rowArray.Length < 5) return;
-            if (rowArray[1] != "m") return;
-            if (!int.TryParse(rowArray[2].Trim(), out int monsterId)) return;
-            if (!float.TryParse(rowArray[3].Trim(), System.Globalization.NumberStyles.Float,
-                    System.Globalization.CultureInfo.InvariantCulture, out float progressAny))
-                return;
-            if (!int.TryParse(rowArray[4].Trim(), out int winsNormal)) return;
-            SetCardProficiencyWins(monsterId, progressAny, winsNormal);
-        }
-    }
-
-    /// <summary>Legacy 3-column rows used one int for monsters and spells. If a monster exists at <paramref name="legacyId"/>, keep it; otherwise map old spell ids to spell keys.</summary>
-    private int NormalizeLegacyUnifiedRowId(int legacyId)
-    {
-        if (CardStore != null && CardStore.GetCardById(legacyId) is MonsterCard)
-            return legacyId;
-        return DeckCardId.NormalizeLegacyUnifiedId(legacyId);
-    }
-
-    private bool TryParseCollectionRow(string[] rowArray, out int key, out int num)
-    {
-        key = 0;
-        num = 0;
-        if (rowArray.Length >= 4 && rowArray[1] == "m")
-        {
-            key = int.Parse(rowArray[2].Trim());
-            num = int.Parse(rowArray[3].Trim());
-            return true;
-        }
-        if (rowArray.Length >= 4 && rowArray[1] == "s")
-        {
-            int ord = int.Parse(rowArray[2].Trim());
-            key = DeckCardId.SpellKeyFromOrdinal(ord);
-            num = int.Parse(rowArray[3].Trim());
-            return true;
-        }
-        if (rowArray.Length >= 3)
-        {
-            int legacyId = int.Parse(rowArray[1].Trim());
-            num = int.Parse(rowArray[2].Trim());
-            key = NormalizeLegacyUnifiedRowId(legacyId);
-            return true;
-        }
-        return false;
-    }
-
-    private bool TryParseDeckRow(string[] rowArray, out int key, out int num)
-    {
-        key = 0;
-        num = 0;
-        if (rowArray.Length >= 4 && rowArray[1] == "m")
-        {
-            key = int.Parse(rowArray[2].Trim());
-            num = int.Parse(rowArray[3].Trim());
-            return true;
-        }
-        if (rowArray.Length >= 4 && rowArray[1] == "s")
-        {
-            int ord = int.Parse(rowArray[2].Trim());
-            key = DeckCardId.SpellKeyFromOrdinal(ord);
-            num = int.Parse(rowArray[3].Trim());
-            return true;
-        }
-        if (rowArray.Length >= 3)
-        {
-            int legacyId = int.Parse(rowArray[1].Trim());
-            num = int.Parse(rowArray[2].Trim());
-            key = NormalizeLegacyUnifiedRowId(legacyId);
-            return true;
-        }
-        return false;
-    }
-
-    private static bool TryParseTypedDeckslotRow(string[] rowArray, out int key, out int num)
-    {
-        key = 0;
-        num = 0;
-        if (rowArray[2] == "m")
-        {
-            key = int.Parse(rowArray[3].Trim());
-            num = int.Parse(rowArray[4].Trim());
-            return true;
-        }
-        if (rowArray[2] == "s")
-        {
-            int ord = int.Parse(rowArray[3].Trim());
-            key = DeckCardId.SpellKeyFromOrdinal(ord);
-            num = int.Parse(rowArray[4].Trim());
-            return true;
-        }
-        return false;
-    }
-
-    /// <summary>合併短時間內多次存檔（Buildbeck 拖卡、切換牌組分頁）。離場景／進戰鬥前請用 <see cref="SavePlayerData"/> 或 <see cref="PlayerSaveCoordinator.FlushDebouncedThenSavePlayerData"/>。</summary>
-    public void SavePlayerDataDebounced()
-    {
-        PlayerData canonical = ResolveCanonical();
-        if (canonical != null && canonical != this)
-        {
-            canonical.SavePlayerDataDebounced();
-            return;
-        }
-
-        PlayerSaveDebouncer.RequestDebouncedSave(this);
-    }
-
-    public void SavePlayerData()
-    {
-        PlayerSaveDebouncer.CancelPending();
-
-        PlayerData canonical = ResolveCanonical();
-        if (canonical != null && canonical != this)
-        {
-            canonical.SavePlayerData();
-            return;
-        }
-
-        EnsureMinimumDeckSlotCount();
-        EnsureDeckSlotMaps();
-
-        string dir = Application.persistentDataPath;
-        string path = GetPlayerDataPath();
-        Directory.CreateDirectory(dir);
-
-        // Rows not rebuilt below must be preserved: profile_*, battle_record, tutorial/harbor 旗標等。
-        var preservedActiveSlotExtraRows = new List<string>(64);
-        if (PlayerPersistSafeIO.TryReadPlayerDataLines(path, out string[] existingLines, out _))
-        {
-            for (int li = 0; li < existingLines.Length; li++)
-            {
-                string line = existingLines[li];
-                if (string.IsNullOrWhiteSpace(line) || line.StartsWith("#", StringComparison.Ordinal)) continue;
-                string[] cols = line.Split(',');
-                if (cols.Length < 4) continue;
-                if (!string.Equals(cols[0].Trim(), "slot", StringComparison.OrdinalIgnoreCase)) continue;
-                if (!int.TryParse(cols[1].Trim(), out int slotNum) || slotNum != activePlayerSlot) continue;
-                string slotKey = cols[2].Trim();
-                if (ValuablesVaultState.IsValuableCsvRow(line))
-                    continue;
-                if (ShouldPreserveActiveSlotRowOnPlayerSave(slotKey, cols.Length))
-                    preservedActiveSlotExtraRows.Add(line);
-            }
-        }
-
-        var datas = new List<string>();
-        datas.Add($"active_slot,{activePlayerSlot}");
-
-        // Preserve all rows for non-active slots (貴重品改由 ValuablesVaultState 統一附加)。
-        for (int i = 0; i < cachedOtherSlotRows.Count; i++)
-        {
-            string row = cachedOtherSlotRows[i];
-            if (ValuablesVaultState.IsValuableCsvRow(row))
-                continue;
-            datas.Add(row);
-        }
-
-        var current = new List<string>();
-        current.Add($"slot,{activePlayerSlot},coins,{playerCoins}");
-        current.Add($"slot,{activePlayerSlot},gems,{playerGems}");
-        current.Add($"slot,{activePlayerSlot},selected_deck_slot,{selectedDeckSlot}");
-        current.Add($"slot,{activePlayerSlot},slot_name,{SanitizeSlotName(activePlayerSlotName, activePlayerSlot)}");
-
-        EnsureDeckSlotMaps();
-        EnsureDeckSlotNamesBuffer();
-        for (int s = 0; s < deckSlotCount; s++)
-        {
-            string label = SanitizeDeckSlotName(GetDeckSlotDisplayName(s));
-            current.Add($"slot,{activePlayerSlot},deck_slot_name,{s},{label}");
-        }
-
-        foreach (var kv in playerCollection)
-        {
-            if (kv.Value == 0) continue;
-            if (DeckCardId.IsSpellKey(kv.Key))
-                current.Add($"slot,{activePlayerSlot},card,s,{DeckCardId.SpellOrdinalFromKey(kv.Key)},{kv.Value}");
-            else
-                current.Add($"slot,{activePlayerSlot},card,m,{kv.Key},{kv.Value}");
-        }
-
-        EnsureDeckSlotMaps();
-        for (int slot = 0; slot < deckSlotMaps.Length; slot++)
-        {
-            foreach (var kv in deckSlotMaps[slot])
-            {
-                if (kv.Value == 0) continue;
-                if (DeckCardId.IsSpellKey(kv.Key))
-                    current.Add($"slot,{activePlayerSlot},deckslot,{slot},s,{DeckCardId.SpellOrdinalFromKey(kv.Key)},{kv.Value}");
-                else
-                    current.Add($"slot,{activePlayerSlot},deckslot,{slot},m,{kv.Key},{kv.Value}");
-            }
-        }
-
-        foreach (var kv in deckSlotMaps[selectedDeckSlot])
-        {
-            if (kv.Value == 0) continue;
-            if (DeckCardId.IsSpellKey(kv.Key))
-                current.Add($"slot,{activePlayerSlot},deck,s,{DeckCardId.SpellOrdinalFromKey(kv.Key)},{kv.Value}");
-            else
-                current.Add($"slot,{activePlayerSlot},deck,m,{kv.Key},{kv.Value}");
-        }
-
-        foreach (var kv in cardProficiencyWins)
-        {
-            if (kv.Value.progressAny <= 0.001f && kv.Value.winsNormalDifficulty <= 0) continue;
-            string progressText = kv.Value.progressAny.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture);
-            current.Add($"slot,{activePlayerSlot},proficiency,m,{kv.Key},{progressText},{kv.Value.winsNormalDifficulty}");
-        }
-
-        PlayerBirdDuelCdState.AppendSaveRows(activePlayerSlot, current);
-
-        for (int i = 0; i < current.Count; i++) datas.Add(current[i]);
-        EnsureAllSlotContainers(datas);
-        for (int pi = 0; pi < preservedActiveSlotExtraRows.Count; pi++)
-            datas.Add(preservedActiveSlotExtraRows[pi]);
-
-        TutorialProgressState.EnsureGraduationFlagRowsInPlayerSave(datas, activePlayerSlot, playerCollection);
-        ValuablesVaultState.AppendAllSlotsSerializedRows(datas);
-        ValuablesVaultState.MarkPersisted();
-
-        PlayerSaveCoordinator.WritePlayerDataCsv(datas);
-        RebuildCachedOtherSlotRowsFromDisk(path);
-        Debug.Log("Save path: " + path);
-    }
-
-    /// <summary>
-    /// 作用中槽位在 SavePlayerData 時不重建的 CSV 列（教學／港灣旗標、戰績 profile、battle_record 等）。
-    /// 若未保留，港灣戰後存檔會清掉入門畢業旗標，Story progress 會誤回到「入門未通關」。
-    /// </summary>
-    private static bool ShouldPreserveActiveSlotRowOnPlayerSave(string slotKey, int columnCount)
-    {
-        if (string.IsNullOrWhiteSpace(slotKey)) return false;
-        if (slotKey.StartsWith("profile_", StringComparison.OrdinalIgnoreCase)) return true;
-        if (string.Equals(slotKey, "battle_record", StringComparison.OrdinalIgnoreCase)) return true;
-        if (string.Equals(slotKey, ValuablesVaultState.SaveKey, StringComparison.OrdinalIgnoreCase))
-            return true;
-        if (columnCount != 4) return false;
-
-        switch (slotKey)
-        {
-            case "coins":
-            case "gems":
-            case "bird_cd":
-            case "selected_deck_slot":
-            case "slot_name":
-            case "card":
-            case "deck":
-            case "deckslot":
-            case "deck_slot_name":
-            case "proficiency":
-                return false;
-            default:
-                return true;
-        }
-    }
-
-    private void RebuildCachedOtherSlotRowsFromDisk(string path)
-    {
-        cachedOtherSlotRows.Clear();
-        if (!PlayerPersistSafeIO.TryReadPlayerDataLines(path, out string[] rows, out _))
-            return;
-
-        for (int i = 0; i < rows.Length; i++)
-        {
-            string row = rows[i];
-            if (string.IsNullOrWhiteSpace(row) || row.StartsWith("#", StringComparison.Ordinal)) continue;
-            string[] cols = row.Split(',');
-            if (cols.Length < 4) continue;
-            if (!string.Equals(cols[0].Trim(), "slot", StringComparison.OrdinalIgnoreCase)) continue;
-            if (!int.TryParse(cols[1].Trim(), out int slotIndex)) continue;
-            if (slotIndex == activePlayerSlot) continue;
-            cachedOtherSlotRows.Add(row);
-        }
-    }
-
-    private static int ReadActiveSlotFromRows(string[] rows)
-    {
-        for (int i = 0; i < rows.Length; i++)
-        {
-            string[] c = rows[i].Split(',');
-            if (c.Length < 2) continue;
-            if (!string.Equals(c[0].Trim(), "active_slot", StringComparison.OrdinalIgnoreCase)) continue;
-            if (!int.TryParse(c[1].Trim(), out int slot)) continue;
-            return Mathf.Clamp(slot, 1, MaxPlayerSlots);
-        }
-        return 1;
-    }
-
-    private static void EnsureAllSlotContainers(List<string> rows)
-    {
-        bool[] hasSlotCoins = new bool[MaxPlayerSlots + 1];
-        bool[] hasSlotGems = new bool[MaxPlayerSlots + 1];
-        bool[] hasSlotSelect = new bool[MaxPlayerSlots + 1];
-        bool[] hasSlotName = new bool[MaxPlayerSlots + 1];
-        for (int i = 0; i < rows.Count; i++)
-        {
-            string[] c = rows[i].Split(',');
-            if (c.Length < 4) continue;
-            if (!string.Equals(c[0].Trim(), "slot", StringComparison.OrdinalIgnoreCase)) continue;
-            if (!int.TryParse(c[1].Trim(), out int slot)) continue;
-            if (slot < 1 || slot > MaxPlayerSlots) continue;
-            string key = c[2].Trim();
-            if (key == "coins") hasSlotCoins[slot] = true;
-            else if (key == "gems") hasSlotGems[slot] = true;
-            else if (key == "selected_deck_slot") hasSlotSelect[slot] = true;
-            else if (key == "slot_name") hasSlotName[slot] = true;
-        }
-        for (int slot = 1; slot <= MaxPlayerSlots; slot++)
-        {
-            if (!hasSlotCoins[slot]) rows.Add($"slot,{slot},coins,100");
-            if (!hasSlotGems[slot]) rows.Add($"slot,{slot},gems,300");
-            if (!hasSlotSelect[slot]) rows.Add($"slot,{slot},selected_deck_slot,0");
-            if (!hasSlotName[slot]) rows.Add($"slot,{slot},slot_name,玩家{slot}");
-        }
-    }
-
     public static string GetPlayerSaveCsvPath() => GetPlayerDataPath();
 
     private static string GetPlayerDataPath()
@@ -903,6 +390,7 @@ public class PlayerData : MonoBehaviour
     public static void SelectActivePlayerSlot(int slot)
     {
         slot = Mathf.Clamp(slot, 1, MaxPlayerSlots);
+        PlayerSaveCoordinator.EnsurePersistedBeforeDiskMerge();
         string path = GetPlayerDataPath();
         string dir = Application.persistentDataPath;
         Directory.CreateDirectory(dir);
@@ -931,6 +419,10 @@ public class PlayerData : MonoBehaviour
         EnsureAllSlotContainers(rows);
         PlayerSaveCoordinator.WritePlayerDataCsv(rows);
         ValuablesVaultState.InvalidateAllCaches();
+
+        PlayerData pd = ResolveCanonical();
+        if (pd != null)
+            pd.LoadPlayerData();
     }
 
     public static int FindFirstEmptySlot()
@@ -956,6 +448,7 @@ public class PlayerData : MonoBehaviour
     public static void DeleteSlotData(int slot, int defaultCoins = 100)
     {
         slot = Mathf.Clamp(slot, 1, MaxPlayerSlots);
+        PlayerSaveCoordinator.EnsurePersistedBeforeDiskMerge();
         string path = GetPlayerDataPath();
         string dir = Application.persistentDataPath;
         Directory.CreateDirectory(dir);
@@ -1178,7 +671,12 @@ public class PlayerData : MonoBehaviour
         int slot = ReadActivePlayerSlotFromSave();
         PlayerData pd = ResolveCanonical();
         if (pd != null)
-            pd.activePlayerSlot = slot;
+        {
+            if (pd.IsSaveHydratedFromDisk && pd.activePlayerSlot != slot)
+                pd.LoadPlayerData();
+            else
+                pd.activePlayerSlot = slot;
+        }
         return slot;
     }
 
@@ -1232,55 +730,6 @@ public class PlayerData : MonoBehaviour
         selectedDeckSlot = Mathf.Clamp(slot, 0, deckSlotCount - 1);
     }
 
-    private void EnsureDeckSlotNamesBuffer()
-    {
-        EnsureDeckSlotMaps();
-        if (deckSlotDisplayNames != null && deckSlotDisplayNames.Length == deckSlotCount)
-            return;
-        var prev = deckSlotDisplayNames;
-        deckSlotDisplayNames = new string[deckSlotCount];
-        if (prev != null)
-        {
-            int copy = Mathf.Min(prev.Length, deckSlotCount);
-            for (int i = 0; i < copy; i++)
-                deckSlotDisplayNames[i] = prev[i];
-        }
-    }
-
-    /// <summary>Localized deck tab label for slot index 0..deckSlotCount-1.</summary>
-    public string GetDeckSlotDisplayName(int slot)
-    {
-        EnsureDeckSlotMaps();
-        EnsureDeckSlotNamesBuffer();
-        slot = Mathf.Clamp(slot, 0, deckSlotCount - 1);
-        string s = deckSlotDisplayNames[slot];
-        return string.IsNullOrWhiteSpace(s) ? ("牌組" + (slot + 1)) : s;
-    }
-
-    public void SetDeckSlotDisplayName(int slot, string name)
-    {
-        PlayerData canonical = ResolveCanonical();
-        if (canonical != null && canonical != this)
-        {
-            canonical.SetDeckSlotDisplayName(slot, name);
-            return;
-        }
-
-        EnsureMinimumDeckSlotCount();
-        EnsureDeckSlotMaps();
-        EnsureDeckSlotNamesBuffer();
-        slot = Mathf.Clamp(slot, 0, deckSlotCount - 1);
-        deckSlotDisplayNames[slot] = SanitizeDeckSlotName(name);
-    }
-
-    private static string SanitizeDeckSlotName(string name)
-    {
-        if (string.IsNullOrWhiteSpace(name)) return string.Empty;
-        string n = name.Trim().Replace("\n", " ").Replace("\r", " ").Replace(",", " ");
-        if (n.Length > 24) n = n.Substring(0, 24);
-        return n;
-    }
-
     public int GetSelectedDeckTotalCount()
     {
         EnsureDeckSlotMaps();
@@ -1292,4 +741,34 @@ public class PlayerData : MonoBehaviour
         }
         return total;
     }
+
+    // ── 牌組槽顯示名稱（<see cref="PlayerDeckSlotNameStorage"/>）────────────────
+
+    internal string[] GetDeckSlotDisplayNamesInternal() => deckSlotDisplayNames;
+
+    internal void SetDeckSlotDisplayNamesInternal(string[] names) => deckSlotDisplayNames = names;
+
+    internal bool IsSaveHydratedInternal() => saveHydratedFromDisk;
+
+    internal void EnsureDeckSlotMapsInternal() => EnsureDeckSlotMaps();
+
+    private void ResetDeckSlotDisplayNamesForLoad() => PlayerDeckSlotNameStorage.ClearForLoad(this);
+
+    public void EnsureActivePlayerSlotSyncedFromDisk() =>
+        PlayerDeckSlotNameStorage.EnsureActivePlayerSlotSyncedFromDisk(this);
+
+    public string GetDeckSlotDisplayNameRaw(int slot) =>
+        PlayerDeckSlotNameStorage.GetRawName(this, slot);
+
+    public string GetDeckSlotDisplayName(int slot) =>
+        PlayerDeckSlotNameStorage.GetDisplayName(this, slot);
+
+    public void SetDeckSlotDisplayName(int slot, string name) =>
+        PlayerDeckSlotNameStorage.SetCustomName(this, slot, name);
+
+    private void ApplyDeckSlotNameLoadRow(string[] rowArray) =>
+        PlayerDeckSlotNameStorage.ApplyLoadRow(this, rowArray);
+
+    private void AppendDeckSlotNameSaveRows(List<string> current) =>
+        PlayerDeckSlotNameStorage.AppendSaveRows(this, current);
 }

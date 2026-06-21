@@ -18,10 +18,25 @@ public static class StoryProgressBattleReturn
         SceneLoader.LaunchIntroTutorialBattleFromAnywhere();
     }
 
-    public static void CompleteReturnFromHarborTraining()
+    public static void CompleteReturnFromHarborTraining(bool firstCombatClear = false)
     {
         TutorialBattleBackgroundMusicPlayer.StopAll();
         BattleLaunchContext.ClearActiveBattle();
-        StoryProgressSession.LoadStoryProgressWithIrisTransition();
+        if (firstCombatClear)
+            StoryProgressSession.LaunchHarborCombatClearBridgeAfterFirstVictory();
+        else
+            StoryProgressSession.LoadStoryProgressWithIrisTransition();
+    }
+
+    public static void RetryM12PhaseABattle()
+    {
+        M12PhaseDeckApplicator.ApplyPhaseADeck();
+        SceneLoader.LaunchM12PhaseABattleDirect();
+    }
+
+    public static void RetryM12PhaseBBattle()
+    {
+        M12PhaseDeckApplicator.ApplyPhaseBDeck();
+        SceneLoader.LaunchM12PhaseBBattleDirect();
     }
 }

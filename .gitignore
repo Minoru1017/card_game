@@ -64,3 +64,6 @@ Assets/PlayerDataSnapshots/*.csv
 !Assets/PlayerDataSnapshots/playerdata.profile_mirror.csv
 !Assets/PlayerDataSnapshots/playerdata.slot3.minoru1017.checkpoint.csv
 !Assets/PlayerDataSnapshots/player_profile.csv
+
+# Local code quality scan CSV (regenerate via code-quality-scan skill)
+.code-quality-scan/

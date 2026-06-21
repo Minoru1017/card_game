@@ -1,14 +1,14 @@
 ﻿schema_version,1
 uuid,9818680397494c9fb34cf02e3f25aabf
 role,遊戲測試員
-decks,撠曈?slot 3 deck_slot_na:30張 | 牌組2:0張 | 牌組3:0張 | 牌組4:0張 | ??5:30張
+decks,國王隊:30張 | 教會隊:3張 | 諾森隊:4張 | 龍族隊:6張 | Good好棒666隊:30張
 heroes,無
 start_date,2026-06-17
 wins,44
-losses,59
+losses,55
 draws,4
 quits,30
-last_result,戰敗
+last_result,?唳?
 battle_record,0,1,入門
 battle_record,1,1,困難
 battle_record,2,-1,困難
@@ -77,3 +77,7 @@ battle_record,64,-1,入門
 battle_record,65,-1,魔王
 battle_record,66,-1,入門
 battle_record,67,-1,入門
+battle_record,68,-1,入門
+battle_record,69,-1,簡單
+battle_record,70,1,入門
+battle_record,71,-1,入門

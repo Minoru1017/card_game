@@ -36,6 +36,16 @@ public static class BirdDuelBgmTempoAnalyzer
             gridMode: BirdDuelRhythmSync.GridMode.AlternatingEighthTwelfth);
     }
 
+    [MenuItem("Tools/Audio/Analyze Bird Duel BGM Tempo (Morning Prayer / Who Are You Hiding From)")]
+    public static void AnalyzeMorningPrayer()
+    {
+        AnalyzeClip(
+            FightingBirdGameSceneController.MorningPrayerAssetPath,
+            writeDefault: false,
+            cdId: BirdDuelRhythmChart.MorningPrayerCdId,
+            gridMode: BirdDuelRhythmSync.GridMode.QuarterBeat);
+    }
+
     private static void AnalyzeClip(
         string clipPath,
         bool writeDefault,
@@ -293,7 +303,7 @@ public static class BirdDuelBgmTempoAnalyzer
         var sync = LoadOrCreateSyncAsset();
         var entry = sync.EditorTryGetCdEntry(cdId, out var existing)
             ? existing
-            : CreateDefaultCourtMarchDifficultyEntry(cdId);
+            : CreateDefaultCdDifficultyEntry(cdId, gridMode);
         entry.cdId = cdId;
         entry.bpm = Mathf.Round(bpm * 10f) / 10f;
         entry.firstDownbeatOffset = offset;
@@ -304,11 +314,15 @@ public static class BirdDuelBgmTempoAnalyzer
         SaveSync(sync, "CD=" + cdId);
     }
 
-    /// <summary>庭訓進行曲：比港灣練習帶略難（量測 BPM 後仍保留此梯度）。</summary>
-    private static BirdDuelRhythmSync.CdEntry CreateDefaultCourtMarchDifficultyEntry(string cdId) =>
-        new BirdDuelRhythmSync.CdEntry
+    /// <summary>R 級 CD 預設難度：與庭訓同檔（略難於港灣）；晨禱用整拍格。</summary>
+    private static BirdDuelRhythmSync.CdEntry CreateDefaultCdDifficultyEntry(
+        string cdId,
+        BirdDuelRhythmSync.GridMode gridMode)
+    {
+        return new BirdDuelRhythmSync.CdEntry
         {
             cdId = cdId,
+            gridMode = gridMode,
             decisivePerfectWindowMul = 0.68f,
             decisiveGoodWindowMul = 0.73f,
             decisiveTelegraphLeadMul = 0.55f,
@@ -320,6 +334,7 @@ public static class BirdDuelBgmTempoAnalyzer
             decisiveMinTriplets = 5,
             decisiveMaxTriplets = 20
         };
+    }
 
     private static BirdDuelRhythmSync LoadOrCreateSyncAsset()
     {

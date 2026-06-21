@@ -55,6 +55,8 @@ public static class HarborTrainingEasyBattleRules
 
     public static bool IsActiveEasyBattle()
     {
+        if (BattleLaunchContext.IsM12CoachPracticeBattle)
+            return true;
         if (!BattleLaunchContext.IsHarborTrainingGroundBattle)
             return false;
         BattleDifficultyTier tier = HarborTrainingBattleCopy.TierFromLabelZh(

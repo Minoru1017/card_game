@@ -332,6 +332,7 @@ public static class BuildbeckLayoutAutoBinder
 
     /// <summary>
     /// If no display reference is set, find a TMP_Text or legacy <see cref="Text"/> on a named object in the Buildbeck scene (runtime only).
+    /// Prefers the label under <see cref="EditDeckNameButton"/> and ignores misnamed clones under the battle-ready button.
     /// </summary>
     public static void TryBindCurrentDeckNameDisplay(DeckManager deckManager)
     {
@@ -341,38 +342,151 @@ public static class BuildbeckLayoutAutoBinder
         if (!active.IsValid() || !active.name.Equals(SceneName, System.StringComparison.OrdinalIgnoreCase))
             return;
 
-        if (IsButtonInScene(deckManager.currentDeckDisplayNameText, active) ||
-            IsLegacyTextInScene(deckManager.currentDeckDisplayNameLegacyText, active))
+        if (IsTextUnderNamedRoot(deckManager.currentDeckDisplayNameText, ReadyBattleButtonNames))
+            deckManager.currentDeckDisplayNameText = null;
+        if (IsLegacyTextUnderNamedRoot(deckManager.currentDeckDisplayNameLegacyText, ReadyBattleButtonNames))
+            deckManager.currentDeckDisplayNameLegacyText = null;
+
+        TMP_Text resolvedTmp = ResolveCurrentDeckDisplayNameTmp(deckManager, active);
+        if (resolvedTmp != null)
         {
+            deckManager.currentDeckDisplayNameText = resolvedTmp;
+            deckManager.currentDeckDisplayNameLegacyText = null;
             deckManager.RefreshCurrentDeckDisplayName();
             return;
         }
 
-        deckManager.currentDeckDisplayNameText = null;
-        deckManager.currentDeckDisplayNameLegacyText = null;
+        Text resolvedLegacy = ResolveCurrentDeckDisplayNameLegacy(deckManager, active);
+        if (resolvedLegacy != null)
+        {
+            deckManager.currentDeckDisplayNameText = null;
+            deckManager.currentDeckDisplayNameLegacyText = resolvedLegacy;
+            deckManager.RefreshCurrentDeckDisplayName();
+            return;
+        }
+
+        if (IsTextInScene(deckManager.currentDeckDisplayNameText, active) ||
+            IsLegacyTextInScene(deckManager.currentDeckDisplayNameLegacyText, active))
+            deckManager.RefreshCurrentDeckDisplayName();
+    }
+
+    private static TMP_Text ResolveCurrentDeckDisplayNameTmp(DeckManager deckManager, Scene scene)
+    {
+        if (IsTextInScene(deckManager.currentDeckDisplayNameText, scene) &&
+            !IsTextUnderNamedRoot(deckManager.currentDeckDisplayNameText, ReadyBattleButtonNames))
+            return deckManager.currentDeckDisplayNameText;
+
+        Button edit = ResolveEditDeckNameButton(deckManager);
+        if (edit != null)
+        {
+            TMP_Text fromEdit = FindNamedDeckDisplayTextUnder(edit.transform, true) as TMP_Text;
+            if (fromEdit != null) return fromEdit;
+        }
+
+        return FindNamedDeckDisplayTextInScene(scene, true) as TMP_Text;
+    }
+
+    private static Text ResolveCurrentDeckDisplayNameLegacy(DeckManager deckManager, Scene scene)
+    {
+        if (IsLegacyTextInScene(deckManager.currentDeckDisplayNameLegacyText, scene) &&
+            !IsLegacyTextUnderNamedRoot(deckManager.currentDeckDisplayNameLegacyText, ReadyBattleButtonNames))
+            return deckManager.currentDeckDisplayNameLegacyText;
+
+        Button edit = ResolveEditDeckNameButton(deckManager);
+        if (edit != null)
+        {
+            Text fromEdit = FindNamedDeckDisplayTextUnder(edit.transform, false) as Text;
+            if (fromEdit != null) return fromEdit;
+        }
+
+        return FindNamedDeckDisplayTextInScene(scene, false) as Text;
+    }
+
+    private static Component FindNamedDeckDisplayTextUnder(Transform root, bool preferTmp)
+    {
+        if (root == null) return null;
 
         for (int i = 0; i < CurrentDeckDisplayNameObjectNames.Length; i++)
         {
-            GameObject go = SceneSearchUtil.FindSceneObject(active, CurrentDeckDisplayNameObjectNames[i]);
-            if (go == null) continue;
-            TMP_Text tmp = go.GetComponent<TMP_Text>();
-            if (tmp == null) tmp = go.GetComponentInChildren<TMP_Text>(true);
-            if (tmp != null)
+            Transform named = SceneSearchUtil.FindDeepChildByName(root, CurrentDeckDisplayNameObjectNames[i]);
+            if (named == null) continue;
+            if (preferTmp)
             {
-                deckManager.currentDeckDisplayNameText = tmp;
-                deckManager.RefreshCurrentDeckDisplayName();
-                return;
+                TMP_Text tmp = named.GetComponent<TMP_Text>();
+                if (tmp == null) tmp = named.GetComponentInChildren<TMP_Text>(true);
+                if (tmp != null) return tmp;
             }
-
-            Text leg = go.GetComponent<Text>();
-            if (leg == null) leg = go.GetComponentInChildren<Text>(true);
-            if (leg != null)
+            else
             {
-                deckManager.currentDeckDisplayNameLegacyText = leg;
-                deckManager.RefreshCurrentDeckDisplayName();
-                return;
+                Text leg = named.GetComponent<Text>();
+                if (leg == null) leg = named.GetComponentInChildren<Text>(true);
+                if (leg != null) return leg;
             }
         }
+
+        if (preferTmp)
+        {
+            TMP_Text childTmp = root.GetComponentInChildren<TMP_Text>(true);
+            if (childTmp != null) return childTmp;
+        }
+        else
+        {
+            Text childLeg = root.GetComponentInChildren<Text>(true);
+            if (childLeg != null) return childLeg;
+        }
+
+        return null;
+    }
+
+    private static Component FindNamedDeckDisplayTextInScene(Scene scene, bool preferTmp)
+    {
+        for (int i = 0; i < CurrentDeckDisplayNameObjectNames.Length; i++)
+        {
+            GameObject go = SceneSearchUtil.FindSceneObject(scene, CurrentDeckDisplayNameObjectNames[i]);
+            if (go == null || IsUnderNamedRoot(go.transform, ReadyBattleButtonNames)) continue;
+
+            if (preferTmp)
+            {
+                TMP_Text tmp = go.GetComponent<TMP_Text>();
+                if (tmp == null) tmp = go.GetComponentInChildren<TMP_Text>(true);
+                if (tmp != null) return tmp;
+            }
+            else
+            {
+                Text leg = go.GetComponent<Text>();
+                if (leg == null) leg = go.GetComponentInChildren<Text>(true);
+                if (leg != null) return leg;
+            }
+        }
+
+        return null;
+    }
+
+    private static bool IsUnderNamedRoot(Transform node, string[] rootNames)
+    {
+        if (node == null || rootNames == null || rootNames.Length == 0) return false;
+        Transform current = node;
+        while (current != null)
+        {
+            string n = current.name;
+            for (int i = 0; i < rootNames.Length; i++)
+            {
+                if (string.Equals(n, rootNames[i], System.StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+            current = current.parent;
+        }
+        return false;
+    }
+
+    private static bool IsTextUnderNamedRoot(TMP_Text text, string[] rootNames)
+    {
+        return text != null && IsUnderNamedRoot(text.transform, rootNames);
+    }
+
+    private static bool IsLegacyTextUnderNamedRoot(Text text, string[] rootNames)
+    {
+        return text != null && IsUnderNamedRoot(text.transform, rootNames);
     }
 
     private static Button ResolveSceneButton(Scene buildbeckScene, Button current, string[] names)
@@ -386,7 +500,7 @@ public static class BuildbeckLayoutAutoBinder
         return button != null && button.gameObject != null && button.gameObject.scene == scene;
     }
 
-    private static bool IsButtonInScene(TMP_Text text, Scene scene)
+    private static bool IsTextInScene(TMP_Text text, Scene scene)
     {
         return text != null && text.gameObject != null && text.gameObject.scene == scene;
     }

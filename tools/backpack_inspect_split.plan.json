@@ -1,0 +1,29 @@
+{
+  "classDecl": "public partial class BackpackCardInspectPanel : MonoBehaviour",
+  "makeMainPartial": true,
+  "mainKeepLines": [1, 187],
+  "partials": [
+    {
+      "file": "BackpackCardInspectPanel.Layout.cs",
+      "lines": [189, 733],
+      "usings": [
+        "System.Collections",
+        "System.Collections.Generic",
+        "System.Text",
+        "TMPro",
+        "UnityEngine",
+        "UnityEngine.UI"
+      ]
+    },
+    {
+      "file": "BackpackCardInspectPanel.UiBuild.cs",
+      "lines": [735, 1282],
+      "usings": [
+        "TMPro",
+        "UnityEngine",
+        "UnityEngine.EventSystems",
+        "UnityEngine.UI"
+      ]
+    }
+  ]
+}

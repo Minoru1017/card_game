@@ -136,6 +136,8 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         lastShownBattleResult = result;
         if (BattleLaunchContext.IsIntroTutorialBattle)
             return;
+        if (BattleLaunchContext.IsM12TrioMasteryBattle)
+            return;
         ShowEndBattlePanel();
     }
 
@@ -1672,7 +1674,8 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
 
     private void OnClickReturnStoryProgress()
     {
-        StoryProgressBattleReturn.CompleteReturnFromHarborTraining();
+        bool firstCombatClear = lastHarborVictoryReward.FirstCombatClear;
+        StoryProgressBattleReturn.CompleteReturnFromHarborTraining(firstCombatClear);
     }
 
     private void OnClickReturnBuildbeck()

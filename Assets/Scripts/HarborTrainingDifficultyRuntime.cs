@@ -4,7 +4,8 @@ using UnityEngine;
 public static class HarborTrainingDifficultyRuntime
 {
     public static bool IsHarborBattleActive =>
-        BattleLaunchContext.IsHarborTrainingGroundBattle;
+        BattleLaunchContext.IsHarborTrainingGroundBattle ||
+        BattleLaunchContext.IsM12CoachPracticeBattle;
 
     public static BattleDifficultyTier ResolveActiveTier()
     {

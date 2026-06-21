@@ -11,10 +11,43 @@ public static class StoryProgressSession
     private static List<MainPlotSceneController.PlotStep> pendingPlotSteps;
     private static bool launchTutorialBattleAfterPlot;
     private static bool tutorialPlotEpilogueActive;
+    private static bool harborCombatClearBridgeActive;
+    private static bool m12IntroPlotActive;
+    private static bool m12MidPatrolPlotActive;
+    private static bool m12VictoryEpilogueActive;
+    private static bool launchM12PhaseABattleAfterPlot;
+    private static bool launchM12PhaseBBattleAfterPlot;
     private static bool tutorialPlotBgmRequested;
+    private static string pendingMapFocusNodeId;
+    private static bool pendingEnterMapFocusMode;
+
+    public const string SeawallPatrolNodeId = "M-1-2";
 
     /// <summary>教學戰勝利後的 Main Plot 結尾劇情進行中。</summary>
     public static bool IsTutorialPlotEpilogueActive => tutorialPlotEpilogueActive;
+
+    /// <summary>港灣實戰首通後、回 Story progress 前的短銜接劇情。</summary>
+    public static bool IsHarborCombatClearBridgeActive => harborCombatClearBridgeActive;
+
+    public static bool IsM12IntroPlotActive => m12IntroPlotActive;
+
+    public static bool IsM12MidPatrolPlotActive => m12MidPatrolPlotActive;
+
+    public static bool IsM12VictoryEpilogueActive => m12VictoryEpilogueActive;
+
+    public static bool TryConsumeLaunchM12PhaseABattleAfterPlot()
+    {
+        bool launch = launchM12PhaseABattleAfterPlot;
+        launchM12PhaseABattleAfterPlot = false;
+        return launch;
+    }
+
+    public static bool TryConsumeLaunchM12PhaseBBattleAfterPlot()
+    {
+        bool launch = launchM12PhaseBBattleAfterPlot;
+        launchM12PhaseBBattleAfterPlot = false;
+        return launch;
+    }
 
     /// <summary>1-1 劇情應播放 Enchanted Valley BGM（進入 Main Plot 至劇情結束）。</summary>
     public static bool TutorialPlotBgmRequested => tutorialPlotBgmRequested;
@@ -128,6 +161,148 @@ public static class StoryProgressSession
         EndTutorialPlotBgmSession();
         PlotUiOverlayCleanup.DestroyStrayPlotTapUi();
         NotifyTutorialChapterFullyCompleted();
+    }
+
+    /// <summary>港灣實戰首通結算「返回地圖」：Main Plot 短台詞 → 回 Story progress 並聚焦 M-1-2。</summary>
+    public static void LaunchHarborCombatClearBridgeAfterFirstVictory()
+    {
+        harborCombatClearBridgeActive = true;
+        tutorialPlotEpilogueActive = false;
+        launchTutorialBattleAfterPlot = false;
+        tutorialPlotBgmRequested = false;
+        BattleLaunchContext.ClearActiveBattle();
+        StoryProgressBackgroundMusicPlayer.StopAll();
+        TutorialBattleBackgroundMusicPlayer.StopAll();
+        SetPendingPlotSteps(TutorialPlotScriptFactory.BuildHarborCombatClearBridgeSteps());
+
+        if (!UnityEngine.Application.CanStreamedLevelBeLoaded(MainPlotSceneName))
+        {
+            UnityEngine.Debug.LogError(
+                "StoryProgressSession: cannot load Main Plot for harbor clear bridge — add scene to Build Settings.");
+            harborCombatClearBridgeActive = false;
+            QueuePostHarborClearMapFocus();
+            LoadStoryProgressWithIrisTransition();
+            return;
+        }
+
+        UnityEngine.SceneManagement.SceneManager.LoadScene(MainPlotSceneName);
+    }
+
+    public static void EndHarborCombatClearBridgeSession()
+    {
+        harborCombatClearBridgeActive = false;
+        PlotUiOverlayCleanup.DestroyStrayPlotTapUi();
+        QueuePostHarborClearMapFocus();
+    }
+
+    public static void LaunchM12IntroPlotScene()
+    {
+        m12IntroPlotActive = true;
+        m12MidPatrolPlotActive = false;
+        m12VictoryEpilogueActive = false;
+        launchM12PhaseABattleAfterPlot = true;
+        launchM12PhaseBBattleAfterPlot = false;
+        tutorialPlotEpilogueActive = false;
+        harborCombatClearBridgeActive = false;
+        launchTutorialBattleAfterPlot = false;
+        tutorialPlotBgmRequested = false;
+        BattleLaunchContext.ClearActiveBattle();
+        StoryProgressBackgroundMusicPlayer.StopAll();
+        SetPendingPlotSteps(TutorialPlotScriptFactory.BuildM12IntroPlotSteps());
+        LoadMainPlotOrFallback(() => m12IntroPlotActive = false);
+    }
+
+    public static void LaunchM12MidPatrolPlotScene()
+    {
+        m12MidPatrolPlotActive = true;
+        m12IntroPlotActive = false;
+        m12VictoryEpilogueActive = false;
+        launchM12PhaseBBattleAfterPlot = true;
+        launchM12PhaseABattleAfterPlot = false;
+        tutorialPlotEpilogueActive = false;
+        harborCombatClearBridgeActive = false;
+        launchTutorialBattleAfterPlot = false;
+        tutorialPlotBgmRequested = false;
+        BattleLaunchContext.ClearActiveBattle();
+        StoryProgressBackgroundMusicPlayer.StopAll();
+        SetPendingPlotSteps(TutorialPlotScriptFactory.BuildM12MidPatrolPlotSteps());
+        LoadMainPlotOrFallback(() => m12MidPatrolPlotActive = false);
+    }
+
+    public static void LaunchM12VictoryEpiloguePlotScene()
+    {
+        m12VictoryEpilogueActive = true;
+        m12IntroPlotActive = false;
+        m12MidPatrolPlotActive = false;
+        launchM12PhaseABattleAfterPlot = false;
+        launchM12PhaseBBattleAfterPlot = false;
+        tutorialPlotEpilogueActive = false;
+        harborCombatClearBridgeActive = false;
+        launchTutorialBattleAfterPlot = false;
+        tutorialPlotBgmRequested = false;
+        BattleLaunchContext.ClearActiveBattle();
+        StoryProgressBackgroundMusicPlayer.StopAll();
+        SetPendingPlotSteps(TutorialPlotScriptFactory.BuildM12VictoryEpilogueSteps());
+        LoadMainPlotOrFallback(() => m12VictoryEpilogueActive = false);
+    }
+
+    public static void LaunchM12PhaseABattleAfterPlot(bool fastCloseAnimation = false) =>
+        M12PlotBattleTransition.PlayFromPlotToPhaseABattle(fastCloseAnimation);
+
+    public static void LaunchM12PhaseBBattleAfterPlot(bool fastCloseAnimation = false) =>
+        M12PlotBattleTransition.PlayFromPlotToPhaseBBattle(fastCloseAnimation);
+
+    public static void EndM12IntroPlotSession()
+    {
+        int slot = PlayerData.GetActivePlayerSlotOrDefault();
+        TutorialProgressState.SetM12IntroSeen(slot, true);
+        m12IntroPlotActive = false;
+        PlotUiOverlayCleanup.DestroyStrayPlotTapUi();
+    }
+
+    public static void EndM12MidPatrolPlotSession()
+    {
+        m12MidPatrolPlotActive = false;
+        PlotUiOverlayCleanup.DestroyStrayPlotTapUi();
+    }
+
+    public static void EndM12VictoryEpilogueSession()
+    {
+        m12VictoryEpilogueActive = false;
+        PlotUiOverlayCleanup.DestroyStrayPlotTapUi();
+        pendingMapFocusNodeId = SeawallPatrolNodeId;
+    }
+
+    private static void LoadMainPlotOrFallback(System.Action onFail)
+    {
+        if (!UnityEngine.Application.CanStreamedLevelBeLoaded(MainPlotSceneName))
+        {
+            UnityEngine.Debug.LogError("StoryProgressSession: cannot load Main Plot.");
+            onFail?.Invoke();
+            return;
+        }
+
+        UnityEngine.SceneManagement.SceneManager.LoadScene(MainPlotSceneName);
+    }
+
+    public static bool TryConsumePendingMapFocusNodeId(out string nodeId)
+    {
+        nodeId = pendingMapFocusNodeId;
+        pendingMapFocusNodeId = null;
+        return !string.IsNullOrWhiteSpace(nodeId);
+    }
+
+    public static bool TryConsumePendingEnterMapFocusMode()
+    {
+        bool enter = pendingEnterMapFocusMode;
+        pendingEnterMapFocusMode = false;
+        return enter;
+    }
+
+    private static void QueuePostHarborClearMapFocus()
+    {
+        pendingMapFocusNodeId = SeawallPatrolNodeId;
+        pendingEnterMapFocusMode = true;
     }
 
     private static void LoadStoryProgressFallback()

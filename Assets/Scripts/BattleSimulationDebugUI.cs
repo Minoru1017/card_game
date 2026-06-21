@@ -8,6 +8,12 @@ using UnityEngine.UI;
 public partial class BattleSimulationDebugUI : MonoBehaviour
 {
     // MASTER INDEX (merged legacy + 2026-04-15 updates)
+    // Partials on disk:
+    //    BattleSimulationDebugUI.TurnBanner.cs — 回合橫幅、閒置提示、手牌按下通知
+    //    BattleSimulationDebugUI.WeatherUiBuild.cs — 天氣全螢幕 FX 圖層建構
+    //    BattleSimulationDebugUI.WeatherRuntime.cs — 天氣動畫迴圈、預報 overlay
+    //    BattleSimulationDebugUI.Settlement.cs — 結算面板、熟練度、凍結截圖
+    //    (+ FieldCards, PlayerHand, Pause, OpeningRoll, BattleHistory, FX partials)
     // A) Core debug UI lifecycle (legacy):
     //    - Start()/Update() orchestration, panel visibility, input lock, pause flow.
     // B) Card/field HUD and battle overlays (legacy):
@@ -164,6 +170,8 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
     private int lastShownEnemyHeroHp = int.MinValue;
     private float heroHudTitleSize = 24f;
     private int lastHeroHudBattleSessionId = int.MinValue;
+    private SacredShieldHeroHudVisual playerHeroSacredShieldVisual;
+    private int lastSacredShieldBattleSessionId = int.MinValue;
     private float nextRefreshTime;
     private int lastHandSignature = int.MinValue;
     private int lastFieldSignature = int.MinValue;
@@ -280,6 +288,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         battleManager.PlayerTurnActionWindowOpenedForPromptUi += OnPlayerTurnActionWindowOpenedForPromptUi;
         battleManager.BattleEnded += OnBattleEndedForSettlement;
         battleManager.BattleRuleMessageChanged += OnBattleRuleMessageChangedForSettlement;
+        battleManager.PlayerHeroShieldConsumed += OnPlayerHeroShieldConsumed;
         BindBattleHistoryUi();
         DisarmYourTurnBannerAllIdlePromptClocks();
         CachePrefabCardSize();
@@ -295,7 +304,9 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         UpdateBattleResultText();
         EnsureTutorialBattleCoach(canvas2);
         EnsureHarborCombatCoach(canvas2);
+        EnsureM12BattleCoach(canvas2);
         EnsureTutorialBattleSettlement(canvas2);
+        EnsureM12BattleSettlement(canvas2);
         SyncHandUiIfBattleAlreadyStarted();
 
         BattleAutoSimPlugin.Started += OnBatchWinRateSimStarted;
@@ -719,12 +730,28 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         coach.Initialize(battleManager, canvasRoot, sharedUIFont, this);
     }
 
+    private void EnsureM12BattleCoach(Transform canvasRoot)
+    {
+        if (!M12BattleCoachUi.IsActiveForCurrentBattle) return;
+        M12BattleCoachUi coach = GetComponent<M12BattleCoachUi>();
+        if (coach == null) coach = gameObject.AddComponent<M12BattleCoachUi>();
+        coach.Initialize(battleManager, canvasRoot, sharedUIFont);
+    }
+
     private void EnsureTutorialBattleSettlement(Transform canvasRoot)
     {
         if (!TutorialBattleSettlementUi.IsActiveForCurrentBattle) return;
         TutorialBattleSettlementUi settlement = GetComponent<TutorialBattleSettlementUi>();
         if (settlement == null) settlement = gameObject.AddComponent<TutorialBattleSettlementUi>();
         settlement.Initialize(battleManager, canvasRoot, sharedUIFont, battleCardPrefab);
+    }
+
+    private void EnsureM12BattleSettlement(Transform canvasRoot)
+    {
+        if (!M12BattleSettlementUi.IsActiveForCurrentBattle) return;
+        M12BattleSettlementUi settlement = GetComponent<M12BattleSettlementUi>();
+        if (settlement == null) settlement = gameObject.AddComponent<M12BattleSettlementUi>();
+        settlement.Initialize(battleManager, canvasRoot, sharedUIFont);
     }
 
     private Transform FindCanvas2()
@@ -823,6 +850,8 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
 
         heroHudTitleSize = titleSize;
 
+        BuildPlayerHeroSacredShieldVisual(playerHeroObj.transform, hpNumSize, titleSize);
+
         enemyHeroObj.transform.SetAsLastSibling();
         playerHeroObj.transform.SetAsLastSibling();
     }
@@ -859,6 +888,8 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
 
         if (playerHeroDamaged && playerHeroDamagedFxRoutine == null && !BattleAutoSimPlugin.IsRunning)
             playerHeroDamagedFxRoutine = StartCoroutine(CoPlayPlayerHeroDamagedFeedback());
+
+        RefreshPlayerHeroSacredShieldFx();
     }
 
     private IEnumerator CoPlayPlayerHeroDamagedFeedback()
@@ -900,358 +931,6 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         if (heroDamageMonochromeFlashCg != null) heroDamageMonochromeFlashCg.alpha = 0f;
     }
 
-    private void CreateBattleTurnBanner(Transform canvasParent)
-    {
-        if (canvasParent == null) return;
-
-        GameObject go = new GameObject("BattleTurnBanner", typeof(RectTransform), typeof(CanvasGroup), typeof(Image), typeof(Shadow));
-        go.transform.SetParent(canvasParent, false);
-        turnBannerPanelRt = go.GetComponent<RectTransform>();
-        turnBannerPanelRt.anchorMin = new Vector2(0.5f, 0.5f);
-        turnBannerPanelRt.anchorMax = new Vector2(0.5f, 0.5f);
-        turnBannerPanelRt.pivot = new Vector2(0.5f, 0.5f);
-        turnBannerPanelRt.anchoredPosition = Vector2.zero;
-        turnBannerPanelRt.sizeDelta = new Vector2(540f, 112f);
-
-        Image bg = go.GetComponent<Image>();
-        bg.color = BattleUiColors.TurnBg;
-        bg.raycastTarget = false;
-
-        Shadow sh = go.GetComponent<Shadow>();
-        sh.effectColor = BattleUiColors.ShadowUi;
-        sh.effectDistance = new Vector2(6f, -7f);
-
-        turnBannerCg = go.GetComponent<CanvasGroup>();
-        turnBannerCg.alpha = 0f;
-        turnBannerCg.blocksRaycasts = false;
-        turnBannerCg.interactable = false;
-        go.SetActive(false);
-
-        GameObject textGo = new GameObject("TurnBannerText", typeof(RectTransform), typeof(TextMeshProUGUI));
-        textGo.transform.SetParent(go.transform, false);
-        RectTransform trt = textGo.GetComponent<RectTransform>();
-        trt.anchorMin = Vector2.zero;
-        trt.anchorMax = Vector2.one;
-        trt.offsetMin = new Vector2(20f, 14f);
-        trt.offsetMax = new Vector2(-20f, -14f);
-        turnBannerTmp = textGo.GetComponent<TextMeshProUGUI>();
-        if (sharedUIFont != null) turnBannerTmp.font = sharedUIFont;
-        turnBannerTmp.fontSize = 42f;
-        turnBannerTmp.alignment = TextAlignmentOptions.Center;
-        turnBannerTmp.color = BattleUiColors.TurnBannerText;
-        turnBannerTmp.raycastTarget = false;
-        turnBannerTmp.enableWordWrapping = true;
-        turnBannerTmp.text = string.Empty;
-
-        Outline ol = textGo.AddComponent<Outline>();
-        BattleUiColors.ApplyHpOutline(ol);
-    }
-
-    /// <summary>將「你的回合／敵方操作中…」置於同 Canvas 下其他戰鬥 UI 之上，並維持在除錯面板之下（除錯為最後子物件）。</summary>
-    private void ApplyBattleTurnBannerStackOrder()
-    {
-        if (turnBannerPanelRt == null || debugUiRoot == null) return;
-        Transform bannerParent = turnBannerPanelRt.parent;
-        if (bannerParent == null || debugUiRoot.transform.parent != bannerParent) return;
-
-        turnBannerPanelRt.SetAsLastSibling();
-        debugUiRoot.transform.SetAsLastSibling();
-    }
-
-    private void ForceHideTurnBanner()
-    {
-        if (turnBannerRoutine != null)
-        {
-            StopCoroutine(turnBannerRoutine);
-            turnBannerRoutine = null;
-        }
-        if (turnBannerCg != null) turnBannerCg.alpha = 0f;
-        if (turnBannerPanelRt != null) turnBannerPanelRt.gameObject.SetActive(false);
-        if (TutorialBattleCoachUi.IsActiveForCurrentBattle)
-            RefreshTutorialHandPlayHighlights();
-    }
-
-    private void SyncTurnBannerWithBattleState()
-    {
-        if (battleManager == null) return;
-        if (BattleAutoSimPlugin.IsRunning) return;
-        if (battleManager.IsBattleOver())
-        {
-            ForceHideTurnBanner();
-            return;
-        }
-        if (battleManager.IsOpeningPresentationInProgress())
-        {
-            ForceHideTurnBanner();
-            return;
-        }
-        if (battleManager.IsPlayerTurn())
-        {
-            ForceHideTurnBanner();
-            DisarmYourTurnBannerAllIdlePromptClocks();
-            yourTurnBannerTurnStartIdleClockStartUnscaled = Time.unscaledTime;
-            return;
-        }
-        OnTurnBannerRequested(BattleTurnBannerKind.EnemyTurn);
-    }
-
-    private void OnTurnBannerRequested(BattleTurnBannerKind kind)
-    {
-        if (turnBannerCg == null || turnBannerPanelRt == null || turnBannerTmp == null) return;
-
-        if (kind == BattleTurnBannerKind.PlayerTurn && !turnBannerPlayerFromIdleTimeout)
-            return;
-
-        if (kind == BattleTurnBannerKind.Hidden || kind == BattleTurnBannerKind.EnemyTurn)
-            DisarmYourTurnBannerAllIdlePromptClocks();
-
-        if (turnBannerRoutine != null)
-        {
-            StopCoroutine(turnBannerRoutine);
-            turnBannerRoutine = null;
-        }
-
-        switch (kind)
-        {
-            case BattleTurnBannerKind.Hidden:
-                turnBannerRoutine = StartCoroutine(TurnBannerFadeOutRoutine());
-                break;
-            case BattleTurnBannerKind.PlayerTurn:
-                turnBannerPlayerFromIdleTimeout = false;
-                turnBannerTmp.text = "你的回合";
-                turnBannerTmp.color = BattleUiColors.TurnPlayer;
-                turnBannerPanelRt.anchoredPosition = Vector2.zero;
-                turnBannerPanelRt.gameObject.SetActive(true);
-                turnBannerCg.alpha = 0f;
-                ApplyBattleTurnBannerStackOrder();
-                turnBannerRoutine = StartCoroutine(TurnBannerFadeInAndFloatRoutine());
-                if (playerHandPressDepth > 0)
-                    ForceHideTurnBanner();
-                break;
-            case BattleTurnBannerKind.EnemyTurn:
-                turnBannerTmp.text = "敵方操作中...";
-                turnBannerTmp.color = BattleUiColors.TurnEnemy;
-                turnBannerPanelRt.anchoredPosition = Vector2.zero;
-                turnBannerPanelRt.gameObject.SetActive(true);
-                turnBannerCg.alpha = 0f;
-                ApplyBattleTurnBannerStackOrder();
-                turnBannerRoutine = StartCoroutine(TurnBannerFadeInAndFloatRoutine());
-                break;
-        }
-    }
-
-    private IEnumerator TurnBannerFadeOutRoutine()
-    {
-        if (turnBannerCg == null) yield break;
-        float dur = 0.2f;
-        float t = 0f;
-        float start = turnBannerCg.alpha;
-        while (t < dur && turnBannerCg != null)
-        {
-            t += Time.unscaledDeltaTime;
-            turnBannerCg.alpha = Mathf.Lerp(start, 0f, Mathf.Clamp01(t / dur));
-            yield return null;
-        }
-        if (turnBannerCg != null) turnBannerCg.alpha = 0f;
-        if (turnBannerPanelRt != null) turnBannerPanelRt.gameObject.SetActive(false);
-        turnBannerRoutine = null;
-    }
-
-    private IEnumerator TurnBannerFadeInAndFloatRoutine()
-    {
-        if (turnBannerCg == null || turnBannerPanelRt == null) yield break;
-        const float fadeIn = 0.24f;
-        float t = 0f;
-        while (t < fadeIn && turnBannerCg != null)
-        {
-            t += Time.unscaledDeltaTime;
-            turnBannerCg.alpha = Mathf.Lerp(0f, 1f, Mathf.Clamp01(t / fadeIn));
-            yield return null;
-        }
-        if (turnBannerCg != null) turnBannerCg.alpha = 1f;
-
-        if (turnBannerTmp != null && turnBannerTmp.text == "你的回合")
-            RefreshTutorialHandPlayHighlights();
-
-        while (turnBannerPanelRt != null && turnBannerPanelRt.gameObject.activeInHierarchy)
-        {
-            float bob = Mathf.Sin(Time.unscaledTime * 2.55f) * 8f;
-            turnBannerPanelRt.anchoredPosition = new Vector2(0f, bob);
-            yield return null;
-        }
-        turnBannerRoutine = null;
-    }
-
-    /// <summary>其他 UI 用：已達任一「你的回合」閒置提示條件（與浮窗顯示併用）。</summary>
-    public bool IsPlayerTurnUiIdleStandbyMode => playerTurnUiIdleStandbyMode;
-
-    private void StopYourTurnBannerHandTouchNoPlayArmDeferRoutine()
-    {
-        if (yourTurnBannerHandTouchNoPlayArmDeferRoutine == null) return;
-        StopCoroutine(yourTurnBannerHandTouchNoPlayArmDeferRoutine);
-        yourTurnBannerHandTouchNoPlayArmDeferRoutine = null;
-    }
-
-    private void DisarmYourTurnBannerTurnStartAndHandTouchClocksOnly()
-    {
-        yourTurnBannerTurnStartIdleClockStartUnscaled = -1f;
-        yourTurnBannerAfterHandTouchNoPlayClockStartUnscaled = -1f;
-        StopYourTurnBannerHandTouchNoPlayArmDeferRoutine();
-    }
-
-    private void DisarmYourTurnBannerAllIdlePromptClocks()
-    {
-        yourTurnBannerTurnStartIdleClockStartUnscaled = -1f;
-        yourTurnBannerAfterHandTouchNoPlayClockStartUnscaled = -1f;
-        yourTurnBannerAfterFieldPlayClockStartUnscaled = -1f;
-        yourTurnBannerIdlePromptShownThisWindow = false;
-        playerTurnUiIdleStandbyMode = false;
-        yourTurnBannerHandTouchSessionLedToPlay = false;
-        StopYourTurnBannerHandTouchNoPlayArmDeferRoutine();
-    }
-
-    private void ClearYourTurnBannerIdlePromptClockArmsOnly()
-    {
-        yourTurnBannerTurnStartIdleClockStartUnscaled = -1f;
-        yourTurnBannerAfterHandTouchNoPlayClockStartUnscaled = -1f;
-        yourTurnBannerAfterFieldPlayClockStartUnscaled = -1f;
-        StopYourTurnBannerHandTouchNoPlayArmDeferRoutine();
-    }
-
-    private void OnPlayerTurnActionWindowOpenedForPromptUi()
-    {
-        if (BattleAutoSimPlugin.IsRunning) return;
-        DisarmYourTurnBannerAllIdlePromptClocks();
-        yourTurnBannerTurnStartIdleClockStartUnscaled = Time.unscaledTime;
-        ForceHideTurnBanner();
-    }
-
-    private void OnPlayerCommittedHandCardToFieldFromHand()
-    {
-        if (BattleAutoSimPlugin.IsRunning) return;
-        DisarmYourTurnBannerTurnStartAndHandTouchClocksOnly();
-        yourTurnBannerAfterFieldPlayClockStartUnscaled = Time.unscaledTime;
-        yourTurnBannerIdlePromptShownThisWindow = false;
-        playerTurnUiIdleStandbyMode = false;
-        ForceHideTurnBanner();
-    }
-
-    private void OnPlayerPressedEndTurnForPromptUi()
-    {
-        DisarmYourTurnBannerAllIdlePromptClocks();
-        ForceHideTurnBanner();
-    }
-
-    private float GetYourTurnIdlePromptThresholdSeconds()
-    {
-        return Mathf.Max(10f, playerTurnIdlePromptSeconds);
-    }
-
-    private IEnumerator YourTurnBannerHandTouchNoPlayMaybeArmNextFrameRoutine()
-    {
-        yield return null;
-        yourTurnBannerHandTouchNoPlayArmDeferRoutine = null;
-        if (BattleAutoSimPlugin.IsRunning) yield break;
-        if (battleManager == null || !battleManager.IsPlayerTurn() || battleManager.IsBattleOver()) yield break;
-        if (battleManager.IsOpeningPresentationInProgress()) yield break;
-        if (battleManager.IsTurnSequenceInProgress()) yield break;
-        if (battleManager.IsSpellCastPresentationActive()) yield break;
-        if (isGamePaused) yield break;
-        if (yourTurnBannerHandTouchSessionLedToPlay) yield break;
-        if (playerHandPressDepth > 0) yield break;
-
-        yourTurnBannerAfterHandTouchNoPlayClockStartUnscaled = Time.unscaledTime;
-        yourTurnBannerIdlePromptShownThisWindow = false;
-    }
-
-    /// <summary>回合開始無操作／觸碰手牌後未出牌／手牌上場後未結束回合，逾時顯示「你的回合」。</summary>
-    private void TickYourTurnBannerIdlePrompts()
-    {
-        if (BattleAutoSimPlugin.IsRunning) return;
-        if (battleManager == null) return;
-        if (!battleManager.IsPlayerTurn() || battleManager.IsBattleOver()) return;
-        if (battleManager.IsOpeningPresentationInProgress()) return;
-        if (battleManager.IsTurnSequenceInProgress()) return;
-        if (battleManager.IsSpellCastPresentationActive()) return;
-        if (isGamePaused) return;
-
-        bool anyClockArmed =
-            yourTurnBannerTurnStartIdleClockStartUnscaled >= 0f ||
-            yourTurnBannerAfterHandTouchNoPlayClockStartUnscaled >= 0f ||
-            yourTurnBannerAfterFieldPlayClockStartUnscaled >= 0f;
-        if (!anyClockArmed) return;
-        if (playerHandPressDepth > 0) return;
-        if (isPlayingCardAnimation) return;
-
-        float threshold = GetYourTurnIdlePromptThresholdSeconds();
-        float deadline = float.MaxValue;
-        if (yourTurnBannerTurnStartIdleClockStartUnscaled >= 0f)
-            deadline = Mathf.Min(deadline, yourTurnBannerTurnStartIdleClockStartUnscaled + threshold);
-        if (yourTurnBannerAfterHandTouchNoPlayClockStartUnscaled >= 0f)
-            deadline = Mathf.Min(deadline, yourTurnBannerAfterHandTouchNoPlayClockStartUnscaled + threshold);
-        if (yourTurnBannerAfterFieldPlayClockStartUnscaled >= 0f)
-            deadline = Mathf.Min(deadline, yourTurnBannerAfterFieldPlayClockStartUnscaled + threshold);
-
-        if (Time.unscaledTime <= deadline) return;
-
-        playerTurnUiIdleStandbyMode = true;
-        if (yourTurnBannerIdlePromptShownThisWindow) return;
-        if (IsPlayerTurnBannerVisuallyShowing()) return;
-
-        yourTurnBannerIdlePromptShownThisWindow = true;
-        ClearYourTurnBannerIdlePromptClockArmsOnly();
-        turnBannerPlayerFromIdleTimeout = true;
-        OnTurnBannerRequested(BattleTurnBannerKind.PlayerTurn);
-    }
-
-    private void NotifyTurnIdlePromptPlayerTookPlayOrAttackIntent()
-    {
-        yourTurnBannerHandTouchSessionLedToPlay = true;
-        DisarmYourTurnBannerTurnStartAndHandTouchClocksOnly();
-    }
-
-    /// <summary>我方手牌按下（由 <see cref="BattlePlayerHandCardPressNotifier"/> 呼叫）。</summary>
-    public void NotifyPlayerHandCardPressBegan()
-    {
-        if (battleManager == null || !battleManager.IsPlayerTurn()) return;
-        if (BattleAutoSimPlugin.IsRunning) return;
-        playerHandPressDepth++;
-        if (playerHandPressDepth == 1)
-        {
-            yourTurnBannerHandTouchSessionLedToPlay = false;
-            ForceHideTurnBanner();
-        }
-    }
-
-    /// <summary>我方手牌放開或指標離開手牌（由 <see cref="BattlePlayerHandCardPressNotifier"/> 呼叫）。</summary>
-    public void NotifyPlayerHandCardPressEnded()
-    {
-        if (playerHandPressDepth <= 0) return;
-        playerHandPressDepth--;
-        if (playerHandPressDepth > 0) return;
-        if (BattleAutoSimPlugin.IsRunning) return;
-        if (battleManager == null || !battleManager.IsPlayerTurn()) return;
-        StopYourTurnBannerHandTouchNoPlayArmDeferRoutine();
-        yourTurnBannerHandTouchNoPlayArmDeferRoutine = StartCoroutine(YourTurnBannerHandTouchNoPlayMaybeArmNextFrameRoutine());
-    }
-
-    private bool IsPlayerTurnBannerVisuallyShowing()
-    {
-        return turnBannerPanelRt != null &&
-               turnBannerPanelRt.gameObject.activeSelf &&
-               turnBannerCg != null &&
-               turnBannerCg.alpha > 0.08f &&
-               turnBannerTmp != null &&
-               turnBannerTmp.text == "你的回合";
-    }
-
-    private static void AttachPlayerHandPressNotifier(GameObject cardRoot, BattleSimulationDebugUI host)
-    {
-        if (cardRoot == null || host == null) return;
-        BattlePlayerHandCardPressNotifier n = cardRoot.GetComponent<BattlePlayerHandCardPressNotifier>();
-        if (n == null) n = cardRoot.AddComponent<BattlePlayerHandCardPressNotifier>();
-        n.Init(host);
-    }
 
     private void CreateDebugPanel(Transform parent)
     {
@@ -1795,6 +1474,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
             battleManager.PlayerTurnActionWindowOpenedForPromptUi -= OnPlayerTurnActionWindowOpenedForPromptUi;
             battleManager.BattleEnded -= OnBattleEndedForSettlement;
             battleManager.BattleRuleMessageChanged -= OnBattleRuleMessageChangedForSettlement;
+            battleManager.PlayerHeroShieldConsumed -= OnPlayerHeroShieldConsumed;
         }
         UnbindBattleHistoryUi();
         StopYourTurnBannerHandTouchNoPlayArmDeferRoutine();
@@ -1843,319 +1523,6 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         ReleaseSettlementFreezeResources();
     }
 
-    private void CreateWeatherScreenFx(Transform parent)
-    {
-        GameObject fxRootObj = new GameObject("WeatherScreenFxRoot", typeof(RectTransform), typeof(CanvasGroup));
-        fxRootObj.transform.SetParent(parent, false);
-        weatherScreenFxRoot = fxRootObj.GetComponent<RectTransform>();
-        weatherScreenFxRoot.anchorMin = Vector2.zero;
-        weatherScreenFxRoot.anchorMax = Vector2.one;
-        weatherScreenFxRoot.offsetMin = Vector2.zero;
-        weatherScreenFxRoot.offsetMax = Vector2.zero;
-        CanvasGroup fxCg = fxRootObj.GetComponent<CanvasGroup>();
-        fxCg.blocksRaycasts = false;
-        fxCg.interactable = false;
-
-        weatherFireRainFxRt = CreateWeatherFxLayer(weatherScreenFxRoot, "WeatherEmberHearthFx", BattleFxColors.WeatherFireBase);
-        weatherHolyLightFxRt = CreateWeatherFxLayer(weatherScreenFxRoot, "WeatherWarmLamplightFx", BattleFxColors.WeatherHolyBase);
-        weatherFogFxRt = CreateWeatherFxLayer(weatherScreenFxRoot, "WeatherTrainingMistFx", BattleFxColors.WeatherFogBase);
-        weatherGaleFxRt = CreateWeatherFxLayer(weatherScreenFxRoot, "WeatherHallDraftFx", BattleFxColors.WeatherGaleBase);
-
-        if (weatherHolyLightFxRt != null)
-        {
-            weatherHolyLightEdgeImgs.Clear();
-            weatherHolyLightEdgeBaseAlphas.Clear();
-            weatherHolyLightDustImages.Clear();
-            weatherHolyLightDustRects.Clear();
-            weatherHolyLightDustSpeeds.Clear();
-            weatherHolyLightDustPhases.Clear();
-            weatherHolyLightDustBaseColors.Clear();
-            weatherHolyLightTopEdgeImg = CreateHolyLightEdge(weatherHolyLightFxRt, "HolyLightTopEdgeOuter", new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, 0f), new Vector2(0f, 170f), 0.11f);
-            weatherHolyLightBottomEdgeImg = CreateHolyLightEdge(weatherHolyLightFxRt, "HolyLightBottomEdgeOuter", new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 0f), new Vector2(0f, 150f), 0.09f);
-            weatherHolyLightLeftEdgeImg = CreateHolyLightEdge(weatherHolyLightFxRt, "HolyLightLeftEdgeOuter", new Vector2(0f, 0f), new Vector2(0f, 1f), new Vector2(0f, 0.5f), new Vector2(0f, 0f), new Vector2(126f, 0f), 0.08f);
-            weatherHolyLightRightEdgeImg = CreateHolyLightEdge(weatherHolyLightFxRt, "HolyLightRightEdgeOuter", new Vector2(1f, 0f), new Vector2(1f, 1f), new Vector2(1f, 0.5f), new Vector2(0f, 0f), new Vector2(126f, 0f), 0.08f);
-            AddHolyLightEdgeLayer(weatherHolyLightTopEdgeImg, 0.11f);
-            AddHolyLightEdgeLayer(weatherHolyLightBottomEdgeImg, 0.09f);
-            AddHolyLightEdgeLayer(weatherHolyLightLeftEdgeImg, 0.08f);
-            AddHolyLightEdgeLayer(weatherHolyLightRightEdgeImg, 0.08f);
-            AddHolyLightEdgeLayer(CreateHolyLightEdge(weatherHolyLightFxRt, "HolyLightTopEdgeMid", new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, 0f), new Vector2(0f, 114f), 0.06f), 0.06f);
-            AddHolyLightEdgeLayer(CreateHolyLightEdge(weatherHolyLightFxRt, "HolyLightBottomEdgeMid", new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 0f), new Vector2(0f, 98f), 0.05f), 0.05f);
-            AddHolyLightEdgeLayer(CreateHolyLightEdge(weatherHolyLightFxRt, "HolyLightLeftEdgeMid", new Vector2(0f, 0f), new Vector2(0f, 1f), new Vector2(0f, 0.5f), new Vector2(0f, 0f), new Vector2(88f, 0f), 0.043f), 0.043f);
-            AddHolyLightEdgeLayer(CreateHolyLightEdge(weatherHolyLightFxRt, "HolyLightRightEdgeMid", new Vector2(1f, 0f), new Vector2(1f, 1f), new Vector2(1f, 0.5f), new Vector2(0f, 0f), new Vector2(88f, 0f), 0.043f), 0.043f);
-            AddHolyLightEdgeLayer(CreateHolyLightEdge(weatherHolyLightFxRt, "HolyLightTopEdgeInner", new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, 0f), new Vector2(0f, 66f), 0.02f), 0.02f);
-            AddHolyLightEdgeLayer(CreateHolyLightEdge(weatherHolyLightFxRt, "HolyLightBottomEdgeInner", new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 0f), new Vector2(0f, 56f), 0.016f), 0.016f);
-            AddHolyLightEdgeLayer(CreateHolyLightEdge(weatherHolyLightFxRt, "HolyLightLeftEdgeInner", new Vector2(0f, 0f), new Vector2(0f, 1f), new Vector2(0f, 0.5f), new Vector2(0f, 0f), new Vector2(54f, 0f), 0.015f), 0.015f);
-            AddHolyLightEdgeLayer(CreateHolyLightEdge(weatherHolyLightFxRt, "HolyLightRightEdgeInner", new Vector2(1f, 0f), new Vector2(1f, 1f), new Vector2(1f, 0.5f), new Vector2(0f, 0f), new Vector2(54f, 0f), 0.015f), 0.015f);
-
-            for (int i = 0; i < 16; i++)
-            {
-                GameObject dustObj = new GameObject("LamplightMote_" + i, typeof(RectTransform), typeof(Image));
-                dustObj.transform.SetParent(weatherHolyLightFxRt, false);
-                RectTransform dustRt = dustObj.GetComponent<RectTransform>();
-                dustRt.anchorMin = new Vector2(0.5f, 0.5f);
-                dustRt.anchorMax = new Vector2(0.5f, 0.5f);
-                dustRt.pivot = new Vector2(0.5f, 0.5f);
-                float size = Random.Range(4.5f, 10f);
-                dustRt.sizeDelta = new Vector2(size, size);
-                dustRt.anchoredPosition = new Vector2(Random.Range(-420f, 420f), Random.Range(-260f, 300f));
-                Image dustImg = dustObj.GetComponent<Image>();
-                dustImg.sprite = GetUnitWhiteSprite();
-                Color baseColor = BattleFxColors.RandomHolyDust();
-                dustImg.color = baseColor;
-                dustImg.raycastTarget = false;
-                weatherHolyLightDustRects.Add(dustRt);
-                weatherHolyLightDustImages.Add(dustImg);
-                weatherHolyLightDustSpeeds.Add(Random.Range(13f, 25f));
-                weatherHolyLightDustPhases.Add(Random.Range(0f, Mathf.PI * 2f));
-                weatherHolyLightDustBaseColors.Add(baseColor);
-            }
-        }
-
-        if (weatherFogFxRt != null)
-        {
-            weatherFogBands.Clear();
-            weatherFogBandImages.Clear();
-            weatherFogBandSpeeds.Clear();
-            weatherFogBandPhases.Clear();
-            weatherFogEdgeImgs.Clear();
-            weatherFogEdgeBaseAlphas.Clear();
-            weatherFogFoamDots.Clear();
-            weatherFogFoamDotImages.Clear();
-            weatherFogFoamDotSpeeds.Clear();
-            weatherFogBoatRt = null;
-            weatherFogBoatHullImg = null;
-            weatherFogBoatBaseY = -120f;
-
-            AddFogEdgeLayer(CreateHolyLightEdge(weatherFogFxRt, "MistTopOuter", new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, 0f), new Vector2(0f, 150f), 0.1f), 0.1f);
-            AddFogEdgeLayer(CreateHolyLightEdge(weatherFogFxRt, "MistBottomOuter", new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 0f), new Vector2(0f, 220f), 0.18f), 0.18f);
-            AddFogEdgeLayer(CreateHolyLightEdge(weatherFogFxRt, "MistLeftOuter", new Vector2(0f, 0f), new Vector2(0f, 1f), new Vector2(0f, 0.5f), new Vector2(0f, 0f), new Vector2(124f, 0f), 0.11f), 0.11f);
-            AddFogEdgeLayer(CreateHolyLightEdge(weatherFogFxRt, "MistRightOuter", new Vector2(1f, 0f), new Vector2(1f, 1f), new Vector2(1f, 0.5f), new Vector2(0f, 0f), new Vector2(124f, 0f), 0.11f), 0.11f);
-            AddFogEdgeLayer(CreateHolyLightEdge(weatherFogFxRt, "MistBottomInner", new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 0f), new Vector2(0f, 128f), 0.11f), 0.11f);
-            AddFogEdgeLayer(CreateHolyLightEdge(weatherFogFxRt, "MistSideInnerL", new Vector2(0f, 0f), new Vector2(0f, 1f), new Vector2(0f, 0.5f), new Vector2(0f, 0f), new Vector2(84f, 0f), 0.075f), 0.075f);
-            AddFogEdgeLayer(CreateHolyLightEdge(weatherFogFxRt, "MistSideInnerR", new Vector2(1f, 0f), new Vector2(1f, 1f), new Vector2(1f, 0.5f), new Vector2(0f, 0f), new Vector2(84f, 0f), 0.075f), 0.075f);
-
-            for (int i = 0; i < 7; i++)
-            {
-                GameObject fogBandObj = new GameObject("TrainingMistWisp_" + i, typeof(RectTransform), typeof(Image));
-                fogBandObj.transform.SetParent(weatherFogFxRt, false);
-                RectTransform fogBandRt = fogBandObj.GetComponent<RectTransform>();
-                fogBandRt.anchorMin = new Vector2(0.5f, 0.5f);
-                fogBandRt.anchorMax = new Vector2(0.5f, 0.5f);
-                fogBandRt.pivot = new Vector2(0.5f, 0.5f);
-                fogBandRt.sizeDelta = new Vector2(Random.Range(560f, 980f), Random.Range(70f, 140f));
-                fogBandRt.anchoredPosition = new Vector2(Random.Range(-520f, 520f), Random.Range(-300f, 300f));
-                Image fogBandImg = fogBandObj.GetComponent<Image>();
-                fogBandImg.sprite = GetUnitWhiteSprite();
-                fogBandImg.color = BattleFxColors.RandomFogWave();
-                fogBandImg.raycastTarget = false;
-                weatherFogBands.Add(fogBandRt);
-                weatherFogBandImages.Add(fogBandImg);
-                weatherFogBandSpeeds.Add(Random.Range(30f, 56f));
-                weatherFogBandPhases.Add(Random.Range(0f, Mathf.PI * 2f));
-            }
-
-            for (int i = 0; i < 18; i++)
-            {
-                GameObject foamDotObj = new GameObject("TrainingMistSpeck_" + i, typeof(RectTransform), typeof(Image));
-                foamDotObj.transform.SetParent(weatherFogFxRt, false);
-                RectTransform foamRt = foamDotObj.GetComponent<RectTransform>();
-                foamRt.anchorMin = new Vector2(0.5f, 0.5f);
-                foamRt.anchorMax = new Vector2(0.5f, 0.5f);
-                foamRt.pivot = new Vector2(0.5f, 0.5f);
-                float size = Random.Range(3.5f, 8f);
-                foamRt.sizeDelta = new Vector2(size, size);
-                foamRt.anchoredPosition = new Vector2(Random.Range(-560f, 560f), Random.Range(-240f, 240f));
-                Image foamImg = foamDotObj.GetComponent<Image>();
-                foamImg.sprite = GetUnitWhiteSprite();
-                foamImg.color = BattleFxColors.RandomFogFoam();
-                foamImg.raycastTarget = false;
-                weatherFogFoamDots.Add(foamRt);
-                weatherFogFoamDotImages.Add(foamImg);
-                weatherFogFoamDotSpeeds.Add(Random.Range(36f, 78f));
-            }
-
-            weatherFogBoatRt = null;
-            weatherFogBoatHullImg = null;
-            for (int i = 0; i < 5; i++)
-            {
-                GameObject pillarObj = new GameObject("TrainingHallPillar_" + i, typeof(RectTransform), typeof(Image));
-                pillarObj.transform.SetParent(weatherFogFxRt, false);
-                RectTransform pillarRt = pillarObj.GetComponent<RectTransform>();
-                pillarRt.anchorMin = new Vector2(0.5f, 0.5f);
-                pillarRt.anchorMax = new Vector2(0.5f, 0.5f);
-                pillarRt.pivot = new Vector2(0.5f, 0f);
-                float pw = Random.Range(12f, 22f);
-                float ph = Random.Range(100f, 180f);
-                pillarRt.sizeDelta = new Vector2(pw, ph);
-                pillarRt.anchoredPosition = new Vector2(Random.Range(-520f, 520f), Random.Range(-200f, -60f));
-                Image pillarImg = pillarObj.GetComponent<Image>();
-                pillarImg.sprite = GetUnitWhiteSprite();
-                pillarImg.color = BattleFxColors.WithAlpha(BattleFxColors.WeatherFogSilhouetteRgb, Random.Range(0.16f, 0.26f));
-                pillarImg.raycastTarget = false;
-            }
-        }
-
-        if (weatherGaleFxRt != null)
-        {
-            weatherGaleNightEdgeImgs.Clear();
-            weatherGaleNightEdgeBaseAlphas.Clear();
-            weatherGaleLeafRects.Clear();
-            weatherGaleLeafImgs.Clear();
-            weatherGaleLeafSpeeds.Clear();
-            weatherGaleLeafPhases.Clear();
-            weatherGaleWindLineRects.Clear();
-            weatherGaleWindLineImgs.Clear();
-            weatherGaleWindLineSpeeds.Clear();
-
-            AddGaleNightLayer(CreateHolyLightEdge(weatherGaleFxRt, "GaleNightTop", new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0.5f, 1f), Vector2.zero, new Vector2(0f, 220f), 0.16f), 0.16f);
-            AddGaleNightLayer(CreateHolyLightEdge(weatherGaleFxRt, "GaleNightBottom", new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(0.5f, 0f), Vector2.zero, new Vector2(0f, 160f), 0.12f), 0.12f);
-            AddGaleNightLayer(CreateHolyLightEdge(weatherGaleFxRt, "GaleNightLeft", new Vector2(0f, 0f), new Vector2(0f, 1f), new Vector2(0f, 0.5f), Vector2.zero, new Vector2(180f, 0f), 0.15f), 0.15f);
-            AddGaleNightLayer(CreateHolyLightEdge(weatherGaleFxRt, "GaleNightRight", new Vector2(1f, 0f), new Vector2(1f, 1f), new Vector2(1f, 0.5f), Vector2.zero, new Vector2(180f, 0f), 0.15f), 0.15f);
-            AddGaleNightLayer(CreateHolyLightEdge(weatherGaleFxRt, "GaleNightTopMid", new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0.5f, 1f), Vector2.zero, new Vector2(0f, 140f), 0.1f), 0.1f);
-            AddGaleNightLayer(CreateHolyLightEdge(weatherGaleFxRt, "GaleNightBottomMid", new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(0.5f, 0f), Vector2.zero, new Vector2(0f, 110f), 0.08f), 0.08f);
-            AddGaleNightLayer(CreateHolyLightEdge(weatherGaleFxRt, "GaleNightVignetteL", new Vector2(0f, 0f), new Vector2(0f, 1f), new Vector2(0f, 0.5f), Vector2.zero, new Vector2(120f, 0f), 0.11f), 0.11f);
-            AddGaleNightLayer(CreateHolyLightEdge(weatherGaleFxRt, "GaleNightVignetteR", new Vector2(1f, 0f), new Vector2(1f, 1f), new Vector2(1f, 0.5f), Vector2.zero, new Vector2(120f, 0f), 0.11f), 0.11f);
-
-            for (int i = 0; i < 14; i++)
-            {
-                GameObject leafObj = new GameObject("HallDraftPaper_" + i, typeof(RectTransform), typeof(Image));
-                leafObj.transform.SetParent(weatherGaleFxRt, false);
-                RectTransform leafRt = leafObj.GetComponent<RectTransform>();
-                leafRt.anchorMin = new Vector2(0.5f, 0.5f);
-                leafRt.anchorMax = new Vector2(0.5f, 0.5f);
-                leafRt.pivot = new Vector2(0.5f, 0.5f);
-                float s = Random.Range(6f, 11f);
-                leafRt.sizeDelta = new Vector2(s * 1.85f, s * 0.5f);
-                leafRt.anchoredPosition = new Vector2(Random.Range(-420f, 760f), Random.Range(-240f, 300f));
-                Image leafImg = leafObj.GetComponent<Image>();
-                leafImg.sprite = GetUnitWhiteSprite();
-                Color leafColor = BattleFxColors.RandomHallDraftPaper();
-                leafImg.color = leafColor;
-                leafImg.raycastTarget = false;
-                weatherGaleLeafRects.Add(leafRt);
-                weatherGaleLeafImgs.Add(leafImg);
-                weatherGaleLeafSpeeds.Add(Random.Range(90f, 180f));
-                weatherGaleLeafPhases.Add(Random.Range(0f, Mathf.PI * 2f));
-            }
-
-            for (int i = 0; i < 11; i++)
-            {
-                GameObject windObj = new GameObject("HallDraftBreeze_" + i, typeof(RectTransform), typeof(Image));
-                windObj.transform.SetParent(weatherGaleFxRt, false);
-                RectTransform windRt = windObj.GetComponent<RectTransform>();
-                windRt.anchorMin = new Vector2(0.5f, 0.5f);
-                windRt.anchorMax = new Vector2(0.5f, 0.5f);
-                windRt.pivot = new Vector2(0.5f, 0.5f);
-                windRt.sizeDelta = new Vector2(Random.Range(90f, 170f), Random.Range(2.4f, 4.2f));
-                windRt.anchoredPosition = new Vector2(Random.Range(-520f, 760f), Random.Range(-260f, 280f));
-                windRt.rotation = Quaternion.Euler(0f, 0f, Random.Range(-8f, 6f));
-                Image windImg = windObj.GetComponent<Image>();
-                windImg.sprite = GetUnitWhiteSprite();
-                windImg.color = BattleFxColors.RandomGaleWind();
-                windImg.raycastTarget = false;
-                weatherGaleWindLineRects.Add(windRt);
-                weatherGaleWindLineImgs.Add(windImg);
-                weatherGaleWindLineSpeeds.Add(Random.Range(130f, 240f));
-            }
-        }
-
-        if (weatherFireRainFxRt != null)
-        {
-            weatherFireRainStreaks.Clear();
-            weatherFireRainStreakSpeeds.Clear();
-            weatherFireRainStreakImages.Clear();
-            weatherFireRainStreakPhases.Clear();
-            for (int i = 0; i < 22; i++)
-            {
-                GameObject dropObj = new GameObject("HearthEmber_" + i, typeof(RectTransform), typeof(Image));
-                dropObj.transform.SetParent(weatherFireRainFxRt, false);
-                RectTransform dropRt = dropObj.GetComponent<RectTransform>();
-                dropRt.anchorMin = new Vector2(0.5f, 0.5f);
-                dropRt.anchorMax = new Vector2(0.5f, 0.5f);
-                dropRt.pivot = new Vector2(0.5f, 0.5f);
-                dropRt.sizeDelta = new Vector2(Random.Range(3f, 7f), Random.Range(10f, 24f));
-                dropRt.rotation = Quaternion.Euler(0f, 0f, Random.Range(-18f, 18f));
-                dropRt.anchoredPosition = new Vector2(Random.Range(-960f, 960f), Random.Range(-560f, 560f));
-                Image dropImg = dropObj.GetComponent<Image>();
-                dropImg.sprite = GetUnitWhiteSprite();
-                dropImg.color = BattleFxColors.RandomFireDrop();
-                dropImg.raycastTarget = false;
-                weatherFireRainStreaks.Add(dropRt);
-                weatherFireRainStreakSpeeds.Add(Random.Range(95f, 185f));
-                weatherFireRainStreakImages.Add(dropImg);
-                weatherFireRainStreakPhases.Add(Random.Range(0f, Mathf.PI * 2f));
-            }
-        }
-
-        if (weatherFireRainFxRt != null) weatherFireRainFxRt.gameObject.SetActive(false);
-        if (weatherHolyLightFxRt != null) weatherHolyLightFxRt.gameObject.SetActive(false);
-        if (weatherFogFxRt != null) weatherFogFxRt.gameObject.SetActive(false);
-        if (weatherGaleFxRt != null) weatherGaleFxRt.gameObject.SetActive(false);
-    }
-
-    private RectTransform CreateWeatherFxLayer(Transform parent, string name, Color tint)
-    {
-        GameObject layerObj = new GameObject(name, typeof(RectTransform), typeof(Image));
-        layerObj.transform.SetParent(parent, false);
-        RectTransform layerRt = layerObj.GetComponent<RectTransform>();
-        layerRt.anchorMin = Vector2.zero;
-        layerRt.anchorMax = Vector2.one;
-        layerRt.offsetMin = Vector2.zero;
-        layerRt.offsetMax = Vector2.zero;
-        Image layerImg = layerObj.GetComponent<Image>();
-        layerImg.sprite = GetUnitWhiteSprite();
-        layerImg.color = tint;
-        layerImg.raycastTarget = false;
-        return layerRt;
-    }
-
-    private Image CreateHolyLightEdge(
-        Transform parent,
-        string name,
-        Vector2 anchorMin,
-        Vector2 anchorMax,
-        Vector2 pivot,
-        Vector2 anchoredPos,
-        Vector2 sizeDelta,
-        float alpha)
-    {
-        GameObject edgeObj = new GameObject(name, typeof(RectTransform), typeof(Image));
-        edgeObj.transform.SetParent(parent, false);
-        RectTransform edgeRt = edgeObj.GetComponent<RectTransform>();
-        edgeRt.anchorMin = anchorMin;
-        edgeRt.anchorMax = anchorMax;
-        edgeRt.pivot = pivot;
-        edgeRt.anchoredPosition = anchoredPos;
-        edgeRt.sizeDelta = sizeDelta;
-        Image edgeImg = edgeObj.GetComponent<Image>();
-        edgeImg.sprite = GetUnitWhiteSprite();
-        edgeImg.color = BattleFxColors.HolyEdge(alpha);
-        edgeImg.raycastTarget = false;
-        return edgeImg;
-    }
-
-    private void AddHolyLightEdgeLayer(Image img, float baseAlpha)
-    {
-        if (img == null) return;
-        weatherHolyLightEdgeImgs.Add(img);
-        weatherHolyLightEdgeBaseAlphas.Add(baseAlpha);
-    }
-
-    private void AddFogEdgeLayer(Image img, float baseAlpha)
-    {
-        if (img == null) return;
-        img.color = BattleFxColors.FogEdge(baseAlpha);
-        weatherFogEdgeImgs.Add(img);
-        weatherFogEdgeBaseAlphas.Add(baseAlpha);
-    }
-
-    private void AddGaleNightLayer(Image img, float baseAlpha)
-    {
-        if (img == null) return;
-        img.color = BattleFxColors.GaleNightEdge(baseAlpha);
-        weatherGaleNightEdgeImgs.Add(img);
-        weatherGaleNightEdgeBaseAlphas.Add(baseAlpha);
-    }
 
 
     private void TogglePause()

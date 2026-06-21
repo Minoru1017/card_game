@@ -41,5 +41,8 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Scenes/Fighting bird game.unity
     guid: 20a58745aeb28af4ab95f8d02b9e9442
+  - enabled: 1
+    path: Assets/Scenes/Bug handling scenarios.unity
+    guid: 7c4cafa1f06383149a1d5ecbc37fe6a1
   m_configObjects: {}
   m_UseUCBPForAssetBundles: 0

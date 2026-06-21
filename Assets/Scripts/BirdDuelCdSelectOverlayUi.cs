@@ -440,6 +440,11 @@ public static class BirdDuelCdSelectOverlayUi
         {
             factionHint = "勝利 draft：庭訓號令／王權方陣／前鋒偵察／御前護衛／戰鼓齊進／背水（與港灣池不同）。";
         }
+        else if (BirdDuelRhythmChart.IsMorningPrayer(profile.CdId))
+        {
+            factionHint =
+                "節奏：屏息谱面。勝利 draft：晨禱守夜／窺視之眼／靜默重整／穿堂頌詩／聖盾禱告／密藏引路（情報＋庇護，無先攻）。";
+        }
         else
         {
             factionHint = profile.Faction switch

@@ -11,6 +11,13 @@ public static class TutorialProgressState
     private const string IntroTrioRewardKey = "tutorial_intro_trio_reward";
     private const string M12ReligiousLineRewardKey = "m12_religious_line_reward";
     private const string M12TrioMasteryClearedKey = "m12_trio_mastery_cleared";
+    private const string M12PhaseACompleteKey = "m12_phase_a_complete";
+    private const string M12PhaseATrioMilitiaKey = "m12_phase_a_trio_militia";
+    private const string M12PhaseATrioQueenKey = "m12_phase_a_trio_queen";
+    private const string M12PhaseATrioKingKey = "m12_phase_a_trio_king";
+    private const string M12MidPatrolCompleteKey = "m12_mid_patrol_complete";
+    private const string M12SealedSpellFoundKey = "m12_sealed_spell_found";
+    private const string M12IntroSeenKey = "m12_intro_seen";
     private const string AcademyGraduatedKey = "academy_intro_graduated";
 
     private const string PlotDonePrefix = "tutorial_plot_done_v1_slot_";
@@ -410,6 +417,48 @@ public static class TutorialProgressState
 
     public static void SetM12TrioMasteryCleared(int slot, bool cleared = true) =>
         WriteCompleted(slot, M12TrioMasteryClearedKey, null, cleared);
+
+    public static bool IsM12IntroSeen(int slot) =>
+        ReadCompleted(slot, M12IntroSeenKey, null);
+
+    public static void SetM12IntroSeen(int slot, bool seen = true) =>
+        WriteCompleted(slot, M12IntroSeenKey, null, seen);
+
+    public static bool IsM12PhaseAComplete(int slot) =>
+        ReadCompleted(slot, M12PhaseACompleteKey, null);
+
+    public static void SetM12PhaseAComplete(int slot, bool complete = true) =>
+        WriteCompleted(slot, M12PhaseACompleteKey, null, complete);
+
+    public static bool IsM12PhaseATrioMilitia(int slot) =>
+        ReadCompleted(slot, M12PhaseATrioMilitiaKey, null);
+
+    public static void SetM12PhaseATrioMilitia(int slot, bool triggered) =>
+        WriteCompleted(slot, M12PhaseATrioMilitiaKey, null, triggered);
+
+    public static bool IsM12PhaseATrioQueen(int slot) =>
+        ReadCompleted(slot, M12PhaseATrioQueenKey, null);
+
+    public static void SetM12PhaseATrioQueen(int slot, bool triggered) =>
+        WriteCompleted(slot, M12PhaseATrioQueenKey, null, triggered);
+
+    public static bool IsM12PhaseATrioKing(int slot) =>
+        ReadCompleted(slot, M12PhaseATrioKingKey, null);
+
+    public static void SetM12PhaseATrioKing(int slot, bool triggered) =>
+        WriteCompleted(slot, M12PhaseATrioKingKey, null, triggered);
+
+    public static bool IsM12MidPatrolComplete(int slot) =>
+        ReadCompleted(slot, M12MidPatrolCompleteKey, null);
+
+    public static void SetM12MidPatrolComplete(int slot, bool complete = true) =>
+        WriteCompleted(slot, M12MidPatrolCompleteKey, null, complete);
+
+    public static bool IsM12SealedSpellFound(int slot) =>
+        ReadCompleted(slot, M12SealedSpellFoundKey, null);
+
+    public static void SetM12SealedSpellFound(int slot, bool found = true) =>
+        WriteCompleted(slot, M12SealedSpellFoundKey, null, found);
 
     public static void SetTutorialPlotCompleted(int slot, bool completed = true) =>
         WriteCompleted(slot, PlotKey, PlotDonePrefix, completed);

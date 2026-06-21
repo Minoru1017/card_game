@@ -28,6 +28,7 @@ public sealed class StoryProgressWorldMapRuntime : MonoBehaviour
     /// <summary>入門主節點 M-1-1 icon 邊長（@2× 出圖建議 96×96）。</summary>
     private const float TutorialNodeSize = 48f;
     private const string TutorialRootNodeId = "M-1-1";
+    private const string SeawallPatrolNodeId = StoryProgressSession.SeawallPatrolNodeId;
     private const string TutorialRootDisplayName = "港灣訓練場";
     /// <summary>新玩家預設對焦：節點落在 viewport 寬度此比例處（0.5 = 正中）。</summary>
     private const float NewPlayerMapNodeViewportXFromLeft = 0.28f;
@@ -64,6 +65,8 @@ public sealed class StoryProgressWorldMapRuntime : MonoBehaviour
     private readonly List<UiVisibilityRecord> hiddenUiRecords = new List<UiVisibilityRecord>(16);
     private readonly Dictionary<string, RectTransform> nodeRects = new Dictionary<string, RectTransform>(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> clearedNodeIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    private string preferredFocusNodeId;
+    private static string selectedStageNodeId = TutorialRootNodeId;
     private StoryProgressNodeDatabase nodeDb;
     private static Sprite whiteSprite;
 
@@ -295,7 +298,7 @@ public sealed class StoryProgressWorldMapRuntime : MonoBehaviour
         if (currentZoom < MapCoverMinZoom)
             SetMapZoom(MapCoverMinZoom);
         ClampContentAnchoredPosition();
-        ReapplyDefaultMapFocusOnNode();
+        ReapplyMapFocusOnPreferredNode();
     }
 
     private void Update()
@@ -501,6 +504,8 @@ public sealed class StoryProgressWorldMapRuntime : MonoBehaviour
         int slot = PlayerData.GetActivePlayerSlotOrDefault();
         if (HarborTrainingProgressState.IsHarborCombatCleared(slot))
             clearedNodeIds.Add("M-1-1");
+        if (TutorialProgressState.IsM12TrioMasteryCleared(slot))
+            clearedNodeIds.Add(SeawallPatrolNodeId);
     }
 
     private void BuildNodeGraphVisuals()
@@ -723,6 +728,15 @@ public sealed class StoryProgressWorldMapRuntime : MonoBehaviour
     private static string ResolveTutorialRootStatusText() =>
         StoryProgressLevelCopy.ResolveMapStatusLabelForActiveSlot();
 
+    public static string SelectedStageNodeId => selectedStageNodeId;
+
+    public static void SetSelectedStageNodeId(string nodeId)
+    {
+        if (string.IsNullOrWhiteSpace(nodeId))
+            return;
+        selectedStageNodeId = nodeId;
+    }
+
     /// <summary>入門勝利／港灣通關後刷新地圖節點與 M-1-1 狀態徽章（與關卡面板、玩家資訊一致）。</summary>
     public static void RequestRefreshProgress()
     {
@@ -742,7 +756,7 @@ public sealed class StoryProgressWorldMapRuntime : MonoBehaviour
             nodeDb = StoryProgressNodeDatabaseLibrary.Load();
         BuildNodeGraphVisuals();
         ApplyTutorialRootStatusBadgeToExistingNode();
-        ReapplyDefaultMapFocusOnNode();
+        ReapplyMapFocusOnPreferredNode();
     }
 
     private void ApplyTutorialRootStatusBadgeToExistingNode()
@@ -892,8 +906,17 @@ public sealed class StoryProgressWorldMapRuntime : MonoBehaviour
     private void OnNodeClicked(StoryProgressNodeEntry node, NodeState state)
     {
         if (node == null) return;
-        if (string.Equals(node.nodeId, "M-1-1", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(node.nodeId, TutorialRootNodeId, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(node.nodeId, SeawallPatrolNodeId, StringComparison.OrdinalIgnoreCase))
         {
+            if (state == NodeState.Locked)
+            {
+                GameDevLog.Log("Story map node locked: " + node.nodeId);
+                return;
+            }
+
+            SetSelectedStageNodeId(node.nodeId);
+            StoryProgressSceneController.RequestRefreshPresentation();
             blockM11PointerToggleUntilUnscaledTime = Time.unscaledTime + M11PointerToggleBlockSeconds;
             TryToggleMapFocusMode();
             return;
@@ -973,20 +996,40 @@ public sealed class StoryProgressWorldMapRuntime : MonoBehaviour
         if (scrollRect == null || mapContentRt == null || viewportRt == null) return;
 
         SetMapZoom(DefaultMapZoom);
-        ReapplyDefaultMapFocusOnNode();
+        ReapplyMapFocusOnPreferredNode();
     }
 
-    /// <summary>Pan viewport so M-1-1 (1-1) is the default focal point after layout or progress refresh.</summary>
-    private void ReapplyDefaultMapFocusOnNode()
+    /// <summary>Pan viewport so the preferred node is centered (M-1-1 default; M-1-2 after harbor first clear).</summary>
+    private void ReapplyMapFocusOnPreferredNode()
     {
         if (mapContentRt == null || viewportRt == null) return;
-        if (!nodeRects.TryGetValue(TutorialRootNodeId, out RectTransform rt)) return;
+
+        string nodeId = ResolvePreferredFocusNodeId();
+        if (!nodeRects.TryGetValue(nodeId, out RectTransform rt))
+        {
+            if (!nodeRects.TryGetValue(TutorialRootNodeId, out rt))
+                return;
+            nodeId = TutorialRootNodeId;
+        }
 
         rt.SetAsLastSibling();
         Canvas.ForceUpdateCanvases();
 
-        bool newPlayerMapFraming = TutorialProgressState.NeedsTutorialFlowForActivePlayer();
+        bool newPlayerMapFraming = string.Equals(nodeId, TutorialRootNodeId, StringComparison.OrdinalIgnoreCase) &&
+                                   TutorialProgressState.NeedsTutorialFlowForActivePlayer();
         CenterOnNode(rt, newPlayerMapFraming ? GetNewPlayerMapViewportAlignOffset() : Vector2.zero);
+
+        if (StoryProgressSession.TryConsumePendingEnterMapFocusMode() && !mapFocusMode)
+            EnterMapFocusMode();
+    }
+
+    private string ResolvePreferredFocusNodeId()
+    {
+        if (string.IsNullOrWhiteSpace(preferredFocusNodeId) &&
+            StoryProgressSession.TryConsumePendingMapFocusNodeId(out string pending))
+            preferredFocusNodeId = pending;
+
+        return string.IsNullOrWhiteSpace(preferredFocusNodeId) ? TutorialRootNodeId : preferredFocusNodeId;
     }
 
     private void SetMapZoom(float zoom)

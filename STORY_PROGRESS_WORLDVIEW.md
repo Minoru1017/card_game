@@ -3,7 +3,7 @@
 > **狀態**：定案（2026-05）  
 > **用途**：統一大地圖、Story progress 關卡 UI、Main Plot 劇情、教學對戰之空間與敘事邏輯。  
 > **相關文件**：[`PLANNING_DOCS_INDEX.md`](PLANNING_DOCS_INDEX.md) · [`PLANNING_MASTER_TABLE.md`](PLANNING_MASTER_TABLE.md) · [`PLANNING_OPEN_ITEMS.md`](PLANNING_OPEN_ITEMS.md) · [`LEVEL_DESIGN_GDD.md`](LEVEL_DESIGN_GDD.md) · [`TUTORIAL_PLOT_SCRIPT.md`](TUTORIAL_PLOT_SCRIPT.md) · [`GAMEPLAY_AND_RULES.md`](GAMEPLAY_AND_RULES.md) · `Assets/Resources/StoryProgressNodeDatabase.json`  
-> **進度／Clear 語意**：以 [`LEVEL_DESIGN_GDD.md`](LEVEL_DESIGN_GDD.md) 與總表為準；與本文件 §七「通關」敘事之差異見 [`PLANNING_OPEN_ITEMS.md`](PLANNING_OPEN_ITEMS.md) §DOC-001。
+> **進度／Clear 語意**：以 [`LEVEL_DESIGN_GDD.md`](LEVEL_DESIGN_GDD.md) §2.3 為準（**教學關 Clear**／**實戰關 Clear**）。
 
 ---
 
@@ -58,7 +58,8 @@ flowchart LR
 | 登入後首次 | Story progress | 系統引導 |
 | 點「進入關卡」 | Main Plot → 學院對戰館 | 林可姐／導師帶領 |
 | 入門對戰 | 學院內（程式：入門級、無天氣） | 玩家操作、老師脈絡之教學戰 |
-| 通關後 | 大地圖節點可標為 Clear；認知上「可面對港灣」 | 玩家自主（後續關卡擴充） |
+| 教學關 Clear | 入門劇情 ＋ 教學戰勝利；地圖 **實戰區** | 玩家可挑戰港灣（**實戰關 Clear** 另計） |
+| 實戰關 Clear | 港灣任一難度首通；地圖 **Clear**（附最高難度） | 解鎖 M-1-2 等後續節點 |
 
 ---
 
@@ -113,7 +114,7 @@ flowchart LR
 |------|----------|
 | 「1-1 在港灣打所以大地圖放港灣」 | 大地圖標的是**章節與未來戰區**；當前戰在學院。 |
 | 「關卡名叫港灣訓練場所以對戰 BG 要是碼頭」 | 名稱是**課程／戰區註冊名**；入門戰景在學院。 |
-| 「通關 1-1 = 已經去過港灣」 | 通關 = **入門畢業**；「去港灣」是後續自主行動（可留給 1-2 或同一節點二階段）。 |
+| 「通關 1-1 = 已經去過港灣」 | **分兩層 Clear**（見 GDD §2.3）：**教學關 Clear**＝入門畢業（仍在學院）；**實戰關 Clear**＝港灣實戰首通（地圖 Clear、解鎖 M-1-2）。 |
 
 ---
 
@@ -128,4 +129,5 @@ flowchart LR
 
 | 日期 | 說明 |
 |------|------|
+| 2026-06-21 | §三、§七 對齊 GDD §2.3：教學關 Clear／實戰關 Clear（最高難度顯示） |
 | 2026-05-28 | 初版定案：港灣 = 學成後自主目的地；1-1 = 學院內教師帶領入門教學。 |

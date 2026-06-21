@@ -162,6 +162,69 @@ public static class TutorialPlotScriptFactory
         return steps;
     }
 
+    /// <summary>港灣實戰首通後銜接（L1-2-002）：短台詞 → 回 Story progress 並聚焦 M-1-2。</summary>
+    public static List<MainPlotSceneController.PlotStep> BuildHarborCombatClearBridgeSteps()
+    {
+        var steps = new List<MainPlotSceneController.PlotStep>(4);
+        TapStep(steps, LinKeSpeaker,
+            "港灣那一仗過關了 地圖上 " + StoryTextStyle.Em("海牆巡邏") + " 已解鎖",
+            1);
+        TapStep(steps, LinKeSpeaker,
+            "下一段是御三家戰技段考 不在學院館內了 跟我到海堤上去",
+            2);
+        TapStepEndPlot(steps, LinKeSpeaker,
+            "我先帶你看節點 按下回到遊戲進度");
+        return steps;
+    }
+
+    /// <summary>M-1-2 開場：段考說明 → 階段 A。</summary>
+    public static List<MainPlotSceneController.PlotStep> BuildM12IntroPlotSteps()
+    {
+        var steps = new List<MainPlotSceneController.PlotStep>(5);
+        TapStep(steps, LinKeSpeaker,
+            "海堤上的風比館內硬 這一段叫" + StoryTextStyle.Em("海牆巡邏") + " 是御三家戰技段考",
+            1);
+        TapStep(steps, LinKeSpeaker,
+            "牌組我幫你鎖好了 只要" + StoryTextStyle.Hi("國王") + " " + StoryTextStyle.Hi("王后") + " " +
+            StoryTextStyle.Hi("民兵") + " 三項戰技本局各觸發一次 再加勝利",
+            2);
+        TapStepEndPlot(steps, LinKeSpeaker,
+            "準備好了就進" + StoryTextStyle.Em("階段 A") + " 我在旁邊提示");
+        return steps;
+    }
+
+    /// <summary>中段 MVP：1 熱區散策（封印法術）→ 階段 B。</summary>
+    public static List<MainPlotSceneController.PlotStep> BuildM12MidPatrolPlotSteps()
+    {
+        var steps = new List<MainPlotSceneController.PlotStep>(6);
+        TapStep(steps, LinKeSpeaker,
+            "段考 A 過關 先沿海牆走一段 別急著馬上開第二場",
+            1);
+        ChoiceStep(steps, LinKeSpeaker,
+            "海牆縫裡卡著一頁蠟封殘卷 要看看嗎",
+            "查看殘卷", 2,
+            "直接前往加練", 3);
+        TapStep(steps, LinKeSpeaker,
+            "……封印的法術 學院還沒歸檔 先收進貴重品 以後再說",
+            3);
+        TapStepEndPlot(steps, LinKeSpeaker,
+            "接下來是" + StoryTextStyle.Em("教會三張搭配") + " 港灣簡單檔加練 出發吧");
+        return steps;
+    }
+
+    /// <summary>B 勝且通關後短結尾 → Story progress。</summary>
+    public static List<MainPlotSceneController.PlotStep> BuildM12VictoryEpilogueSteps()
+    {
+        var steps = new List<MainPlotSceneController.PlotStep>(3);
+        TapStep(steps, LinKeSpeaker,
+            StoryTextStyle.Em("修女") + " " + StoryTextStyle.Em("主教") + " " + StoryTextStyle.Em("城堡") +
+            " 各一張入收藏了 熟練度到 B 戰技會照規則生效",
+            1);
+        TapStepEndPlot(steps, LinKeSpeaker,
+            "海牆巡邏段考通過 按下回到遊戲進度");
+        return steps;
+    }
+
     public static Sprite GetLinKePortraitSprite() => ResolveLinKePortrait();
 
     private static Sprite ResolveLinKePortrait()

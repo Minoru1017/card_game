@@ -503,6 +503,14 @@ public partial class DeckManager : MonoBehaviour, ICardInspectPanelHost
         RefreshDeckSlotTabVisual();
     }
 
+    /// <summary>僅依記憶體刷新牌組名稱 UI（不重綁場景節點、不 LoadPlayerData）。</summary>
+    public void RefreshBuildbeckDeckNameDisplayFromMemory()
+    {
+        if (!IsBuildbeckSceneActive()) return;
+        EnsureCoreRefs();
+        RefreshDeckSlotTabVisual();
+    }
+
     public void TriggerBuildbeckUiReload()
     {
         RequestBuildbeckUiReload();
@@ -3619,7 +3627,12 @@ public partial class DeckManager : MonoBehaviour, ICardInspectPanelHost
             PlayerData.SetSelectedDeckCount(key, 0);
         }
 
+        PlayerDeckSlotNameStorage.ResetSelectedDeckSlotNameToDefault(PlayerData);
         PlayerData.SavePlayerData();
+        PlayerProfileCsvService.SyncDeckSummaryFromRuntime();
+        RefreshDeckSlotTabVisual();
+        RefreshCurrentDeckDisplayName();
+        BuildbeckLayoutAutoBinder.TryBindCurrentDeckNameDisplay(this);
         StartCoroutine(RebuildPanelsAfterReset());
 
         SceneLoader loader = GetCachedSceneLoader();
@@ -3791,7 +3804,7 @@ public partial class DeckManager : MonoBehaviour, ICardInspectPanelHost
         EnsureDeckNameEditPanel();
         if (deckNameEditPanel == null) return;
 
-        string cur = PlayerData.GetDeckSlotDisplayName(PlayerData.selectedDeckSlot);
+        string cur = PlayerDeckSlotNameStorage.ReadBuildbeckEditDialogCurrentName(PlayerData);
         if (deckNameEditInput != null)
         {
             deckNameEditInput.text = cur;
@@ -3836,26 +3849,22 @@ public partial class DeckManager : MonoBehaviour, ICardInspectPanelHost
 
     public void ConfirmDeckNameEdit()
     {
-        EnsureCoreRefs();
-        PlayerData pd = PlayerData.ResolveCanonical();
-        if (pd == null)
-        {
-            HideDeckNameEditPanel();
-            return;
-        }
+        PlayerDeckSlotNameStorage.ConfirmBuildbeckRename(this, ReadDeckNameEditInputText());
+    }
 
-        PlayerData = pd;
-        pd.EnsureMinimumDeckSlotCount();
-        int nameSlot = Mathf.Clamp(pd.selectedDeckSlot, 0, pd.deckSlotCount - 1);
-        string text = deckNameEditInput != null ? deckNameEditInput.text : string.Empty;
-        pd.SetDeckSlotDisplayName(nameSlot, text);
-        pd.SavePlayerData();
+    internal void FinishDeckNameEditUi(string deckSummary)
+    {
         HideDeckNameEditPanel();
+        BuildbeckLayoutAutoBinder.TryBindCurrentDeckNameDisplay(this);
         RefreshDeckSlotTabVisual();
+        GlobalNavRuntime.TryRefreshPlayerInfoDeckSummaryIfOpen(deckSummary);
         ShowDeckHint("牌組名稱已更新");
         SceneLoader loader = GetCachedSceneLoader();
         if (loader != null) loader.RefreshEnterBattleState(false);
     }
+
+    private string ReadDeckNameEditInputText() =>
+        deckNameEditInput != null ? deckNameEditInput.text : string.Empty;
 
     private void EnsureDeckNameEditPanel()
     {

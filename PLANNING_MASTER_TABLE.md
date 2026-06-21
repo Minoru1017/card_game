@@ -22,18 +22,19 @@
 | 領域 | 主文件 | 狀態 | 主要讀者 | 程式／資料錨點 | 待定摘要 |
 |------|--------|------|----------|----------------|----------|
 | **企劃入口** | `PLANNING_DOCS_INDEX.md` | 定案 | 全員 | — | — |
-| **主線世界觀** | `STORY_PROGRESS_WORLDVIEW.md` | 定案 | 企劃、美術、文案 | `StoryProgressLevelCopy.cs`、`StoryProgressNodeDatabase.json` | 與關卡 GDD 的 **Clear 語意**需對齊（見待定 §DOC） |
-| **關卡 1-1** | `LEVEL_DESIGN_GDD.md` | **部分定案** | 企劃、程式 | `HarborTrainingProgressState`、`HarborTrainingRewardService`、`SceneLoader.HarborTraining.cs` | 三難度數值表、平手／放棄、通關獎勵 UI 狀態（見待定 §L1-1） |
+| **主線世界觀** | `STORY_PROGRESS_WORLDVIEW.md` | 定案 | 企劃、美術、文案 | `StoryProgressLevelCopy.cs`、`StoryProgressNodeDatabase.json` | Clear 語意見 GDD §2.3 |
+| **關卡 1-1** | `LEVEL_DESIGN_GDD.md` | **部分定案** | 企劃、程式 | `HarborTrainingProgressState`、`HarborTrainingRewardService`、`SceneLoader.HarborTraining.cs` | 三難度數值表、放棄、通關獎勵 UI 狀態（平手已定案不算 Clear，見 §L1-1） |
 | **關卡 1-2+** | —（待 `LEVEL_DESIGN_M-1-2.md` 或擴章） | **待開案** | 企劃 | `M-1-2` 節點於 JSON；地圖點擊未接戰鬥 | 海牆巡邏全流程（見待定 §L1-2） |
 | **入門劇本** | `TUTORIAL_PLOT_SCRIPT.md` | 定案 | 文案、程式 | `TutorialPlotScriptFactory.cs`、`MainPlotSceneController.cs` | 重溫入門是否跳劇情（見待定 §TUT） |
 | **教學進度旗標** | `LEVEL_DESIGN_GDD.md` §二、`TUTORIAL_PLOT_SCRIPT.md` | 部分定案 | 程式 | `TutorialProgressState.cs` | 舊存檔遷移（見待定 §SAVE） |
 | **對戰規則** | `GAMEPLAY_AND_RULES.md` | 定案 | 企劃、程式 | `BattleSimulationManager.cs`、`CardList.csv` | — |
 | **難度與 AI** | `DIFFICULTY_AND_AI_DESIGN.md` | 定案（報告） | 程式、口試 | `BuildDifficultyConfig`、`EnemyAiPlayStyle` | 港灣三檔是否僅標籤差異（見待定 §L1-1） |
 | **敵 AI 細節** | `ENEMY_AI_DECISION_TREE.md` | 定案 | 程式 | `EnemyAi*.cs` | — |
-| **戰前預覽謎題** | `BATTLE_PREVIEW_PUZZLE_INDEX.md` | 定案 | 程式、美術 | `SceneLoader.BattlePreview.cs` | 港灣預覽與碼頭敘事一致性（見待定 §ART） |
+| **戰前預覽謎題** | `BATTLE_PREVIEW_PUZZLE_INDEX.md` | **已停用**（PZ 謎題）；預覽 modal 仍用 | 程式、美術 | `SceneLoader.BattlePreview.cs` | 謎題解鎖已由鬥鳥取代；港灣預覽敘事（見待定 §ART） |
+| **鬥鳥暖身賽** | `Docs/鬥鳥手勢小遊戲企劃.md` | **定案** | 企劃、程式 | `FightingBirdGameSceneController.*`、`BirdDuelCore`、`SceneLoader.BirdDuel`、`BirdDuelRhythmSync` | CD Phase1 實裝見待定 §BD-CD |
 | **卡牌熟練度** | `CARD_PROFICIENCY_GDD.md` | 部分定案（v1 暫採） | 企劃 | `proficiency` CSV 鍵、`MonsterSkillRegistry` | §7 八項待決；彙總見待定 §PROF |
 | **單卡戰技文案** | `卡牌技能階段式揭露.md` | 草案 | 企劃 | `MonsterSkillRegistry` | 逐卡填表進度 |
-| **牌組存檔** | `DECK_SAVE_IMPLEMENTATION.md` | 定案 | 程式 | `PlayerData`、`DeckManager` | — |
+| **牌組存檔** | `DECK_SAVE_IMPLEMENTATION.md` | **定案**（2026-06 牌組名稱驗收） | 程式 | `PlayerDeckSlotNameStorage`、`PlayerData`、`DeckManager` | 驗收：[`Docs/DECK_SLOT_NAME_BUG_CHECKLIST.md`](Docs/DECK_SLOT_NAME_BUG_CHECKLIST.md) |
 | **大地圖節點文案** | `StoryProgressNodeDatabase.json` + `StoryProgressLevelCopy.cs` | 部分定案 | 程式 | `StoryProgressWorldMapRuntime.cs` | 節點點擊→進關流程（見待定 §MAP） |
 | **登入／大廳導流** | `TUTORIAL_PLOT_SCRIPT.md`（首段） | 部分定案 | 程式 | 登入場景、`hall` | 未寫入關卡 GDD（見待定 §FLOW） |
 | **對戰 UI 色票** | `BATTLE_UI_COLOR_SPEC.md` | 定案 | 美術、程式 | `BattleUiColors.cs` 等 | — |
@@ -47,16 +48,16 @@
 
 ## 主線 1-1 進度語意（定案摘要）
 
-以下為**目前實作與 `LEVEL_DESIGN_GDD.md` 一致**的用語；勿與舊版「入門戰勝即 Clear」混淆。
+以下與 [`LEVEL_DESIGN_GDD.md`](LEVEL_DESIGN_GDD.md) **§2.3** 一致。
 
 | 用語 | 條件 | 玩家可見效果 |
 |------|------|----------------|
 | **入門進行中** | 未完成 `Main Plot` 教學戰勝 | Story progress：進入關卡 → 劇情 |
-| **入門畢業** | 教學對戰勝利 | 可開港灣預覽；地圖副標多為「實戰區」 |
-| **實戰 Clear（M-1-1）** | 港灣**任一難度首通勝利** | 節點 Clear；解鎖 `M-1-2` |
+| **教學關 Clear** | 入門劇情 ＋ 入門教學戰勝利 | 地圖 badge **實戰區**；可挑戰港灣 |
+| **實戰關 Clear（M-1-1）** | 港灣**任一難度首通勝利** | 地圖 **Clear**；`harbor_combat_clear`；解鎖 `M-1-2`；**附最高已勝難度** |
 | **港灣畢業證** | 港灣**困難首通勝利**（一次） | 獲得 SR 聖院騎士（卡 id 18） |
 
-完整流程與獎勵表見 [`LEVEL_DESIGN_GDD.md`](LEVEL_DESIGN_GDD.md)。`STORY_PROGRESS_WORLDVIEW.md` §七「通關＝入門畢業」指**敘事層**，與**地圖 Clear** 不同層級——對照說明見 [`PLANNING_OPEN_ITEMS.md`](PLANNING_OPEN_ITEMS.md) §DOC-001。
+完整流程與獎勵表見 [`LEVEL_DESIGN_GDD.md`](LEVEL_DESIGN_GDD.md)。
 
 ---
 
@@ -64,7 +65,7 @@
 
 | 優先 | 產出物 | 解除待定 |
 |------|--------|----------|
-| P0 | 修訂 `STORY_PROGRESS_WORLDVIEW.md` §三、§七 與本總表「進度語意」對齊 | §DOC |
+| P0 | ~~修訂 `STORY_PROGRESS_WORLDVIEW.md` §三、§七~~ | ✅ 2026-06-21 對齊 GDD §2.3 |
 | P0 | `LEVEL_DESIGN` 補港灣三難度數值表或「同配置僅標籤」聲明 | §L1-1-DIFF |
 | P1 | `LEVEL_DESIGN_M-1-2.md`（或 GDD 第二章） | §L1-2 |
 | P1 | 大地圖「點擊節點 → 進關」流程圖 | §MAP |
@@ -77,3 +78,5 @@
 | 日期 | 說明 |
 |------|------|
 | 2026-05-30 | 初版：建立企劃總表，彙整 1-1 進度語意與各領域狀態 |
+| 2026-06-21 | 進度語意改為教學關／實戰關雙 Clear（GDD §2.3）；世界觀 §三、§七 對齊 |
+| 2026-06-19 | 新增「鬥鳥暖身賽」列；戰前謎題列改已停用；程式錨點對齊 `PROJECT_CODE_INDEX_v2` §I |

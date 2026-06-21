@@ -77,7 +77,7 @@ public static class CardProficiencyDebugReset
         }
 
         if (removed > 0)
-            PlayerPersistSafeIO.WriteAllLines(csvPath, kept);
+            PlayerSaveCoordinator.WritePlayerDataCsv(kept);
 
         return removed;
     }

@@ -176,7 +176,8 @@ public class MainPlotSceneController : MonoBehaviour
     }
 
     /// <summary>僅 1-1 從遊戲進度進入的教學劇情播放專屬 BGM。</summary>
-    private bool ShouldPlayTutorialPlotBgm() => launchedFromStoryProgress;
+    private bool ShouldPlayTutorialPlotBgm() =>
+        IsOpeningTutorialPlotSession() && StoryProgressSession.TutorialPlotBgmRequested;
 
     private void TryPlayTutorialPlotBgm()
     {
@@ -619,6 +620,8 @@ public class MainPlotSceneController : MonoBehaviour
     {
         if (StoryProgressSession.IsTutorialPlotEpilogueActive)
             return false;
+        if (StoryProgressSession.IsHarborCombatClearBridgeActive)
+            return false;
         return launchedFromStoryProgress || StoryProgressSession.TutorialPlotBgmRequested;
     }
 
@@ -763,6 +766,41 @@ public class MainPlotSceneController : MonoBehaviour
         {
             StoryProgressSession.LoadStoryProgressWithIrisTransition();
             return;
+        }
+
+        if (StoryProgressSession.IsHarborCombatClearBridgeActive)
+        {
+            StoryProgressSession.LoadStoryProgressWithIrisTransition();
+            return;
+        }
+
+        if (StoryProgressSession.IsM12VictoryEpilogueActive)
+        {
+            StoryProgressSession.EndM12VictoryEpilogueSession();
+            StoryProgressSession.LoadStoryProgressWithIrisTransition();
+            return;
+        }
+
+        if (StoryProgressSession.IsM12MidPatrolPlotActive)
+        {
+            int slot = PlayerData.GetActivePlayerSlotOrDefault();
+            M12SeawallPatrolProgressState.MarkMidPatrolComplete(slot, sealedSpellFound: true);
+            StoryProgressSession.EndM12MidPatrolPlotSession();
+            if (StoryProgressSession.TryConsumeLaunchM12PhaseBBattleAfterPlot())
+            {
+                StoryProgressSession.LaunchM12PhaseBBattleAfterPlot(fastCloseAnimation: skippedPlot);
+                return;
+            }
+        }
+
+        if (StoryProgressSession.IsM12IntroPlotActive)
+        {
+            StoryProgressSession.EndM12IntroPlotSession();
+            if (StoryProgressSession.TryConsumeLaunchM12PhaseABattleAfterPlot())
+            {
+                StoryProgressSession.LaunchM12PhaseABattleAfterPlot(fastCloseAnimation: skippedPlot);
+                return;
+            }
         }
 
         if (launchedFromStoryProgress)

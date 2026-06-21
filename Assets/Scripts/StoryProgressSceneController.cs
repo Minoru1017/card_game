@@ -227,6 +227,16 @@ public class StoryProgressSceneController : MonoBehaviour
     private void OnEnterStageClicked()
     {
         int slot = PlayerData.GetActivePlayerSlotOrDefault();
+        string selectedNode = StoryProgressWorldMapRuntime.SelectedStageNodeId;
+        if (string.Equals(selectedNode, StoryProgressSession.SeawallPatrolNodeId, System.StringComparison.OrdinalIgnoreCase))
+        {
+            if (M12SeawallPatrolFlow.CanEnterFromStoryProgress(slot))
+                M12SeawallPatrolFlow.LaunchFromStoryProgress();
+            else
+                Debug.LogWarning("StoryProgressSceneController: M-1-2 locked — clear harbor combat first.");
+            return;
+        }
+
         if (TutorialProgressState.IsAcademyIntroGraduated(slot))
         {
             SceneLoader.OpenHarborTrainingBattlePreviewFromStoryProgress();
@@ -234,6 +244,13 @@ public class StoryProgressSceneController : MonoBehaviour
         }
 
         OnReplayIntroClicked();
+    }
+
+    public static void RequestRefreshPresentation()
+    {
+        StoryProgressSceneController ctrl =
+            Object.FindFirstObjectByType<StoryProgressSceneController>();
+        ctrl?.RefreshPresentation();
     }
 
     /// <summary>1-1 學院入門：劇情 → 選項 → 教學對戰。</summary>
@@ -271,9 +288,23 @@ public class StoryProgressSceneController : MonoBehaviour
             scenarioOverviewPlaceholderRoot.SetActive(false);
 
         CardStore cardStore = PlayerData.ResolveCanonical()?.CardStore;
+        string selectedNode = StoryProgressWorldMapRuntime.SelectedStageNodeId;
+        bool showingM12 = string.Equals(selectedNode, StoryProgressSession.SeawallPatrolNodeId,
+            System.StringComparison.OrdinalIgnoreCase) &&
+                          M12SeawallPatrolFlow.CanEnterFromStoryProgress(slot);
+
+        if (levelPanelTitleTmp != null)
+        {
+            string title = showingM12 ? StoryProgressLevelCopyM12.LevelTitle : StoryProgressLevelCopy.LevelTitle;
+            ApplyStoryProgressPlainText(levelPanelTitleTmp, title, 28f);
+        }
+
         if (scenarioPreviewTmp != null)
         {
-            ApplyStoryProgressBodyText(scenarioPreviewTmp, StoryProgressLevelCopy.BuildScenarioIntro(introGraduated));
+            string intro = showingM12
+                ? StoryProgressLevelCopyM12.BuildScenarioIntro(slot)
+                : StoryProgressLevelCopy.BuildScenarioIntro(introGraduated);
+            ApplyStoryProgressBodyText(scenarioPreviewTmp, intro);
             SyncScenarioIntroScrollContentHeight();
             StartCoroutine(CoSyncScenarioIntroScrollAfterLayout());
         }
@@ -281,13 +312,23 @@ public class StoryProgressSceneController : MonoBehaviour
         if (scenarioRewardsTmp == null)
             scenarioRewardsTmp = FindViewLevelFlowRewardsTmp();
         if (scenarioRewardsTmp != null)
-            ApplyStoryProgressRewardsText(scenarioRewardsTmp, StoryProgressLevelCopy.BuildScenarioRewards(cardStore));
+        {
+            string rewards = showingM12
+                ? StoryProgressLevelCopyM12.BuildScenarioRewards(cardStore, slot)
+                : StoryProgressLevelCopy.BuildScenarioRewards(cardStore);
+            ApplyStoryProgressRewardsText(scenarioRewardsTmp, rewards);
+        }
 
         if (enterStageButtonLabel != null)
         {
-            string enterLabel = introGraduated ? "挑戰港灣訓練場" : "進入關卡";
+            string enterLabel = showingM12
+                ? StoryProgressLevelCopyM12.ResolveEnterButtonLabel(slot)
+                : (introGraduated ? "挑戰港灣訓練場" : "進入關卡");
             PlotUiTextUtil.ApplyButtonLabel(enterStageButtonLabel, enterLabel, scenarioPreviewTmp);
         }
+
+        if (enterStageButton != null)
+            enterStageButton.interactable = !showingM12 || M12SeawallPatrolFlow.CanEnterFromStoryProgress(slot);
 
         if (introGraduated)
         {
@@ -340,7 +381,12 @@ public class StoryProgressSceneController : MonoBehaviour
         ApplyRightDetailPanelThemeAndLayout();
         ApplyResponsiveRightDockTextScale();
         if (chapterSummaryTmp != null)
-            ApplyHarborBulletinText(chapterSummaryTmp, StoryProgressLevelCopy.BuildHarborBulletin(introGraduated));
+        {
+            string bulletin = showingM12
+                ? StoryProgressLevelCopyM12.BuildBulletin(slot)
+                : StoryProgressLevelCopy.BuildHarborBulletin(introGraduated);
+            ApplyHarborBulletinText(chapterSummaryTmp, bulletin);
+        }
 
     }
 

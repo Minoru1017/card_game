@@ -53,7 +53,7 @@ flowchart TD
 | **牌組** | 劇情至「基礎牌組」步驟後發放 30 張入門牌組（牌組槽為空時才寫入；**僅首次**彈「獲得基礎牌組」） |
 | **通關條件** | 完成入門劇情 ＋ 贏得入門教學戰 |
 | **通關獎勵** | 收藏各 +1：**UR 國王、SR 王后、N 民兵**（僅**首次**入門戰勝利；**重溫入門課**再勝不重複發） |
-| **地圖節點** | **不**因入門 alone 將 `M-1-1` 標為實戰 Clear；節點狀態為 **實戰區**（可挑戰港灣） |
+| **地圖節點** | **教學關 Clear**（語意）；地圖 badge 現顯示 **實戰區**（可挑戰港灣） | 入門劇情 ＋ 入門教學戰勝利 |
 
 詳細劇情步數見 `TUTORIAL_PLOT_SCRIPT.md`。
 
@@ -77,7 +77,18 @@ flowchart TD
 
 ---
 
-## 三、通關獎勵與進度（定案）
+## 2.3 「通關 1-1」雙 Clear 語意（2026-06 定案）
+
+| Clear 類型 | 觸發 | 進度／解鎖 | 地圖／UI 顯示 |
+|------------|------|------------|----------------|
+| **教學關 Clear** | 入門劇情完成 ＋ **入門教學戰勝利** | 入門畢業；可開港灣預覽 | 地圖 badge **實戰區**（語意＝教學關已 Clear，**尚未**實戰關 Clear） |
+| **實戰關 Clear** | 港灣**任一難度**首次勝利 | `harbor_combat_clear`；解鎖 **M-1-2** | 地圖 badge **Clear**；**附註已通關最高難度**（簡單／普通／困難，依戰績／旗標推 highest win） |
+
+- **勿混用**：僅教學關 Clear **不**解鎖 M-1-2、**不**將節點標為實戰關 Clear。  
+- **平手不算 Clear**（2026-06 定案）：港灣對局 **平手**（`GetBattleResult() == 0`）**不**觸發實戰關 Clear、**不**解鎖 M-1-2、**不**發港灣首通獎；可再戰。僅 **勝利**（`result == 1`）走 `HarborTrainingRewardService.ProcessVictory`。  
+- **最高難度顯示**：玩家資訊、地圖 tooltip 或 Clear 副標應反映「目前贏過的最高港灣難度」；地圖 badge 現僅字串 `Clear`（待接戰績列，見 `StoryProgressLevelCopy`／`PlayerInfoProgressCopy`）。
+
+---
 
 ### 3.1 獎勵總表
 
@@ -85,10 +96,11 @@ flowchart TD
 |----------|----------|------------|------|
 | 入門教學戰**首次勝利** | UR 國王、SR 王后、N 民兵 各 1 | 否 | `tutorial_intro_trio_reward` · `TutorialBattleRewardService.TryGrantIntroTrioReward` |
 | 重溫入門課再勝 | 無卡牌；結算僅提示已於首次通關發放 | — | 同上旗標 |
-| 港灣**任一難度首次勝利** | 大地圖 **M-1-1 實戰 Clear**；解鎖 **M-1-2 海牆巡邏**（**不**發修女／主教／城堡） | 否 | `harbor_combat_clear` |
+| 港灣**任一難度首次勝利** | 大地圖 **M-1-1 實戰關 Clear**；解鎖 **M-1-2 海牆巡邏**（**不**發修女／主教／城堡） | 否 | `harbor_combat_clear` |
 | **M-1-2 段考首通** | 修女、主教、城堡 各 +1 收藏；戰技熟練度 **B** | 否 | `m12_religious_line_reward` · 見 [`LEVEL_DESIGN_M-1-2.md`](LEVEL_DESIGN_M-1-2.md) |
 | 港灣**困難級首次勝利** | **SR 聖院騎士** ×1（港灣畢業證） | 否 | `harbor_hard_reward`；CardList id `18` |
 | 港灣任一難度**再次勝利** | 無額外卡牌／解鎖 | — | 僅熟練度與戰績 |
+| 港灣**平手** | 無進度、無獎勵；**不**算實戰關 Clear | — | 可再戰；結算可開啟（見 `BattleSimulationDebugUI.Settlement`） |
 | 港灣戰敗 | 無懲罰性扣資源 | — | 可再戰 |
 
 ### 3.2 與入門獎勵的關係
@@ -114,6 +126,20 @@ flowchart TD
 | 簡單 | 簡單級 | 熟悉快攻節奏、容錯較高 | 快攻型（前段減壓） | 建議首次實戰優先；**KPI 首通約 70%、平均約 10 回合** |
 | 普通 | 普通級 | 標準實戰壓力；**可練可過** | 快攻型 | **KPI 首通約 60%**（入門預設牌組）；回合數不限；見 `HarborTrainingNormalBattleRules` |
 | 困難 | 困難級 | 畢業門檻；發放畢業證 | 快攻型 | **僅首次勝利**發 SR |
+
+### 4.0 三難度企劃對照表（L1-1-DIFF-001）
+
+> 敵牌組為固定池 **循環湊滿 30 張**（`BattleSimulationManager`）；法術比例為實際 30 張牌面計算。三檔**非**僅 UI 標籤不同。程式錨點：`HarborTrainingEasy/Normal/HardBattleRules` · `HarborTrainingTierConfig`（預設 `FastAttack`）。
+
+| 維度 | 簡單 | 普通 | 困難 |
+|------|------|------|------|
+| **敵牌組（30 張）** | 入門弱牌系：民兵×9、長弓×7、教徒×7、修女×4；**無 SSR** | 弱牌 + 主教×2、騎兵×1；民兵×7、長弓×8、教徒×7；**無 SSR** | 普通池加強：主教×3、騎兵×3、審判官×1；民兵×6、長弓×6、教徒×5；**無 SSR 四騎（8～11）** |
+| **法術比例** | **10%**（3／30：治療×2、火球×1） | **10%**（3／30：治療×2、火球×1） | **13%**（4／30：治療×2、火球×2） |
+| **超牌容許（over limit）** | **2** | **2** | **3** |
+| **最少法術（構築下限）** | 1 | 1 | 2 |
+| **預期勝率（KPI）** | 真人首通 **~70%**；均局 **~10 回合**（第 10 回合後必勝） | 真人首通 **~60%**（入門 30 張預設牌組）；自動模擬 **~15～25%**（僅回歸，非 KPI） | **未定 KPI**（畢業門檻；僅困難首通發 SR）；無專用勝率模擬工具 |
+
+牌組明細見 [`HARBOR_1-1_VS_TRAINING_GROUND_DIFFICULTY.md`](HARBOR_1-1_VS_TRAINING_GROUND_DIFFICULTY.md) §3。
 
 **簡單檔專用規則**（`HarborTrainingEasyBattleRules.cs`，與 Buildbeck 一般 `Easy` 分離）：
 
@@ -170,12 +196,14 @@ flowchart TD
 
 ### 5.2 大地圖節點 M-1-1
 
-| 狀態 | 顯示 | 條件 |
-|------|------|------|
-| NEW | NEW | 入門未完成 |
-| 進行中 | 進行中 | 僅完成部分入門 |
-| 實戰區 | 實戰區 | 入門畢業，尚未港灣實戰通關 |
-| Clear | Clear | `harbor_combat_clear` |
+> **Clear 語意**見 §2.3。**實戰關 Clear** 時 badge 定案附註**已勝利最高難度**（實作待接）。
+
+| 狀態 | 顯示 | 條件 | 定案語意 |
+|------|------|------|----------|
+| NEW | NEW | 入門未完成 | — |
+| 進行中 | 進行中 | 僅完成部分入門 | — |
+| 實戰區 | 實戰區 | 入門畢業（**教學關 Clear**），尚未港灣實戰首通 | 教學關 Clear |
+| Clear | Clear（＋最高難度，待 UI） | `harbor_combat_clear` | **實戰關 Clear** |
 
 副標（節點下）：入門中「入門課 · 學院內」；畢業後「簡單・普通・困難」。
 
@@ -209,7 +237,7 @@ flowchart TD
 | 港灣實戰 Clear | `HarborTrainingProgressState` → `harbor_combat_clear` |
 | 困難畢業證 | `HarborTrainingProgressState` → `harbor_hard_reward` |
 | 發獎邏輯 | `HarborTrainingRewardService.ProcessVictory` |
-| 地圖 Clear / M-1-2 | `StoryProgressWorldMapRuntime.LoadClearedNodeProgress` |
+| 地圖 Clear / M-1-2 | `StoryProgressWorldMapRuntime.LoadClearedNodeProgress` · 港灣首通銜接見 [`LEVEL_DESIGN_M-1-2.md`](LEVEL_DESIGN_M-1-2.md) §2.5 |
 | M-1-2 宗教三張 B | `M12ReligiousLineRewardService` · `m12_religious_line_reward` |
 | M-1-2 段考戰技追蹤 | `M12TrioMasteryBattleTracker` · `BattleLaunchContext.IsM12TrioMasteryBattle` |
 | 戰前預覽 | `SceneLoader.HarborTraining.cs`、`HarborTrainingBattleCopy.cs` |
@@ -247,6 +275,9 @@ flowchart TD
 
 | 日期 | 變更 |
 |------|------|
+| 2026-06-21 | §4.0：港灣三難度企劃對照表（L1-1-DIFF-001）；敵牌組／法術比例／over limit／KPI |
+| 2026-06-21 | §2.3／§3.1：港灣**平手不算**實戰關 Clear（僅 `result == 1`）；關閉 L1-1-BTL-001 |
+| 2026-06-21 | §2.3 定案「通關 1-1」雙 Clear：教學關 Clear（入門勝）／實戰關 Clear（港灣首通＋顯示最高難度）；§5.2 對照 |
 | 2026-05-30 | 初版：釐清入門／港灣兩階段；定案實戰 Clear → M-1-2、困難首通 SR 聖院騎士畢業證；對照現行程式。 |
 | 2026-05-30 | 入門御三家改為僅首次發放；重溫入門不可重複領（`tutorial_intro_trio_reward`）。 |
 | 2026-05-31 | 大地圖節點 icon 小幅調整：入門 48、一般 40、魔王 44（§5.2.1）。 |

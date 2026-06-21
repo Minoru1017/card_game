@@ -72,14 +72,54 @@ public static class PlayerProfileCsvService
         PlayerData playerData = ResolvePlayerData();
         if (playerData != null)
         {
-            // 先寫入完整 playerdata.csv（含 deck_slot_name），避免 SyncProfile 僅合併 profile 時覆寫成預設名稱。
-            playerData.SavePlayerData();
-            p.decks = BuildDeckSummary(playerData);
+            p.decks = PlayerDeckSlotNameStorage.ProfileBridge.BuildDeckSummaryLine(playerData);
             p.heroes = BuildHeroSummary(playerData);
+            // 先依 runtime 摘要再存檔，避免 SyncProfile 合併前後記憶體被 Load 覆蓋自訂牌組名。
+            playerData.SavePlayerData();
         }
 
         Save(p);
         return p;
+    }
+
+    /// <summary>
+    /// 玩家資訊面板顯示用：合併 profile 列並依 runtime 牌組名組摘要，<b>不寫入</b> playerdata.csv。
+    /// 開啟面板時請用此方法，勿呼叫 <see cref="RefreshProfileFromRuntime"/>，以免覆蓋 Buildbeck 自訂名稱。
+    /// </summary>
+    public static PlayerProfile LoadProfileForPlayerInfoDisplay()
+    {
+        PlayerProfile p = LoadOrCreate();
+        if (TryReadActiveSlotProfile(out PlayerProfile slotProfile))
+            p = MergeProfileWithSlotRecord(p, slotProfile);
+
+        p.schemaVersion = string.IsNullOrWhiteSpace(p.schemaVersion) ? CurrentSchemaVersion : p.schemaVersion;
+        if (string.IsNullOrWhiteSpace(p.uuid)) p.uuid = Guid.NewGuid().ToString("N");
+        if (string.IsNullOrWhiteSpace(p.role)) p.role = "一般玩家";
+        if (string.IsNullOrWhiteSpace(p.startDate)) p.startDate = DateTime.Now.ToString("yyyy-MM-dd");
+
+        PlayerData playerData = ResolvePlayerData();
+        if (playerData != null)
+            p.decks = PlayerDeckSlotNameStorage.ProfileBridge.BuildDeckSummaryLine(playerData);
+
+        return p;
+    }
+
+    /// <summary>
+    /// 依 runtime <see cref="PlayerData"/> 重建並寫入 profile 的牌組摘要（玩家資訊面板）。
+    /// Buildbeck 改名／存檔後請呼叫，避免 <c>profile_decks</c> 仍保留舊名稱。
+    /// </summary>
+    public static string SyncDeckSummaryFromRuntime()
+    {
+        PlayerData playerData = ResolvePlayerData();
+        if (playerData == null) return null;
+
+        PlayerProfile p = LoadOrCreate();
+        if (TryReadActiveSlotProfile(out PlayerProfile slotProfile))
+            p = MergeProfileWithSlotRecord(p, slotProfile);
+
+        p.decks = PlayerDeckSlotNameStorage.ProfileBridge.BuildDeckSummaryLine(playerData);
+        Save(p);
+        return p.decks;
     }
 
     public static void SetRole(string role)
@@ -175,6 +215,7 @@ public static class PlayerProfileCsvService
 
     private static void ResetActiveSlotToDefaultsInPlayerDataCsv(int defaultCoins)
     {
+        PlayerSaveCoordinator.EnsurePersistedBeforeDiskMerge();
         string dir = Application.persistentDataPath;
         Directory.CreateDirectory(dir);
         string[] existing = PlayerPersistSafeIO.TryReadPlayerDataLines(PlayerDataPath, out string[] read, out _)
@@ -576,10 +617,14 @@ public static class PlayerProfileCsvService
 
     private static void SyncProfileIntoActiveSlotRows(PlayerProfile p)
     {
+        PlayerSaveCoordinator.EnsurePersistedBeforeDiskMerge();
         string[] existing = PlayerPersistSafeIO.TryReadPlayerDataLines(PlayerDataPath, out string[] read, out _)
             ? read
             : Array.Empty<string>();
-        int activeSlot = ReadActiveSlotFromRows(existing);
+        PlayerData runtimePd = ResolvePlayerData();
+        int activeSlot = runtimePd != null
+            ? Mathf.Clamp(runtimePd.activePlayerSlot, 1, PlayerData.MaxPlayerSlots)
+            : ReadActiveSlotFromRows(existing);
         var merged = new List<string>(existing.Length + 10);
 
         for (int i = 0; i < existing.Length; i++)
@@ -607,22 +652,14 @@ public static class PlayerProfileCsvService
                     continue;
                 if (string.Equals(slotKey, "battle_record", StringComparison.OrdinalIgnoreCase))
                     continue;
-                if (string.Equals(slotKey, "deck_slot_name", StringComparison.OrdinalIgnoreCase))
+                if (PlayerDeckSlotNameStorage.IsDeckSlotNameCsvKey(slotKey))
                     continue;
             }
             merged.Add(row);
         }
 
-        PlayerData runtimePd = ResolvePlayerData();
         if (runtimePd != null)
-        {
-            int deckSlots = Mathf.Max(1, runtimePd.deckSlotCount);
-            for (int s = 0; s < deckSlots; s++)
-            {
-                string label = runtimePd.GetDeckSlotDisplayName(s);
-                merged.Add($"slot,{activeSlot},deck_slot_name,{s},{SafeCsv(label)}");
-            }
-        }
+            PlayerDeckSlotNameStorage.ProfileBridge.RewriteActiveSlotNameRows(runtimePd, merged, SafeCsv);
         else
         {
             for (int i = 0; i < existing.Length; i++)
@@ -633,7 +670,7 @@ public static class PlayerProfileCsvService
                 if (cols.Length < 5) continue;
                 if (!string.Equals(cols[0].Trim(), "slot", StringComparison.OrdinalIgnoreCase)) continue;
                 if (!int.TryParse(cols[1].Trim(), out int slot) || slot != activeSlot) continue;
-                if (!string.Equals(cols[2].Trim(), "deck_slot_name", StringComparison.OrdinalIgnoreCase)) continue;
+                if (!PlayerDeckSlotNameStorage.IsDeckSlotNameCsvKey(cols[2].Trim())) continue;
                 merged.Add(row);
             }
         }
@@ -724,23 +761,8 @@ public static class PlayerProfileCsvService
         }
     }
 
-    private static string BuildDeckSummary(PlayerData playerData)
-    {
-        if (playerData == null || playerData.deckSlotCount <= 0) return "尚無牌組資料";
-        var parts = new List<string>(playerData.deckSlotCount);
-        for (int slot = 0; slot < playerData.deckSlotCount; slot++)
-        {
-            int total = 0;
-            IReadOnlyDictionary<int, int> map = playerData.GetDeckMap(slot);
-            foreach (KeyValuePair<int, int> kv in map)
-            {
-                if (kv.Value > 0) total += kv.Value;
-            }
-            string deckLabel = playerData.GetDeckSlotDisplayName(slot);
-            parts.Add(deckLabel + ":" + total + "張");
-        }
-        return parts.Count > 0 ? string.Join(" | ", parts) : "尚無牌組資料";
-    }
+    private static string BuildDeckSummary(PlayerData playerData) =>
+        PlayerDeckSlotNameStorage.ProfileBridge.BuildDeckSummaryLine(playerData);
 
     private static string BuildHeroSummary(PlayerData playerData)
     {

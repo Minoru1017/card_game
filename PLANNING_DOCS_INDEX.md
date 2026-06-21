@@ -55,6 +55,7 @@
 | [`CARD_PROFICIENCY_GDD.md`](CARD_PROFICIENCY_GDD.md) | 熟練度、A/B/C 解鎖、存檔欄位 |
 | [`卡牌技能階段式揭露.md`](卡牌技能階段式揭露.md) | 單卡三階戰技文案範例 |
 | [`DECK_SAVE_IMPLEMENTATION.md`](DECK_SAVE_IMPLEMENTATION.md) | 牌組槽、CSV 鍵、Buildbeck 索引對照 |
+| [`Docs/DECK_SLOT_NAME_BUG_CHECKLIST.md`](Docs/DECK_SLOT_NAME_BUG_CHECKLIST.md) | **牌組名稱**驗收清單（2026-06 定案；含三流程與存檔污染） |
 
 ---
 
@@ -95,7 +96,9 @@
 |------|------|
 | [`P0_MANUAL_REGRESSION.md`](P0_MANUAL_REGRESSION.md) | P0 手動回歸清單 |
 | [`OPTIMIZATION_CHECKLIST.md`](OPTIMIZATION_CHECKLIST.md) | 效能與維護待辦 |
-| [`Assets/Scripts/PROJECT_CODE_INDEX_v2.md`](Assets/Scripts/PROJECT_CODE_INDEX_v2.md) | **程式模組索引**（Story、Harbor、Battle 錨點） |
+| [`Docs/CODE_QUALITY_SCAN_REPORT.md`](Docs/CODE_QUALITY_SCAN_REPORT.md) | 程式碼品質 heuristics 掃描（索引→Desktop 正式工具；`.cursor/skills/code-quality-scan`） |
+| [`Docs/CURSOR_SKILLS_MANUAL.md`](Docs/CURSOR_SKILLS_MANUAL.md) | **Cursor 自訂 Skills 說明書**（功能、自動流程、適用時機；`.cursor/skills/`） |
+| [`Assets/Scripts/PROJECT_CODE_INDEX_v2.md`](Assets/Scripts/PROJECT_CODE_INDEX_v2.md) | **程式模組索引**（Story、Harbor、Battle、**鬥鳥 §I** 錨點） |
 
 ---
 
@@ -116,6 +119,18 @@
 
 | 日期 | 說明 |
 |------|------|
+| 2026-06-21 | 封印法術真身定案 **潮印**（§3.3.3a）；1-2 中段仍為封印态 |
+| 2026-06-21 | 1-2 中段 **封印法術**伏筆定案（§3.3.3）；支線解封待 L1-2-013 |
+| 2026-06-21 | M-1-2 段考 A/B **定案牌表**（15／20 張）；`LEVEL_DESIGN_M-1-2.md` §3.1／§3.2 |
+| 2026-06-21 | 定案 M-1-2 段考 A/B 任務欄、鎖牌 15／20 張、B 港灣簡單（L1-2-006～008）；`LEVEL_DESIGN_M-1-2.md` §3.0 |
+| 2026-06-21 | 關閉 L1-2-002：港灣首通銜接（短台詞 + 聚焦 M-1-2）；`LEVEL_DESIGN_M-1-2.md` §2.5 |
+| 2026-06-21 | 關閉 L1-1-DIFF-001：港灣三難度對照表（`LEVEL_DESIGN_GDD.md` §4.0 · `HARBOR_1-1_VS_TRAINING_GROUND_DIFFICULTY.md` §4.1） |
+| 2026-06-21 | 定案港灣平手不算實戰關 Clear（L1-1-BTL-001）；`LEVEL_DESIGN_GDD.md` §2.3／§3.1 |
+| 2026-06-21 | 定案 M-1-1 雙 Clear 語意（`LEVEL_DESIGN_GDD.md` §2.3）；關閉 `PLANNING_OPEN_ITEMS` DOC-001/002 |
+| 2026-06-21 | `PLANNING_OPEN_ITEMS.md` §L1-2 可勾選清單（1-2 未定案細項 A～E） |
+| 2026-06-21 | 牌組名稱定案同步：`DECK_SAVE_IMPLEMENTATION.md` §7–§9（`PlayerDeckSlotNameStorage`、玩家資訊只讀路徑）；總表／索引／`PROJECT_CODE_INDEX_v2` 更新 |
+| 2026-06-21 | 新增 `Docs/CURSOR_SKILLS_MANUAL.md`：專案自訂 Cursor Skills（含 major-bug-resolution）使用說明 |
+| 2026-06-19 | 企劃↔程式同步：`PROJECT_CODE_INDEX_v2` 新增 §I 鬥鳥暖身；`ARCHITECTURE_OVERVIEW` 補戰前鬥鳥場景；總表新增鬥鳥列、戰前謎題標為已停用 |
 | 2026-06-15 | CD 鬥鳥難度梯度定案：`Docs/鬥鳥手勢小遊戲企劃.md` §12.4.1（港灣最簡、庭訓略難；`BirdDuelRhythmSync` 參數表） |
 | 2026-06-14 | 鬥鳥取代戰前謎題：所有戰前先進鬥鳥場景，勝出挑戰魔王級、否則打所選難度，情報以 toast 帶入戰鬥；停用 `BATTLE_PREVIEW_PUZZLE_INDEX.md` 謎題解鎖 |
 | 2026-06-10 | 定案 `Docs/鬥鳥手勢小遊戲企劃.md`：改為 BGM 鼓點節奏反制，築巢定義為看破增益，連接戰前進階 AI 情報 |

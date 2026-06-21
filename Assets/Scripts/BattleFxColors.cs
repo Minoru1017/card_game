@@ -118,6 +118,12 @@ public static class BattleFxColors
     public static readonly Color FieldHaloInner = BattleUiColors.WithAlpha(BattleUiColors.AllyLabel, 0.23f);
     public static readonly Color FieldHaloCore = BattleUiColors.WithAlpha(BattleUiColors.BtnSecondaryText, 0.065f);
 
+    /// <summary>聖盾禱告：我方英雄 HUD 護盾環（教會金／紫）。</summary>
+    public static readonly Color SacredShieldHeroOuter = BattleUiColors.WithAlpha(BattleUiColors.Hex("#E8D8FF"), 0.52f);
+    public static readonly Color SacredShieldHeroInner = BattleUiColors.WithAlpha(BattleUiColors.Hex("#E8BB6A"), 0.62f);
+    public static readonly Color SacredShieldHeroCore = BattleUiColors.WithAlpha(BattleUiColors.PanelMilk, 0.38f);
+    public static readonly Color SacredShieldHeroBreakFlash = BattleUiColors.WithAlpha(BattleUiColors.PanelMilk, 0.92f);
+
     public static readonly Color FieldHpHurt = HurtFlash;
 
     public static readonly Color GazeGlareRgb = BattleUiColors.Hex("#8A7A9E");

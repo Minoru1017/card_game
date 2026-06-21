@@ -31,3 +31,19 @@ MonoBehaviour:
     normalBeatsPerStep: 3
     decisiveMinTriplets: 5
     decisiveMaxTriplets: 20
+  - cdId: morning_prayer
+    bpm: 110
+    firstDownbeatOffset: 0.23219955
+    gridMode: 0
+    decisivePerfectWindowMul: 0.68
+    decisiveGoodWindowMul: 0.73
+    decisiveTelegraphLeadMul: 0.55
+    bgmLoopStartSeconds: 57.3649
+    bgmLoopLengthSeconds: 45.374695
+    basePerfectWindowMul: 0.92
+    baseGoodWindowMul: 0.94
+    baseTelegraphLeadMul: 0.88
+    closeToWinScoreMargin: 5
+    normalBeatsPerStep: 3
+    decisiveMinTriplets: 5
+    decisiveMaxTriplets: 20
