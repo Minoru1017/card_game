@@ -115,7 +115,7 @@ public class PlotBackgroundMusicPlayer : MonoBehaviour
         EnsureClipLoaded(plotBgmClip);
         ConfigureAudioSource(audioSource);
         audioSource.clip = plotBgmClip;
-        audioSource.volume = volume;
+        audioSource.volume = GameAudioUserSettings.ScaleBgm(volume);
         audioSource.loop = false;
         audioSource.time = 0f;
 
@@ -192,6 +192,12 @@ public class PlotBackgroundMusicPlayer : MonoBehaviour
 
     private static bool ShouldPlayTutorialPlotBgm() =>
         StoryProgressSession.TutorialPlotBgmRequested;
+
+    public void ApplyUserBgmVolume()
+    {
+        if (audioSource != null)
+            audioSource.volume = GameAudioUserSettings.ScaleBgm(volume);
+    }
 
     private void EnsureListenerActive()
     {

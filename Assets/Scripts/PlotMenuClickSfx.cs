@@ -53,7 +53,7 @@ public class PlotMenuClickSfx : MonoBehaviour
         if (menuClickClip == null || sfxSource == null)
             return;
 
-        sfxSource.PlayOneShot(menuClickClip, volume);
+        sfxSource.PlayOneShot(menuClickClip, GameAudioUserSettings.ScaleButtonSfx(volume));
     }
 
     private void Awake()

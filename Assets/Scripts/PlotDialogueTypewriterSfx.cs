@@ -56,7 +56,7 @@ public class PlotDialogueTypewriterSfx : MonoBehaviour
         StopTypingSound();
 
         sfxSource.clip = typingClip;
-        sfxSource.volume = volume;
+        sfxSource.volume = GameAudioUserSettings.ScaleNpcVoice(volume);
         sfxSource.loop = false;
         sfxSource.time = 0f;
         sfxSource.Play();

@@ -598,10 +598,16 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         endBattleFooterBar = CreateEndBattleFooterBar(endBattlePanel.transform, panelW);
         CreateEndBattleFooterButton(endBattleFooterBar.transform, "BattleHistoryButton", "對戰歷史", OnClickBattleHistory, false);
         CreateEndBattleFooterButton(endBattleFooterBar.transform, "RestartBattleButton", "再戰一局", OnClickRestartBattle, true);
-        string returnLabel = BattleLaunchContext.IsHarborTrainingGroundBattle ? "返回地圖" : "牌組編輯";
+        string returnLabel = BattleLaunchContext.IsHarborTrainingGroundBattle
+            ? "返回地圖"
+            : BattleLaunchContext.IsFreeBattle
+                ? "返回自由對戰"
+                : "牌組編輯";
         UnityEngine.Events.UnityAction returnAction = BattleLaunchContext.IsHarborTrainingGroundBattle
             ? OnClickReturnStoryProgress
-            : OnClickReturnBuildbeck;
+            : BattleLaunchContext.IsFreeBattle
+                ? OnClickReturnFreeBattle
+                : OnClickReturnBuildbeck;
         CreateEndBattleFooterButton(
             endBattleFooterBar.transform,
             "ReturnBuildbeckButton",
@@ -1676,6 +1682,19 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
     {
         bool firstCombatClear = lastHarborVictoryReward.FirstCombatClear;
         StoryProgressBattleReturn.CompleteReturnFromHarborTraining(firstCombatClear);
+    }
+
+    private void OnClickReturnFreeBattle()
+    {
+        string sceneName = FreeBattleBattleCopy.SceneName;
+        if (!Application.CanStreamedLevelBeLoaded(sceneName))
+        {
+            Debug.LogError("BattleSimulationDebugUI: free battle scene not in Build Settings -> " + sceneName);
+            return;
+        }
+
+        BattleLaunchContext.ClearActiveBattle();
+        SceneManager.LoadScene(sceneName);
     }
 
     private void OnClickReturnBuildbeck()

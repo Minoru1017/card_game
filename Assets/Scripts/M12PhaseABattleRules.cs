@@ -1,6 +1,6 @@
 using UnityEngine;
 
-/// <summary>M-1-2 階段 A 教學戰：比港灣更溫和、無天氣（IntroGreedy AI）。</summary>
+/// <summary>M-1-2 階段 A 教學戰：比港灣更溫和、無天氣（綜合型 AI＋教學用出牌偏置）。</summary>
 public static class M12PhaseABattleRules
 {
     public const int MaxRoundsInclusive = 12;

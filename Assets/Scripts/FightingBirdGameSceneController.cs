@@ -76,20 +76,20 @@ public sealed partial class FightingBirdGameSceneController : MonoBehaviour
     private int activeDecisiveMaxTriplets = BirdDuelRhythmSync.HarborDecisiveMaxTriplets;
     private float SecondsPerBeat => 60f / Mathf.Max(1f, bpm);
 
-    private static readonly Color ColorBg = new Color(0.10f, 0.12f, 0.16f, 1f);
-    private static readonly Color ColorPanel = new Color(0.16f, 0.19f, 0.25f, 0.96f);
-    private static readonly Color ColorPeck = new Color(0.86f, 0.34f, 0.26f, 1f);
-    private static readonly Color ColorWing = new Color(0.27f, 0.55f, 0.86f, 1f);
-    private static readonly Color ColorNest = new Color(0.92f, 0.74f, 0.24f, 1f);
-    private static readonly Color ColorPass = new Color(0.62f, 0.66f, 0.70f, 1f);
-    private static readonly Color ColorScoreFill = new Color(0.30f, 0.78f, 0.45f, 1f);
-    private static readonly Color ColorInsightFill = new Color(0.92f, 0.74f, 0.24f, 1f);
-    private static readonly Color ColorIdle = new Color(0.30f, 0.34f, 0.42f, 1f);
-    private static readonly Color ColorSubtitle = new Color(0.78f, 0.82f, 0.88f, 1f);
-    private static readonly Color ColorBeatPadIdle = new Color(0.85f, 0.88f, 0.95f, 0.85f);
-    private static readonly Color ColorShrinkIdle = new Color(1f, 1f, 1f, 0.20f);
-    private static readonly Color ColorDecisive = new Color(0.98f, 0.55f, 0.20f, 1f); // 決勝拍：熱橙色提示
-    private static readonly Color ColorFakeScareRing = new Color(1f, 1f, 1f, 1f);     // 假 scare：白色方形外框
+    private static Color ColorBg => BirdDuelUiColors.SceneBg;
+    private static Color ColorPanel => BirdDuelUiColors.ScenePanel;
+    private static Color ColorPeck => BirdDuelUiColors.GesturePeck;
+    private static Color ColorWing => BirdDuelUiColors.GestureWing;
+    private static Color ColorNest => BirdDuelUiColors.GestureNest;
+    private static Color ColorPass => BirdDuelUiColors.GesturePass;
+    private static Color ColorScoreFill => BirdDuelUiColors.ScoreFill;
+    private static Color ColorInsightFill => BirdDuelUiColors.InsightFill;
+    private static Color ColorIdle => BirdDuelUiColors.OpponentIdle;
+    private static Color ColorSubtitle => BirdDuelUiColors.Subtitle;
+    private static Color ColorBeatPadIdle => BirdDuelUiColors.BeatPadIdle;
+    private static Color ColorShrinkIdle => BirdDuelUiColors.ShrinkIdle;
+    private static Color ColorDecisive => BirdDuelUiColors.Decisive;
+    private static Color ColorFakeScareRing => BirdDuelUiColors.FakeScareRing;
 
     private static bool subscribed;
 

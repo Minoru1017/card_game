@@ -4,27 +4,14 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
-/// <summary>戰前 CD 光碟選擇（程式化 overlay，主面板 + 可展開橫向光碟列）。</summary>
+/// <summary>戰前 CD 光碟選擇（程式化 overlay，手機優先版面 + 驚奇感色票）。</summary>
 public static class BirdDuelCdSelectOverlayUi
 {
-    private const float PanelWidth = 920f;
-    private const float PanelHeight = 600f;
     private const float PickerBarHeight = 88f;
     private const float HeaderHeight = 56f;
-    private const float SwitchRowHeight = 56f;
-    private const float FooterHeight = 92f;
-    private const float ContentPadH = 28f;
-
-    private static readonly Color DimColor = new Color(0f, 0f, 0f, 0.72f);
-    private static readonly Color PanelBg = new Color(0.1f, 0.12f, 0.18f, 0.98f);
-    private static readonly Color PanelAccent = new Color(0.14f, 0.17f, 0.24f, 0.98f);
-    private static readonly Color FrameBg = new Color(0.2f, 0.24f, 0.32f, 0.95f);
-    private static readonly Color SlotIdle = new Color(0.16f, 0.19f, 0.26f, 0.95f);
-    private static readonly Color SlotSelected = new Color(0.28f, 0.42f, 0.58f, 0.98f);
-    private static readonly Color BtnPrimary = new Color(0.22f, 0.38f, 0.58f, 1f);
-    private static readonly Color BtnOther = new Color(0.18f, 0.22f, 0.3f, 0.98f);
-    private static readonly Color TextMain = new Color(0.92f, 0.95f, 0.99f, 1f);
-    private static readonly Color TextMuted = new Color(0.72f, 0.78f, 0.86f, 1f);
+    private static float FooterHeight => BirdDuelMobileOverlayLayout.FooterBarHeight;
+    private static float SwitchRowHeight => BirdDuelMobileOverlayLayout.SwitchRowHeight;
+    private const float ContentPadH = 20f;
 
     private static GameObject activeOverlay;
 
@@ -51,7 +38,7 @@ public static class BirdDuelCdSelectOverlayUi
             "BirdDuelCdSelectOverlay", typeof(RectTransform), typeof(CanvasGroup), typeof(Image));
         overlay.transform.SetParent(parentCanvas.transform, false);
         StretchFull(overlay.GetComponent<RectTransform>());
-        overlay.GetComponent<Image>().color = DimColor;
+        overlay.GetComponent<Image>().color = BirdDuelUiColors.Dim;
 
         Canvas overlayCanvas = overlay.AddComponent<Canvas>();
         overlayCanvas.overrideSorting = true;
@@ -165,21 +152,22 @@ public static class BirdDuelCdSelectOverlayUi
             {
                 if (SlotBackgrounds[i] == null) continue;
                 bool on = string.Equals(SlotCdIds[i], SelectedCdId, StringComparison.Ordinal);
-                SlotBackgrounds[i].color = on ? SlotSelected : SlotIdle;
+                SlotBackgrounds[i].color = on ? BirdDuelUiColors.CdSlotSelected : BirdDuelUiColors.CdSlotIdle;
             }
         }
     }
 
     private static GameObject CreatePanel(Transform parent)
     {
-        GameObject panel = new GameObject("Panel", typeof(RectTransform), typeof(Image));
+        GameObject panel = new GameObject("Panel", typeof(RectTransform), typeof(Image), typeof(Outline));
         panel.transform.SetParent(parent, false);
         RectTransform rt = panel.GetComponent<RectTransform>();
-        rt.anchorMin = new Vector2(0.5f, 0.5f);
-        rt.anchorMax = new Vector2(0.5f, 0.5f);
-        rt.pivot = new Vector2(0.5f, 0.5f);
-        rt.sizeDelta = new Vector2(PanelWidth, PanelHeight);
-        panel.GetComponent<Image>().color = PanelBg;
+        BirdDuelMobileOverlayLayout.ApplyMobilePanel(rt);
+        Image panelImg = panel.GetComponent<Image>();
+        panelImg.color = BirdDuelUiColors.CdPanelBg;
+        Outline outline = panel.GetComponent<Outline>();
+        outline.effectColor = BirdDuelUiColors.PanelEdge;
+        outline.effectDistance = new Vector2(0f, -3f);
         return panel;
     }
 
@@ -197,7 +185,7 @@ public static class BirdDuelCdSelectOverlayUi
         barRt.pivot = new Vector2(0.5f, 1f);
         barRt.anchoredPosition = Vector2.zero;
         barRt.sizeDelta = new Vector2(0f, PickerBarHeight);
-        bar.GetComponent<Image>().color = PanelAccent;
+        bar.GetComponent<Image>().color = BirdDuelUiColors.CdPanelAccent;
 
         GameObject scrollRoot = new GameObject("Slots", typeof(RectTransform));
         scrollRoot.transform.SetParent(bar.transform, false);
@@ -240,7 +228,7 @@ public static class BirdDuelCdSelectOverlayUi
         RectTransform rt = slot.GetComponent<RectTransform>();
         rt.sizeDelta = new Vector2(72f, 72f);
         Image bg = slot.GetComponent<Image>();
-        bg.color = SlotIdle;
+        bg.color = BirdDuelUiColors.CdSlotIdle;
         ui.SlotBackgrounds.Add(bg);
 
         GameObject iconObj = new GameObject("Icon", typeof(RectTransform), typeof(Image));
@@ -267,13 +255,13 @@ public static class BirdDuelCdSelectOverlayUi
         rt.pivot = new Vector2(0.5f, 1f);
         rt.anchoredPosition = Vector2.zero;
         rt.sizeDelta = new Vector2(0f, HeaderHeight);
-        header.GetComponent<Image>().color = PanelAccent;
+        header.GetComponent<Image>().color = BirdDuelUiColors.CdPanelAccent;
         ui.HeaderRt = rt;
 
-        CreateAnchoredText(header.transform, font, "Title", "選擇 CD 光碟",
-            34f, FontStyles.Bold, Vector2.zero, Vector2.one,
+        CreateAnchoredText(header.transform, font, "Title", "✦ 選擇 CD 光碟",
+            30f, FontStyles.Bold, Vector2.zero, Vector2.one,
             new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero,
-            TextAlignmentOptions.Center, TextMain);
+            TextAlignmentOptions.Center, BirdDuelUiColors.WonderBadge);
     }
 
     private static GameObject BuildSwitchRow(
@@ -289,17 +277,14 @@ public static class BirdDuelCdSelectOverlayUi
         rowRt.pivot = new Vector2(0.5f, 0f);
         rowRt.offsetMin = new Vector2(ContentPadH, FooterHeight + 8f);
         rowRt.offsetMax = new Vector2(-ContentPadH, FooterHeight + 8f + SwitchRowHeight);
-        row.GetComponent<Image>().color = PanelAccent;
+        row.GetComponent<Image>().color = BirdDuelUiColors.CdPanelAccent;
 
         Button otherBtn = CreateModalButton(row.transform, font, "OtherCdButton", "＋  其他 CD 光碟");
         StretchFull(otherBtn.GetComponent<RectTransform>(), 0f);
-        otherBtn.GetComponent<Image>().color = BtnPrimary;
+        ApplyButtonColors(otherBtn, true);
         TextMeshProUGUI label = otherBtn.GetComponentInChildren<TextMeshProUGUI>();
         if (label != null)
-        {
-            label.fontSize = 26f;
-            label.color = Color.white;
-        }
+            label.fontSize = 28f;
 
         otherBtn.onClick.AddListener(() => ui.SetPickerVisible(true));
         row.transform.SetAsLastSibling();
@@ -325,23 +310,28 @@ public static class BirdDuelCdSelectOverlayUi
         RectTransform backRt = backBtn.GetComponent<RectTransform>();
         backRt.anchorMin = new Vector2(0f, 0f);
         backRt.anchorMax = new Vector2(0.5f, 1f);
-        backRt.offsetMin = new Vector2(ContentPadH, 12f);
-        backRt.offsetMax = new Vector2(-10f, -12f);
-        backBtn.GetComponent<Image>().color = BtnOther;
+        backRt.offsetMin = new Vector2(ContentPadH, FooterButtonPadV);
+        backRt.offsetMax = new Vector2(-10f, -FooterButtonPadV);
+        ApplyButtonColors(backBtn, false);
         backBtn.onClick.AddListener(() => onBack?.Invoke());
 
         Button confirmBtn = CreateModalButton(footer.transform, font, "ConfirmBtn", "確認交付");
         RectTransform confirmRt = confirmBtn.GetComponent<RectTransform>();
         confirmRt.anchorMin = new Vector2(0.5f, 0f);
         confirmRt.anchorMax = new Vector2(1f, 1f);
-        confirmRt.offsetMin = new Vector2(10f, 12f);
-        confirmRt.offsetMax = new Vector2(-ContentPadH, -12f);
+        confirmRt.offsetMin = new Vector2(10f, FooterButtonPadV);
+        confirmRt.offsetMax = new Vector2(-ContentPadH, -FooterButtonPadV);
+        ApplyButtonColors(confirmBtn, true);
         confirmBtn.onClick.AddListener(() => onConfirm?.Invoke());
     }
 
+    private static float FooterButtonPadV => BirdDuelMobileOverlayLayout.FooterButtonPadV;
+
     private static RectTransform BuildMainContent(Transform panel, TMP_FontAsset font, OverlayUi ui)
     {
-        const float coverColWidth = 176f;
+        bool portraitStack = BirdDuelMobileOverlayLayout.PreferPortraitStack();
+        float coverSize = portraitStack ? 140f : 160f;
+        float coverColWidth = portraitStack ? 0f : 176f;
 
         GameObject body = new GameObject("Body", typeof(RectTransform));
         body.transform.SetParent(panel, false);
@@ -354,12 +344,23 @@ public static class BirdDuelCdSelectOverlayUi
         GameObject frame = new GameObject("CoverFrame", typeof(RectTransform), typeof(Image));
         frame.transform.SetParent(body.transform, false);
         RectTransform frameRt = frame.GetComponent<RectTransform>();
-        frameRt.anchorMin = new Vector2(0f, 1f);
-        frameRt.anchorMax = new Vector2(0f, 1f);
-        frameRt.pivot = new Vector2(0f, 1f);
-        frameRt.anchoredPosition = Vector2.zero;
-        frameRt.sizeDelta = new Vector2(160f, 160f);
-        frame.GetComponent<Image>().color = FrameBg;
+        if (portraitStack)
+        {
+            frameRt.anchorMin = new Vector2(0.5f, 1f);
+            frameRt.anchorMax = new Vector2(0.5f, 1f);
+            frameRt.pivot = new Vector2(0.5f, 1f);
+            frameRt.anchoredPosition = Vector2.zero;
+            frameRt.sizeDelta = new Vector2(coverSize, coverSize);
+        }
+        else
+        {
+            frameRt.anchorMin = new Vector2(0f, 1f);
+            frameRt.anchorMax = new Vector2(0f, 1f);
+            frameRt.pivot = new Vector2(0f, 1f);
+            frameRt.anchoredPosition = Vector2.zero;
+            frameRt.sizeDelta = new Vector2(coverSize, coverSize);
+        }
+        frame.GetComponent<Image>().color = BirdDuelUiColors.CdFrameBg;
 
         GameObject iconObj = new GameObject("Cover", typeof(RectTransform), typeof(Image));
         iconObj.transform.SetParent(frame.transform, false);
@@ -371,20 +372,30 @@ public static class BirdDuelCdSelectOverlayUi
         GameObject textCol = new GameObject("TextColumn", typeof(RectTransform));
         textCol.transform.SetParent(body.transform, false);
         RectTransform textRt = textCol.GetComponent<RectTransform>();
-        textRt.anchorMin = Vector2.zero;
-        textRt.anchorMax = Vector2.one;
-        textRt.offsetMin = new Vector2(coverColWidth, 0f);
-        textRt.offsetMax = Vector2.zero;
+        if (portraitStack)
+        {
+            textRt.anchorMin = Vector2.zero;
+            textRt.anchorMax = Vector2.one;
+            textRt.offsetMin = new Vector2(0f, 0f);
+            textRt.offsetMax = new Vector2(0f, -(coverSize + 16f));
+        }
+        else
+        {
+            textRt.anchorMin = Vector2.zero;
+            textRt.anchorMax = Vector2.one;
+            textRt.offsetMin = new Vector2(coverColWidth, 0f);
+            textRt.offsetMax = Vector2.zero;
+        }
 
         ui.NameTmp = CreateAnchoredText(textCol.transform, font, "CdName", string.Empty,
-            32f, FontStyles.Bold, new Vector2(0f, 1f), new Vector2(1f, 1f),
+            30f, FontStyles.Bold, new Vector2(0f, 1f), new Vector2(1f, 1f),
             new Vector2(0.5f, 1f), Vector2.zero, new Vector2(0f, 44f),
-            TextAlignmentOptions.Left, TextMain);
+            TextAlignmentOptions.Left, BirdDuelUiColors.CdTextMain);
 
         ui.MetaTmp = CreateAnchoredText(textCol.transform, font, "Meta", string.Empty,
-            22f, FontStyles.Normal, new Vector2(0f, 1f), new Vector2(1f, 1f),
+            24f, FontStyles.Normal, new Vector2(0f, 1f), new Vector2(1f, 1f),
             new Vector2(0.5f, 1f), new Vector2(0f, -48f), new Vector2(0f, 30f),
-            TextAlignmentOptions.Left, TextMuted);
+            TextAlignmentOptions.Left, BirdDuelUiColors.WonderGlow);
 
         GameObject descObj = new GameObject("Description", typeof(RectTransform), typeof(TextMeshProUGUI));
         descObj.transform.SetParent(textCol.transform, false);
@@ -396,12 +407,12 @@ public static class BirdDuelCdSelectOverlayUi
         ui.DescTmp = descObj.GetComponent<TextMeshProUGUI>();
         if (font != null) ui.DescTmp.font = font;
         ui.DescTmp.text = string.Empty;
-        ui.DescTmp.fontSize = 26f;
+        ui.DescTmp.fontSize = portraitStack ? 28f : 26f;
         ui.DescTmp.alignment = TextAlignmentOptions.TopLeft;
         ui.DescTmp.enableWordWrapping = true;
         ui.DescTmp.lineSpacing = 6f;
         ui.DescTmp.paragraphSpacing = 8f;
-        ui.DescTmp.color = TextMuted;
+        ui.DescTmp.color = BirdDuelUiColors.CdTextMuted;
         ui.DescTmp.raycastTarget = false;
 
         return bodyRt;
@@ -418,12 +429,14 @@ public static class BirdDuelCdSelectOverlayUi
         go.transform.SetParent(parent, false);
         RectTransform rt = go.GetComponent<RectTransform>();
         rt.sizeDelta = new Vector2(size, size);
-        go.GetComponent<Image>().color = BtnPrimary;
+        Image img = go.GetComponent<Image>();
+        img.color = Color.white;
+        ApplyButtonColors(go.GetComponent<Button>(), true);
 
         CreateAnchoredText(go.transform, font, "Label", label, 24f, FontStyles.Bold,
             new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
             new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(size - 8f, size - 8f),
-            TextAlignmentOptions.Center, TextMain);
+            TextAlignmentOptions.Center, BirdDuelUiColors.BtnPrimaryText);
 
         return go.GetComponent<Button>();
     }
@@ -503,6 +516,7 @@ public static class BirdDuelCdSelectOverlayUi
         rt.sizeDelta = sizeDelta;
         TextMeshProUGUI tmp = obj.GetComponent<TextMeshProUGUI>();
         if (font != null) tmp.font = font;
+        SettingsUiFonts.ApplyTo(tmp);
         tmp.text = text;
         tmp.fontSize = fontSize;
         tmp.fontStyle = style;
@@ -517,20 +531,53 @@ public static class BirdDuelCdSelectOverlayUi
     {
         GameObject go = new GameObject(name, typeof(RectTransform), typeof(Image), typeof(Button));
         go.transform.SetParent(parent, false);
-        go.GetComponent<Image>().color = BtnPrimary;
+        go.GetComponent<Image>().color = Color.white;
         Button btn = go.GetComponent<Button>();
+        ApplyButtonColors(btn, true);
 
         GameObject textGo = new GameObject("Label", typeof(RectTransform), typeof(TextMeshProUGUI));
         textGo.transform.SetParent(go.transform, false);
         StretchFull(textGo.GetComponent<RectTransform>());
         TextMeshProUGUI tmp = textGo.GetComponent<TextMeshProUGUI>();
         if (font != null) tmp.font = font;
+        SettingsUiFonts.ApplyTo(tmp);
         tmp.text = label;
-        tmp.fontSize = 28f;
+        tmp.fontSize = BirdDuelMobileOverlayLayout.ButtonFontSecondary;
+        tmp.fontStyle = FontStyles.Bold;
         tmp.alignment = TextAlignmentOptions.Center;
-        tmp.color = Color.white;
+        tmp.color = BirdDuelUiColors.BtnPrimaryText;
         tmp.raycastTarget = false;
         return btn;
+    }
+
+    private static void ApplyButtonColors(Button btn, bool primary)
+    {
+        if (btn == null) return;
+        Image img = btn.targetGraphic as Image;
+        if (img == null) img = btn.GetComponent<Image>();
+        if (img != null) img.color = Color.white;
+
+        var cb = btn.colors;
+        if (primary)
+        {
+            cb.normalColor = BirdDuelUiColors.BtnPrimary;
+            cb.highlightedColor = BirdDuelUiColors.BtnPrimaryH;
+            cb.pressedColor = BirdDuelUiColors.BtnPrimaryP;
+        }
+        else
+        {
+            cb.normalColor = BirdDuelUiColors.BtnSecondary;
+            cb.highlightedColor = BirdDuelUiColors.BtnSecondaryH;
+            cb.pressedColor = BirdDuelUiColors.BtnSecondaryP;
+        }
+
+        cb.selectedColor = cb.highlightedColor;
+        cb.disabledColor = BirdDuelUiColors.BtnDisabledBg;
+        btn.colors = cb;
+
+        TextMeshProUGUI tmp = btn.GetComponentInChildren<TextMeshProUGUI>(true);
+        if (tmp != null)
+            tmp.color = primary ? BirdDuelUiColors.BtnPrimaryText : BirdDuelUiColors.BtnSecondaryText;
     }
 
     private static void StretchFull(RectTransform rt, float pad = 0f)

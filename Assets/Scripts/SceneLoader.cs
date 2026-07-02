@@ -51,6 +51,12 @@ public partial class SceneLoader : MonoBehaviour
             return;
         }
 
+        if (FreeBattleViewSession.TryGetPendingAiStyle(out EnemyAiPlayStyle freeBattleAiStyle))
+        {
+            OpenFreeBattlePreview(freeBattleAiStyle);
+            return;
+        }
+
         ShowBattlePreviewModal();
     }
 
@@ -80,6 +86,8 @@ public partial class SceneLoader : MonoBehaviour
             return;
         }
 
+        DeckPackViewSession.Clear();
+        FreeBattleViewSession.Clear();
         SceneManager.LoadScene(persistentSceneName);
     }
 

@@ -112,6 +112,7 @@ public static class BuildbeckLayoutAutoBinder
         if (!scene.IsValid() || !scene.name.Equals(SceneName, System.StringComparison.OrdinalIgnoreCase))
             return;
         TryWireDeckManagerForScene(scene);
+        ShowFreeBattleEntryHintIfNeeded();
     }
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -123,6 +124,14 @@ public static class BuildbeckLayoutAutoBinder
             return;
 
         TryWireDeckManagerForScene(active);
+        ShowFreeBattleEntryHintIfNeeded();
+    }
+
+    private static void ShowFreeBattleEntryHintIfNeeded()
+    {
+        string toast = FreeBattleViewSession.GetBuildbeckEntryToast();
+        if (!string.IsNullOrWhiteSpace(toast))
+            SceneToast.Show(toast, 3.5f);
     }
 
     private static void TryWireDeckManagerForScene(Scene scene)
@@ -260,13 +269,30 @@ public static class BuildbeckLayoutAutoBinder
             return;
 
         Button ready = FindFirstButtonByNames(active, ReadyBattleButtonNames);
-        if (ready == null) return;
 
         SceneLoader loader = cachedSceneLoader;
         if (loader == null || loader.gameObject == null)
             loader = Object.FindFirstObjectByType<SceneLoader>();
         cachedSceneLoader = loader;
+
+        if (DeckPackViewSession.HideReadyBattleButtonInBuildbeck)
+        {
+            if (ready != null)
+            {
+                if (loader != null)
+                    ready.onClick.RemoveListener(loader.EnterBattle);
+                ready.gameObject.SetActive(false);
+            }
+
+            if (loader != null)
+                loader.enterBattleButton = null;
+            return;
+        }
+
+        if (ready == null) return;
         if (loader == null) return;
+
+        ready.gameObject.SetActive(true);
 
         UnityEngine.Events.UnityAction enter = loader.EnterBattle;
         ready.onClick.RemoveListener(enter);

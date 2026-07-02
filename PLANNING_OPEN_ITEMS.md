@@ -149,6 +149,8 @@
 | FLOW-001 | P1 | **登入後第一站** | `TUTORIAL_PLOT_SCRIPT`：教學完成→hall；未完成→Story progress | 是否寫入 `LEVEL_DESIGN_GDD` 或獨立「新手導流」小節 |
 | FLOW-002 | P2 | **「前往大廳」** | Story progress 有按鈕 | 大廳與 1-1 推進關係、是否必經 |
 | FLOW-003 | P2 | **返回目標** | 劇本寫回 hall；Story progress 返回行為未在關卡 GDD | 統一各場景返回堆疊 |
+| FLOW-004 | P2 | **hall 牌組入口** | **已實作 2026-07-03**：`牌組` → `Deck Pack`（查看／編輯分流） | 詳見 `ARCHITECTURE_OVERVIEW` · `DECK_SAVE_IMPLEMENTATION` §17 |
+| FLOW-005 | P2 | **自由對戰 GDD** | 程式已實作三 AI + 70% 鬥鳥暖身；尚無獨立關卡 GDD | 是否寫入 `GAMEPLAY_AND_RULES` 或獨立小節 |
 
 ---
 

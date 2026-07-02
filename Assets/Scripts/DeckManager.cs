@@ -560,10 +560,14 @@ public partial class DeckManager : MonoBehaviour, ICardInspectPanelHost
             BuildbeckLayoutAutoBinder.InvalidateAndRewire(this);
 
             PlayerData pd = PlayerData.ResolveCanonical();
+            int pendingBuildbeckSlot = -1;
+            bool preserveBuildbeckSlot = DeckPackViewSession.TryGetPendingBuildbeckDeckSlot(out pendingBuildbeckSlot);
             if (pd != null)
             {
                 pd.EnsureMinimumDeckSlotCount();
                 pd.LoadPlayerData();
+                if (preserveBuildbeckSlot && pendingBuildbeckSlot >= 0)
+                    pd.SetSelectedDeckSlot(pendingBuildbeckSlot);
             }
 
             EnsureDeckUIRefs();
@@ -596,6 +600,28 @@ public partial class DeckManager : MonoBehaviour, ICardInspectPanelHost
         {
             _sceneBuildbeckReloadCo = null;
         }
+
+        ApplyDeckPackBuildbeckFocusIfNeeded();
+    }
+
+    private void ApplyDeckPackBuildbeckFocusIfNeeded()
+    {
+        if (!DeckPackViewSession.TryGetPendingBuildbeckDeckSlot(out int slot))
+        {
+            DeckPackViewSession.ClearBuildbeckDeckFocus();
+            return;
+        }
+
+        EnsureCoreRefs();
+        if (PlayerData == null)
+        {
+            DeckPackViewSession.ClearBuildbeckDeckFocus();
+            return;
+        }
+
+        deckSlotSelectorExpanded = true;
+        SelectDeckSlot(slot);
+        DeckPackViewSession.ClearBuildbeckDeckFocus();
     }
 
     private static bool IsBuildbeckSceneActive()
@@ -753,7 +779,17 @@ public partial class DeckManager : MonoBehaviour, ICardInspectPanelHost
         }
 
         EnsureMinimumDeckSlotCount();
-        AutoSelectFirstNonEmptyDeckSlotIfNeeded();
+        if (DeckPackViewSession.ShouldPreserveSelectedDeckSlotInBuildbeck
+            && DeckPackViewSession.TryGetPendingBuildbeckDeckSlot(out int pendingBuildbeckSlot))
+        {
+            EnsureCoreRefs();
+            if (PlayerData != null)
+                PlayerData.SetSelectedDeckSlot(pendingBuildbeckSlot);
+        }
+        else
+        {
+            AutoSelectFirstNonEmptyDeckSlotIfNeeded();
+        }
 
         EnsureDeckUIRefs();
         ApplyNewLayoutRuntimeDefaults();
@@ -787,6 +823,9 @@ public partial class DeckManager : MonoBehaviour, ICardInspectPanelHost
 
     private void AutoSelectFirstNonEmptyDeckSlotIfNeeded()
     {
+        if (DeckPackViewSession.ShouldPreserveSelectedDeckSlotInBuildbeck)
+            return;
+
         EnsureCoreRefs();
         if (PlayerData == null) return;
         if (PlayerData.deckSlotCount <= 1) return;
@@ -1630,7 +1669,7 @@ public partial class DeckManager : MonoBehaviour, ICardInspectPanelHost
         }
 
         int countForId = state == CardState.Library
-            ? PlayerData.GetCollectionCount(id)
+            ? DeckPackViewSession.ResolveLibraryDisplayCount(PlayerData, id)
             : PlayerData.GetSelectedDeckCount(id);
         if (countForId <= 0)
         {
@@ -2179,7 +2218,7 @@ public partial class DeckManager : MonoBehaviour, ICardInspectPanelHost
         for (int i = 0; i < buttons.Length; i++)
         {
             Button btn = buttons[i];
-            if (btn == null) continue;
+            if (btn == null || !btn.gameObject.activeInHierarchy) continue;
 
             TMP_Text tmp = btn.GetComponentInChildren<TMP_Text>(true);
             if (tmp != null && (tmp.text.Contains("GO") || tmp.text.Contains("進入對戰") ||
@@ -2623,7 +2662,7 @@ public partial class DeckManager : MonoBehaviour, ICardInspectPanelHost
     public int GetLibraryCardCount(int id)
     {
         if (PlayerData == null) return 0;
-        return PlayerData.GetCollectionCount(id);
+        return DeckPackViewSession.ResolveLibraryDisplayCount(PlayerData, id);
     }
 
     private int GetDeckTotalCount()
@@ -4267,6 +4306,19 @@ public partial class DeckManager : MonoBehaviour, ICardInspectPanelHost
     public void BackpackInspectFillCollectionIds(List<int> ids)
     {
         if (ids == null || PlayerData == null) return;
+
+        if (DeckPackViewSession.RestrictBackpackToSelectedDeck)
+        {
+            int slot = Mathf.Clamp(PlayerData.selectedDeckSlot, 0, PlayerData.deckSlotCount - 1);
+            foreach (var kv in PlayerData.GetDeckMap(slot))
+            {
+                if (kv.Value <= 0) continue;
+                if (CardStore != null && CardStore.GetCardById(kv.Key) == null) continue;
+                ids.Add(kv.Key);
+            }
+            return;
+        }
+
         foreach (var kv in PlayerData.playerCollection)
         {
             if (kv.Value <= 0) continue;
@@ -4276,7 +4328,7 @@ public partial class DeckManager : MonoBehaviour, ICardInspectPanelHost
     }
 
     public int BackpackInspectCollectionCount(int cardId) =>
-        PlayerData != null ? PlayerData.GetCollectionCount(cardId) : 0;
+        DeckPackViewSession.ResolveLibraryDisplayCount(PlayerData, cardId);
 
     internal int BackpackInspectDeckCount(int cardId) =>
         PlayerData != null ? PlayerData.GetSelectedDeckCount(cardId) : 0;
@@ -4284,10 +4336,21 @@ public partial class DeckManager : MonoBehaviour, ICardInspectPanelHost
     public string BackpackInspectDeckInclusionText(int cardId)
     {
         if (PlayerData == null) return "尚未加入牌組";
+
+        if (DeckPackViewSession.RestrictBackpackToSelectedDeck)
+        {
+            int slot = Mathf.Clamp(PlayerData.selectedDeckSlot, 0, PlayerData.deckSlotCount - 1);
+            int deckCount = PlayerData.GetDeckCount(slot, cardId);
+            if (deckCount <= 0) return "不在此牌組";
+            string deckName = PlayerData.GetDeckSlotDisplayName(slot);
+            if (string.IsNullOrWhiteSpace(deckName)) deckName = "牌組";
+            return $"本牌組內 {deckCount} 張 · {deckName.Trim()}";
+        }
+
         if (PlayerData.GetSelectedDeckCount(cardId) <= 0) return "尚未加入目前牌組";
-        string deckName = PlayerData.GetDeckSlotDisplayName(PlayerData.selectedDeckSlot);
-        if (string.IsNullOrWhiteSpace(deckName)) deckName = "牌組";
-        return $"已含在牌組 {deckName.Trim()}";
+        string selectedDeckName = PlayerData.GetDeckSlotDisplayName(PlayerData.selectedDeckSlot);
+        if (string.IsNullOrWhiteSpace(selectedDeckName)) selectedDeckName = "牌組";
+        return $"已含在牌組 {selectedDeckName.Trim()}";
     }
 
     public void EnsureCoreRefsForInspect() => EnsureCoreRefs();

@@ -18,7 +18,8 @@ public sealed partial class FightingBirdGameSceneController
 
         // 標題與說明。
         CreateText("Title", root, "鬥鳥暖身賽", 64f, TextAlignmentOptions.Center,
-            new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -70f), new Vector2(900f, 84f), Color.white);
+            new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -70f), new Vector2(900f, 84f),
+            BirdDuelUiColors.WonderBadge);
         subtitleText = CreateText("Subtitle", root,
             DefaultSubtitle(), 30f, TextAlignmentOptions.Center,
             new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -140f), new Vector2(1400f, 44f),
@@ -93,7 +94,7 @@ public sealed partial class FightingBirdGameSceneController
     {
         opponentName = CreateText("OpponentName", root, npc.displayName, 34f, TextAlignmentOptions.Center,
             new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -210f), new Vector2(600f, 44f),
-            new Color(0.95f, 0.86f, 0.62f, 1f));
+            BirdDuelUiColors.OpponentName);
 
         opponentPad = CreateImage("OpponentPad", root,
             new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), Vector2.zero, Vector2.zero, ColorIdle, false);
@@ -217,7 +218,7 @@ public sealed partial class FightingBirdGameSceneController
     private void BuildResultPanel(Transform overlayRoot)
     {
         resultOverlayRoot = CreateImage("ResultOverlay", overlayRoot,
-            Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero, new Color(0f, 0f, 0f, 0.78f), true).gameObject;
+            Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero, BirdDuelUiColors.Dim, true).gameObject;
 
         resultPanel = CreateImage("ResultPanel", resultOverlayRoot.transform,
             new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero, ColorPanel, true).gameObject;
@@ -225,10 +226,11 @@ public sealed partial class FightingBirdGameSceneController
         panelRt.sizeDelta = new Vector2(1100f, 620f);
 
         resultTitle = CreateText("ResultTitle", resultPanel.transform, "", 64f, TextAlignmentOptions.Center,
-            new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -70f), new Vector2(1000f, 84f), Color.white);
+            new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -70f), new Vector2(1000f, 84f),
+            BirdDuelUiColors.WonderBadge);
         resultLine = CreateText("ResultLine", resultPanel.transform, "", 34f, TextAlignmentOptions.Center,
             new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -190f), new Vector2(980f, 120f),
-            new Color(0.86f, 0.9f, 0.96f, 1f));
+            BirdDuelUiColors.ResultLine);
         resultLine.enableWordWrapping = true;
         resultIntel = CreateText("ResultIntel", resultPanel.transform, "", 36f, TextAlignmentOptions.Center,
             new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -330f), new Vector2(980f, 140f),
@@ -238,7 +240,7 @@ public sealed partial class FightingBirdGameSceneController
         // 再練一次。
         Image replay = CreateImage("ReplayBtn", resultPanel.transform,
             new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), Vector2.zero, Vector2.zero, ColorWing, true);
-        replay.rectTransform.sizeDelta = new Vector2(320f, 96f);
+        replay.rectTransform.sizeDelta = new Vector2(320f, 112f);
         replay.rectTransform.anchoredPosition = new Vector2(-190f, 80f);
         Button replayBtn = replay.gameObject.AddComponent<Button>();
         replayBtn.targetGraphic = replay;
@@ -250,7 +252,7 @@ public sealed partial class FightingBirdGameSceneController
         // 進入對戰／返回 hall。
         Image leave = CreateImage("LeaveBtn", resultPanel.transform,
             new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), Vector2.zero, Vector2.zero, ColorScoreFill, true);
-        leave.rectTransform.sizeDelta = new Vector2(320f, 96f);
+        leave.rectTransform.sizeDelta = new Vector2(320f, 112f);
         leave.rectTransform.anchoredPosition = new Vector2(190f, 80f);
         Button leaveBtn = leave.gameObject.AddComponent<Button>();
         leaveBtn.targetGraphic = leave;

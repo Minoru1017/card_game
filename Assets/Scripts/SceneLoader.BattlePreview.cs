@@ -237,7 +237,7 @@ public partial class SceneLoader
     private int[] pendingFixedEnemyDeckCardIds;
     private int pendingEnemyOverLimitAllowance;
     private int pendingMinEnemySpellsInDeck;
-    private EnemyAiPlayStyle pendingEnemyAiPlayStyle = EnemyAiPlayStyle.Greedy;
+    private EnemyAiPlayStyle pendingEnemyAiPlayStyle = EnemyAiPlayStyle.Balanced;
     private string pendingDifficultyLabelZh = BattleDifficultyRuntime.DefaultLabelZh;
     private void ShowBattlePreviewModal()
     {
@@ -267,6 +267,7 @@ public partial class SceneLoader
         }
 
         battlePreviewHarborTrainingMode = false;
+        battlePreviewFreeBattleMode = false;
         if (battlePreviewOverlayRoot != null)
             battlePreviewOverlayRoot.SetActive(false);
     }
@@ -288,9 +289,17 @@ public partial class SceneLoader
         // roguelike 分支：先詢問「挑戰鬥鳥／直接進入對戰」。挑戰鬥鳥才會走暖身賽並依表現拿加成。
         // 讀取旗標需早於對話框流程（LaunchBirdDuelThenBattle / 直接進入 內部會 HideBattlePreviewModal 重置港灣旗標）。
         bool harbor = battlePreviewHarborTrainingMode;
+        bool freeBattle = battlePreviewFreeBattleMode;
         BattleDifficultyTier selected = selectedDifficultyTier;
-        // 標準戰前提供隱藏難度（魔王級），鬥鳥勝出可選擇挑戰；港灣訓練場無隱藏難度。
-        bool hasHidden = !harbor;
+        // 標準戰前提供隱藏難度（魔王級），鬥鳥勝出可選擇挑戰；港灣訓練場與自由對戰無隱藏難度。
+        bool hasHidden = !harbor && !freeBattle;
+
+        if (freeBattle)
+        {
+            EnemyAiPlayStyle aiStyle = battlePreviewFreeBattleAiStyle;
+            TryBeginFreeBattleRandomBirdDuelEvent(aiStyle, selected);
+            return;
+        }
 
         if (harbor)
         {
@@ -302,18 +311,8 @@ public partial class SceneLoader
         ShowBirdDuelEntryChoice(harbor, selected, hasHidden, BattleDifficultyTier.Boss);
     }
 
-    private static EnemyAiPlayStyle MapDifficultyToEnemyAiPlayStyle(BattleDifficultyTier tier)
-    {
-        switch (tier)
-        {
-            case BattleDifficultyTier.Intro: return EnemyAiPlayStyle.IntroGreedy;
-            case BattleDifficultyTier.Easy: return EnemyAiPlayStyle.EasySpellLean;
-            case BattleDifficultyTier.Normal: return EnemyAiPlayStyle.Greedy;
-            case BattleDifficultyTier.Hard: return EnemyAiPlayStyle.SchemingHard;
-            case BattleDifficultyTier.Boss: return EnemyAiPlayStyle.SchemingBoss;
-            default: return EnemyAiPlayStyle.Greedy;
-        }
-    }
+    private static EnemyAiPlayStyle MapDifficultyToEnemyAiPlayStyle(BattleDifficultyTier tier) =>
+        EnemyAiPlayStyleCatalog.MapDifficultyToStyle(tier);
 
     private void OnBattlePreviewGiveUpClicked()
     {
@@ -622,7 +621,7 @@ public partial class SceneLoader
                 battlePreviewActivePuzzleId = BattlePreviewPuzzleIndex.RollRandomPreviewPuzzleId();
             diffRailObj.SetActive(false);
             CreateAuthoredPuzzleDifficultyButtons(panelObj.transform, layoutSx, layoutSy);
-            if (!battlePreviewHarborTrainingMode)
+            if (!battlePreviewHarborTrainingMode && !battlePreviewFreeBattleMode)
                 CreateAuthoredBossTierReveal(panelObj.transform, layoutSx, layoutSy);
         }
         else
@@ -740,6 +739,7 @@ public partial class SceneLoader
         battlePreviewDifficultyButtonTiers.Clear();
         battlePreviewUsesAuthoredPuzzleLayout = false;
         battlePreviewHarborTrainingMode = false;
+        battlePreviewFreeBattleMode = false;
         battlePreviewBossRevealRoot = null;
         battlePreviewBossTierButton = null;
         battlePreviewIntelButton = null;
@@ -1385,7 +1385,9 @@ public partial class SceneLoader
         EnsureCardStoreLoadedForPreview();
 
         BattleDifficultyConfig cfg = BuildDifficultyConfig(selectedDifficultyTier);
-        EnemyAiPlayStyle aiStyle = MapDifficultyToEnemyAiPlayStyle(selectedDifficultyTier);
+        EnemyAiPlayStyle aiStyle = battlePreviewFreeBattleMode
+            ? battlePreviewFreeBattleAiStyle
+            : MapDifficultyToEnemyAiPlayStyle(selectedDifficultyTier);
         int playerDeckCount = playerData != null ? Mathf.Max(1, playerData.GetSelectedDeckTotalCount()) : 20;
         List<int> predictedDeck = BuildPredictedEnemyDeckKeys(playerDeckCount, cfg);
 
@@ -1478,43 +1480,11 @@ public partial class SceneLoader
         return counts;
     }
 
-    private static string GetEnemyAiOneLinerZh(EnemyAiPlayStyle style)
-    {
-        switch (style)
-        {
-            case EnemyAiPlayStyle.IntroGreedy:
-                return "優先出怪, 法術較少";
-            case EnemyAiPlayStyle.EasySpellLean:
-                return "略偏法術, 即時出牌";
-            case EnemyAiPlayStyle.FastAttack:
-                return "快攻型, 早出怪壓迫";
-            case EnemyAiPlayStyle.SchemingHard:
-                return "保留高稀有卡, 待時機出牌";
-            case EnemyAiPlayStyle.SchemingBoss:
-                return "積極囤牌, 高稀有卡更晚出手";
-            default:
-                return "有牌可出即依優先度打出";
-        }
-    }
+    private static string GetEnemyAiOneLinerZh(EnemyAiPlayStyle style) =>
+        EnemyAiPlayStyleCatalog.GetOneLinerZh(style);
 
-    private static string GetEnemyAiBriefZh(EnemyAiPlayStyle style)
-    {
-        switch (style)
-        {
-            case EnemyAiPlayStyle.IntroGreedy:
-                return "入門 AI: 以 Greedy 為基礎, 降低法術出牌評分, 較常先上場怪物.";
-            case EnemyAiPlayStyle.EasySpellLean:
-                return "簡單 AI: 以 Greedy 為基礎, 提高法術出牌評分, 較常施放法術.";
-            case EnemyAiPlayStyle.FastAttack:
-                return "快攻 AI: 以 Greedy 為基礎, 強烈優先出場怪與直傷法術, 壓迫玩家血線.";
-            case EnemyAiPlayStyle.SchemingHard:
-                return "困難 AI: 傾向保留 SR 以上卡牌, 在場面有利或需要斬殺時才打出.";
-            case EnemyAiPlayStyle.SchemingBoss:
-                return "魔王 AI: 傾向保留 R 以上卡牌, 囤牌條件比困難更嚴, 回合壓力更大.";
-            default:
-                return "普通 AI: 每回合在可出牌中選評分最高者立即打出.";
-        }
-    }
+    private static string GetEnemyAiBriefZh(EnemyAiPlayStyle style) =>
+        EnemyAiPlayStyleCatalog.GetBriefZh(style);
 
     private static int CountSpellCards(List<int> keys)
     {
@@ -1651,6 +1621,32 @@ public partial class SceneLoader
             return;
         }
 
+        if (battlePreviewFreeBattleMode)
+        {
+            EnemyAiPlayStyle style = battlePreviewFreeBattleAiStyle;
+            battlePreviewAuthoredHeaderText.text = SafePreviewText(FreeBattleBattleCopy.PreviewHeaderRich);
+            if (battlePreviewAuthoredLeftTitleText != null)
+                battlePreviewAuthoredLeftTitleText.text = SafePreviewText(FreeBattleBattleCopy.PreviewLeftTitleRich);
+            if (battlePreviewAuthoredLeftDetailText != null)
+                battlePreviewAuthoredLeftDetailText.text = SafePreviewText(FreeBattleBattleCopy.GetPreviewLeftDetailRich(style));
+            if (battlePreviewAuthoredRightTitleText != null)
+                battlePreviewAuthoredRightTitleText.text = SafePreviewText(FreeBattleBattleCopy.PreviewRightTitleRich);
+            if (battlePreviewAuthoredRightDetailText != null)
+                battlePreviewAuthoredRightDetailText.text = SafePreviewText(FreeBattleBattleCopy.GetPreviewRightDetailRich(style));
+            if (battlePreviewAuthoredPuzzleTitleText != null)
+                battlePreviewAuthoredPuzzleTitleText.text = SafePreviewText(FreeBattleBattleCopy.GetPreviewGoalRich(style));
+            if (battlePreviewAuthoredPuzzleHintText != null)
+            {
+                BattleDifficultyConfig cfg = BuildDifficultyConfig(selectedDifficultyTier);
+                battlePreviewAuthoredPuzzleHintText.text = SafePreviewText(
+                    "<color=#43573A>目前選擇 " + cfg.LabelZh + " · " + EnemyAiPlayStyleCatalog.GetOneLinerZh(style) + "</color>");
+            }
+
+            if (battlePreviewGaugesPanelObj != null && !battlePreviewDetailVisible)
+                battlePreviewGaugesPanelObj.SetActive(false);
+            return;
+        }
+
         battlePreviewAuthoredHeaderText.text = SafePreviewText(BattlePreviewPuzzleIndex.HeaderSelectDifficultyRich);
         if (battlePreviewAuthoredLeftTitleText != null)
             battlePreviewAuthoredLeftTitleText.text = SafePreviewText("<b>" + BattlePreviewPuzzleIndex.LeftColumnTitle + "</b>");
@@ -1702,7 +1698,7 @@ public partial class SceneLoader
         if (!battlePreviewUsesAuthoredPuzzleLayout)
             return;
 
-        if (battlePreviewHarborTrainingMode)
+        if (battlePreviewHarborTrainingMode || battlePreviewFreeBattleMode)
         {
             SetAuthoredArchButtonsVisible(!battlePreviewDetailVisible);
             if (battlePreviewBossRevealRoot != null)
@@ -1753,7 +1749,7 @@ public partial class SceneLoader
         if (battlePreviewBossUnlockAnimating)
             return;
 
-        if (battlePreviewHarborTrainingMode)
+        if (battlePreviewHarborTrainingMode || battlePreviewFreeBattleMode)
         {
             selectedDifficultyTier = tier;
             battlePreviewFeedbackDifficultyTier = tier;

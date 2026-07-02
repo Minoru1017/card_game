@@ -54,7 +54,10 @@ public partial class BattleSimulationManager : MonoBehaviour
     public struct AttackVisualData
     {
         public bool attackerIsPlayer;
+        /// <summary>攻擊目標為對方場上怪獸（非直擊英雄）。</summary>
         public bool hasMonsterTarget;
+        /// <summary>場上怪獸直擊對方英雄（空場直擊）。</summary>
+        public bool targetsHero;
         public int attackerDamage;
         public bool counterTriggered;
         public int counterDamage;
@@ -185,7 +188,8 @@ public partial class BattleSimulationManager : MonoBehaviour
     private int[] runtimeFixedEnemyDeckCardIds;
     private int runtimeEnemyOverLimitAllowance;
     private int runtimeMinEnemySpellsInDeck;
-    private EnemyAiPlayStyle runtimeEnemyAiPlayStyle = EnemyAiPlayStyle.Greedy;
+    private EnemyAiPlayStyle runtimeEnemyAiPlayStyle = EnemyAiPlayStyle.Balanced;
+    private bool runtimeDefensiveAiStrict;
     private string runtimeDifficultyLabelZh;
     private bool runtimeDifficultyLabelExplicit;
     private bool lastBattleEndedBySurrender;
@@ -216,10 +220,13 @@ public partial class BattleSimulationManager : MonoBehaviour
     {
         if (runtimeDifficultyLabelExplicit && !string.IsNullOrWhiteSpace(runtimeDifficultyLabelZh))
             return runtimeDifficultyLabelZh.Trim();
-        if (runtimeEnemyAiPlayStyle == EnemyAiPlayStyle.SchemingBoss)
-            return "魔王";
-        if (runtimeEnemyAiPlayStyle == EnemyAiPlayStyle.SchemingHard)
-            return "困難";
+        if (runtimeEnemyAiPlayStyle == EnemyAiPlayStyle.Defensive)
+        {
+            if (runtimeDefensiveAiStrict || EnemyAiPlayStyleCatalog.IsDefensiveStrictLabel(runtimeDifficultyLabelZh))
+                return "魔王";
+            if (EnemyAiPlayStyleCatalog.IsDefensiveHardLabel(runtimeDifficultyLabelZh))
+                return "困難";
+        }
         string pending = BattleLaunchContext.PeekDifficultyLabelZh();
         if (!string.IsNullOrWhiteSpace(pending))
             return pending.Trim();
@@ -257,6 +264,12 @@ public partial class BattleSimulationManager : MonoBehaviour
             return;
         }
 
+        if (BattleLaunchContext.IsFreeBattle)
+        {
+            SceneLoader.ApplyFreeBattleRuntimeConfigToManager(this);
+            return;
+        }
+
         if (BattleLaunchContext.IsM12CoachPracticeBattle)
         {
             SceneLoader.ApplyM12RuntimeConfigToManager(this);
@@ -274,39 +287,48 @@ public partial class BattleSimulationManager : MonoBehaviour
             label = BattleDifficultyRuntime.CurrentLabelZh;
         label = string.IsNullOrWhiteSpace(label) ? BattleDifficultyRuntime.DefaultLabelZh : label.Trim();
 
-        EnemyAiPlayStyle style = EnemyAiPlayStyle.Greedy;
+        EnemyAiPlayStyle style = EnemyAiPlayStyle.Balanced;
+        bool defensiveStrict = false;
         if (label.StartsWith("魔王", System.StringComparison.Ordinal) ||
             string.Equals(label, "Boss", System.StringComparison.OrdinalIgnoreCase) ||
             string.Equals(label, "BOSS", System.StringComparison.Ordinal))
-            style = EnemyAiPlayStyle.SchemingBoss;
+        {
+            style = EnemyAiPlayStyle.Defensive;
+            defensiveStrict = true;
+        }
         else if (label.StartsWith("困難", System.StringComparison.Ordinal) ||
                  string.Equals(label, "Hard", System.StringComparison.OrdinalIgnoreCase))
-            style = EnemyAiPlayStyle.SchemingHard;
+        {
+            style = EnemyAiPlayStyle.Defensive;
+            defensiveStrict = false;
+        }
 
-        if (style == EnemyAiPlayStyle.Greedy && runtimeEnemyAiPlayStyle != EnemyAiPlayStyle.Greedy)
+        if (style == EnemyAiPlayStyle.Balanced && runtimeEnemyAiPlayStyle != EnemyAiPlayStyle.Balanced)
             return;
 
-        if (style == EnemyAiPlayStyle.SchemingBoss)
+        if (style == EnemyAiPlayStyle.Defensive && defensiveStrict)
         {
             QueueRuntimeDifficultyConfig(
                 true,
                 BossFixedEnemyDeckCardIds,
                 enemyOverLimitAllowance > 0 ? enemyOverLimitAllowance : 12,
                 minEnemySpellsInDeck > 0 ? minEnemySpellsInDeck : 4,
-                EnemyAiPlayStyle.SchemingBoss,
-                "魔王");
+                EnemyAiPlayStyle.Defensive,
+                "魔王",
+                defensiveStrict: true);
             return;
         }
 
-        if (style == EnemyAiPlayStyle.SchemingHard)
+        if (style == EnemyAiPlayStyle.Defensive)
         {
             QueueRuntimeDifficultyConfig(
                 useFixedEnemyDeck,
                 fixedEnemyDeckCardIds,
                 enemyOverLimitAllowance > 0 ? enemyOverLimitAllowance : 8,
                 minEnemySpellsInDeck > 0 ? minEnemySpellsInDeck : 3,
-                EnemyAiPlayStyle.SchemingHard,
-                "困難");
+                EnemyAiPlayStyle.Defensive,
+                "困難",
+                defensiveStrict: false);
         }
     }
 
@@ -357,7 +379,7 @@ public partial class BattleSimulationManager : MonoBehaviour
         if (BattleLaunchContext.IsM12TrioTutorialBattle)
             return false;
 
-        return runtimeEnemyAiPlayStyle != EnemyAiPlayStyle.IntroGreedy;
+        return true;
     }
 
     private void ResetWeatherStateToInactive()
@@ -1944,6 +1966,7 @@ public partial class BattleSimulationManager : MonoBehaviour
             {
                 attackerIsPlayer = true,
                 hasMonsterTarget = false,
+                targetsHero = true,
                 attackerDamage = directDmg,
                 counterTriggered = false,
                 counterDamage = 0
@@ -2181,6 +2204,7 @@ public partial class BattleSimulationManager : MonoBehaviour
             {
                 attackerIsPlayer = false,
                 hasMonsterTarget = false,
+                targetsHero = true,
                 attackerDamage = directDmg,
                 counterTriggered = false,
                 counterDamage = 0
@@ -2712,7 +2736,7 @@ public partial class BattleSimulationManager : MonoBehaviour
         GetPlayerSavedDeckMaxStats(out playerMaxAttack, out playerMaxHealth);
         if (useFixedEnemyDeck && fixedEnemyDeckCardIds != null && fixedEnemyDeckCardIds.Length > 0)
         {
-            int[] deckIdsForBuild = runtimeEnemyAiPlayStyle == EnemyAiPlayStyle.SchemingBoss
+            int[] deckIdsForBuild = runtimeEnemyAiPlayStyle == EnemyAiPlayStyle.Defensive && runtimeDefensiveAiStrict
                 ? BossFixedEnemyDeckCardIds
                 : fixedEnemyDeckCardIds;
             List<Card> fixedPool = new List<Card>();
@@ -2790,8 +2814,9 @@ public partial class BattleSimulationManager : MonoBehaviour
         int[] fixedDeckIds,
         int overLimitAllowance,
         int minSpells,
-        EnemyAiPlayStyle aiPlayStyle = EnemyAiPlayStyle.Greedy,
-        string difficultyLabelZh = null)
+        EnemyAiPlayStyle aiPlayStyle = EnemyAiPlayStyle.Balanced,
+        string difficultyLabelZh = null,
+        bool? defensiveStrict = null)
     {
         runtimeUseFixedEnemyDeck = useFixed;
         runtimeFixedEnemyDeckCardIds = fixedDeckIds != null ? (int[])fixedDeckIds.Clone() : null;
@@ -2799,6 +2824,9 @@ public partial class BattleSimulationManager : MonoBehaviour
         runtimeMinEnemySpellsInDeck = minSpells;
         runtimeEnemyAiPlayStyle = aiPlayStyle;
         runtimeDifficultyLabelZh = ResolveDifficultyLabelZh(difficultyLabelZh, aiPlayStyle);
+        runtimeDefensiveAiStrict = defensiveStrict ??
+            (aiPlayStyle == EnemyAiPlayStyle.Defensive &&
+             EnemyAiPlayStyleCatalog.IsDefensiveStrictLabel(runtimeDifficultyLabelZh));
         runtimeDifficultyLabelExplicit = true;
         BattleDifficultyRuntime.SetCurrentLabelZh(runtimeDifficultyLabelZh);
         BattleLaunchContext.SetPendingDifficultyLabelZh(runtimeDifficultyLabelZh);
@@ -2812,9 +2840,12 @@ public partial class BattleSimulationManager : MonoBehaviour
             return difficultyLabelZh.Trim();
         switch (aiPlayStyle)
         {
-            case EnemyAiPlayStyle.SchemingBoss: return "魔王";
-            case EnemyAiPlayStyle.SchemingHard: return "困難";
-            default: return BattleDifficultyRuntime.CurrentLabelZh;
+            case EnemyAiPlayStyle.FastAttack:
+                return "快攻";
+            case EnemyAiPlayStyle.Defensive:
+                return BattleDifficultyRuntime.CurrentLabelZh;
+            default:
+                return BattleDifficultyRuntime.CurrentLabelZh;
         }
     }
 
@@ -3124,7 +3155,7 @@ public partial class BattleSimulationManager : MonoBehaviour
             int baseMonster = m.attack * 2 + m.healthPointMax + rarityBonus;
             int withSkills = ApplyEnemyReligiousLineSkillPlayBonus(baseMonster, card);
             withSkills = ApplyEnemyStarterTrioSkillPlayBonus(withSkills, card);
-            return ApplyIntroEasyPriorityTweak(withSkills, card);
+            return ApplyEnemyAiStylePriorityTweak(withSkills, card);
         }
         if (card is SpellCard sp)
         {
@@ -3136,9 +3167,9 @@ public partial class BattleSimulationManager : MonoBehaviour
             if (sp.SpellOrdinal == 0 && IsOpeningRoundFireballBlocked()) spellValue = int.MinValue / 4;
             int withSkills = ApplyEnemyReligiousLineSkillPlayBonus(spellValue + rarityBonus, card);
             withSkills = ApplyEnemyStarterTrioSkillPlayBonus(withSkills, card);
-            return ApplyIntroEasyPriorityTweak(withSkills, card);
+            return ApplyEnemyAiStylePriorityTweak(withSkills, card);
         }
-        return ApplyIntroEasyPriorityTweak(rarityBonus, card);
+        return ApplyEnemyAiStylePriorityTweak(rarityBonus, card);
     }
 
     /// <summary>國王／王后／民兵（御三家）戰技：調整敵方出牌優先度。</summary>
@@ -3337,10 +3368,12 @@ public partial class BattleSimulationManager : MonoBehaviour
         return chosen;
     }
 
-    private int ApplyIntroEasyPriorityTweak(int basePriority, Card card)
+    private int ApplyEnemyAiStylePriorityTweak(int basePriority, Card card)
     {
         if (card == null) return basePriority;
-        if (runtimeEnemyAiPlayStyle == EnemyAiPlayStyle.IntroGreedy)
+
+        if (runtimeEnemyAiPlayStyle == EnemyAiPlayStyle.Balanced &&
+            (BattleLaunchContext.IsIntroTutorialBattle || BattleLaunchContext.IsM12TrioTutorialBattle))
         {
             if (card is SpellCard)
                 return basePriority - 26;
@@ -3366,8 +3399,19 @@ public partial class BattleSimulationManager : MonoBehaviour
             }
         }
 
-        if (runtimeEnemyAiPlayStyle == EnemyAiPlayStyle.EasySpellLean && card is SpellCard)
-            return basePriority + 12;
+        if (runtimeEnemyAiPlayStyle == EnemyAiPlayStyle.Defensive)
+        {
+            if (card is SpellCard sp)
+            {
+                if (sp.SpellOrdinal == 0)
+                    return basePriority + 10;
+                return basePriority - 4;
+            }
+
+            if (card is MonsterCard)
+                return basePriority - 6;
+        }
+
         return basePriority;
     }
 
@@ -3437,46 +3481,45 @@ public partial class BattleSimulationManager : MonoBehaviour
         CompleteBattle(1, "教學戰限時：第 " + IntroTutorialBattleRules.MaxRoundsInclusive + " 回合結束，判定我方獲勝。");
     }
 
-    private bool UsesSchemingEnemyAi =>
-        runtimeEnemyAiPlayStyle == EnemyAiPlayStyle.SchemingHard ||
-        runtimeEnemyAiPlayStyle == EnemyAiPlayStyle.SchemingBoss;
+    private bool UsesDefensiveEnemyAi =>
+        runtimeEnemyAiPlayStyle == EnemyAiPlayStyle.Defensive;
 
     private int GetEnemyPlayRarityBonus(CardRarity rarity)
     {
         int bonus = CardRarityUtility.GetPlayAndKeepBonus(rarity);
-        if (runtimeEnemyAiPlayStyle == EnemyAiPlayStyle.SchemingBoss)
+        if (runtimeEnemyAiPlayStyle == EnemyAiPlayStyle.Defensive && runtimeDefensiveAiStrict)
             bonus = Mathf.RoundToInt(bonus * 1.35f);
         return bonus;
     }
 
-    private int GetSchemingMaxHoldStreak() =>
-        runtimeEnemyAiPlayStyle == EnemyAiPlayStyle.SchemingBoss ? 4 : 3;
+    private int GetDefensiveMaxHoldStreak() =>
+        runtimeDefensiveAiStrict ? 4 : 3;
 
-    private int GetSchemingMinRarityRank() =>
-        runtimeEnemyAiPlayStyle == EnemyAiPlayStyle.SchemingBoss
+    private int GetDefensiveMinRarityRank() =>
+        runtimeDefensiveAiStrict
             ? (int)CardRarity.R
             : (int)CardRarity.SR;
 
-    private bool IsSchemingHighRarityCard(Card card) =>
-        card != null && CardRarityUtility.GetRank(card.rarity) >= GetSchemingMinRarityRank();
+    private bool IsDefensiveHighRarityCard(Card card) =>
+        card != null && CardRarityUtility.GetRank(card.rarity) >= GetDefensiveMinRarityRank();
 
-    private bool ShouldDeferSchemingCard(Card card)
+    private bool ShouldDeferDefensiveCard(Card card)
     {
-        if (!UsesSchemingEnemyAi || !IsSchemingHighRarityCard(card)) return false;
-        if (enemySchemingHoldStreak >= GetSchemingMaxHoldStreak()) return false;
-        return !IsSchemingPremiumTimingReady(card);
+        if (!UsesDefensiveEnemyAi || !IsDefensiveHighRarityCard(card)) return false;
+        if (enemySchemingHoldStreak >= GetDefensiveMaxHoldStreak()) return false;
+        return !IsDefensivePremiumTimingReady(card);
     }
 
-    private bool IsSchemingPremiumTimingReady(Card card)
+    private bool IsDefensivePremiumTimingReady(Card card)
     {
         if (card == null) return true;
-        bool strict = runtimeEnemyAiPlayStyle == EnemyAiPlayStyle.SchemingBoss;
-        if (card is MonsterCard) return IsSchemingMonsterSummonReady(strict);
-        if (card is SpellCard sp) return IsSchemingSpellReady(sp, strict);
+        bool strict = runtimeDefensiveAiStrict;
+        if (card is MonsterCard) return IsDefensiveMonsterSummonReady(strict);
+        if (card is SpellCard sp) return IsDefensiveSpellReady(sp, strict);
         return true;
     }
 
-    private bool IsSchemingMonsterSummonReady(bool strict)
+    private bool IsDefensiveMonsterSummonReady(bool strict)
     {
         if (enemyField != null) return true;
         MonsterCard playerMonster = GetPlayerFieldCard() as MonsterCard;
@@ -3495,7 +3538,7 @@ public partial class BattleSimulationManager : MonoBehaviour
         return true;
     }
 
-    private bool IsSchemingSpellReady(SpellCard sp, bool strict)
+    private bool IsDefensiveSpellReady(SpellCard sp, bool strict)
     {
         if (sp == null) return true;
         switch (sp.SpellOrdinal)
@@ -3576,17 +3619,17 @@ public partial class BattleSimulationManager : MonoBehaviour
         return lethalIndex;
     }
 
-    private void NoteEnemySchemingCardPlayed(Card played)
+    private void NoteEnemyDefensiveCardPlayed(Card played)
     {
-        if (!UsesSchemingEnemyAi) return;
-        if (played != null && IsSchemingHighRarityCard(played))
+        if (!UsesDefensiveEnemyAi) return;
+        if (played != null && IsDefensiveHighRarityCard(played))
         {
             enemySchemingHoldStreak = 0;
             return;
         }
         for (int i = 0; i < enemyHand.Count; i++)
         {
-            if (ShouldDeferSchemingCard(enemyHand[i]))
+            if (ShouldDeferDefensiveCard(enemyHand[i]))
             {
                 enemySchemingHoldStreak++;
                 return;
@@ -3595,7 +3638,7 @@ public partial class BattleSimulationManager : MonoBehaviour
         enemySchemingHoldStreak = 0;
     }
 
-    /// <summary>敵方 AI：戰術斬殺 &gt;（困難／魔王）囤高稀有待機 &gt; 優先度出牌。</summary>
+    /// <summary>敵方 AI：戰術斬殺 &gt;（防禦型）囤高稀有待機 &gt; 優先度出牌。</summary>
     public int ChooseEnemyHandCardToPlayIndex()
     {
         if (enemyHand.Count == 0) return -1;
@@ -3603,7 +3646,7 @@ public partial class BattleSimulationManager : MonoBehaviour
         int lethal = TryPickLethalMonsterIndex();
         if (lethal >= 0) return lethal;
 
-        System.Predicate<Card> notDeferred = c => !ShouldDeferSchemingCard(c);
+        System.Predicate<Card> notDeferred = c => !ShouldDeferDefensiveCard(c);
         System.Predicate<Card> isMonster = c => c is MonsterCard;
 
         if (enemyField == null)
@@ -4545,7 +4588,7 @@ public partial class BattleSimulationManager : MonoBehaviour
             enemyPlacedCardThisRound = true;
             enemyPlayedHandCardThisTurn = true;
             BattleVerbose("Enemy summoned: " + enemyField.cardName);
-            NoteEnemySchemingCardPlayed(selected);
+            NoteEnemyDefensiveCardPlayed(selected);
             EnemyCardPlayed?.Invoke(selected);
             BattleLayoutVisualRefreshRequested?.Invoke();
         }
@@ -4578,7 +4621,7 @@ public partial class BattleSimulationManager : MonoBehaviour
                 enemyPlayedHandCardThisTurn = true;
                 if (spell.SpellOrdinal != 0 && spell.SpellOrdinal != 1)
                     BattleVerbose("Enemy cast spell: " + spell.cardName);
-                NoteEnemySchemingCardPlayed(eventCard);
+                NoteEnemyDefensiveCardPlayed(eventCard);
                 EnemyCardPlayed?.Invoke(eventCard);
             }
             deferPlayerFieldUiClearAfterEnemyFireballKill =

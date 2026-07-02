@@ -31,11 +31,13 @@ public class HallSceneFeatureBinder : MonoBehaviour
     {
         if (!scene.IsValid() || scene.name != SceneName) return;
 
-        TryBindSceneButton("牌組", "Buildbeck");
+        TryBindSceneButton("牌組", DeckPackSceneController.SceneName);
+        TryBindSceneButton("BuildDeckButton", DeckPackSceneController.SceneName);
         // Existing feature closest to backpack flow: return to Persistent hub.
-        TryBindSceneButton("背包", "Persistent");
+        TryBindBackpackSceneButton("背包");
         TryBindSceneButton("商店", "CardStore");
         TryBindSceneButton("遊戲進度", StoryProgressSession.StoryProgressSceneName);
+        TryBindSceneButton("自由對戰", FreeBattleBattleCopy.SceneName);
 
         TryBindSceneButton("遊戲設定", "Settings");
         TryBindSceneButton("SettingsButton", "Settings");
@@ -57,6 +59,23 @@ public class HallSceneFeatureBinder : MonoBehaviour
                 SceneManager.LoadScene(targetSceneName);
             else
                 Debug.LogError("HallSceneFeatureBinder: scene not found in Build Settings -> " + targetSceneName);
+        });
+    }
+
+    private static void TryBindBackpackSceneButton(string objName)
+    {
+        GameObject go = GameObject.Find(objName);
+        if (go == null) return;
+        Button btn = EnsureButton(go);
+        if (btn == null) return;
+        btn.onClick.RemoveAllListeners();
+        btn.onClick.AddListener(() =>
+        {
+            DeckPackViewSession.Clear();
+            if (Application.CanStreamedLevelBeLoaded("Persistent"))
+                SceneManager.LoadScene("Persistent");
+            else
+                Debug.LogError("HallSceneFeatureBinder: scene not found in Build Settings -> Persistent");
         });
     }
 

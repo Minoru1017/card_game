@@ -80,7 +80,7 @@ public class TutorialBattleDefeatSfx : MonoBehaviour
         if (defeatClip == null || sfxSource == null)
             return;
 
-        sfxSource.PlayOneShot(defeatClip, volume);
+        sfxSource.PlayOneShot(defeatClip, GameAudioUserSettings.ScaleBattleSfx(volume));
     }
 
     private void Awake()

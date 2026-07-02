@@ -168,15 +168,16 @@ public sealed partial class FightingBirdGameSceneController
         if (parent == null) parent = transform;
 
         GameObject overlay = CreateImage("BonusDraftOverlay", parent,
-            Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero, new Color(0f, 0f, 0f, 0.78f), true).gameObject;
+            Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero, BirdDuelUiColors.Dim, true).gameObject;
         overlay.transform.SetAsLastSibling();
 
         Image panelImg = CreateImage("Panel", overlay.transform,
             new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero, ColorPanel, true);
-        panelImg.rectTransform.sizeDelta = new Vector2(1180f, 560f);
+        BirdDuelMobileOverlayLayout.ApplyMobilePanel(panelImg.rectTransform);
 
         CreateText("DraftTitle", panelImg.transform, title, 58f, TextAlignmentOptions.Center,
-            new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -60f), new Vector2(1100f, 76f), Color.white);
+            new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -60f), new Vector2(1100f, 76f),
+            BirdDuelUiColors.WonderBadge);
         TextMeshProUGUI sub = CreateText("DraftSubtitle", panelImg.transform, subtitle, 32f, TextAlignmentOptions.Center,
             new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -150f), new Vector2(1080f, 120f), ColorSubtitle);
         sub.enableWordWrapping = true;
@@ -190,7 +191,7 @@ public sealed partial class FightingBirdGameSceneController
     {
         Image card = CreateImage(name, panel,
             new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), Vector2.zero, Vector2.zero, tint, true);
-        card.rectTransform.sizeDelta = new Vector2(320f, 200f);
+        card.rectTransform.sizeDelta = new Vector2(320f, 220f);
         card.rectTransform.anchoredPosition = anchoredPos;
 
         Button btn = card.gameObject.AddComponent<Button>();
@@ -201,7 +202,7 @@ public sealed partial class FightingBirdGameSceneController
         titleText.raycastTarget = false;
         TextMeshProUGUI descText = CreateText("Desc", card.transform, desc, 26f, TextAlignmentOptions.Center,
             new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -120f), new Vector2(296f, 110f),
-            new Color(0.97f, 0.98f, 1f, 0.95f));
+            BirdDuelUiColors.ResultLine);
         descText.enableWordWrapping = true;
         descText.raycastTarget = false;
         return btn;

@@ -36,7 +36,10 @@
 | **單卡戰技文案** | `卡牌技能階段式揭露.md` | 草案 | 企劃 | `MonsterSkillRegistry` | 逐卡填表進度 |
 | **牌組存檔** | `DECK_SAVE_IMPLEMENTATION.md` | **定案**（2026-06 牌組名稱驗收） | 程式 | `PlayerDeckSlotNameStorage`、`PlayerData`、`DeckManager` | 驗收：[`Docs/DECK_SLOT_NAME_BUG_CHECKLIST.md`](Docs/DECK_SLOT_NAME_BUG_CHECKLIST.md) |
 | **大地圖節點文案** | `StoryProgressNodeDatabase.json` + `StoryProgressLevelCopy.cs` | 部分定案 | 程式 | `StoryProgressWorldMapRuntime.cs` | 節點點擊→進關流程（見待定 §MAP） |
-| **登入／大廳導流** | `TUTORIAL_PLOT_SCRIPT.md`（首段） | 部分定案 | 程式 | 登入場景、`hall` | 未寫入關卡 GDD（見待定 §FLOW） |
+| **登入／大廳導流** | `TUTORIAL_PLOT_SCRIPT.md`（首段）、`ARCHITECTURE_OVERVIEW.md` | **部分定案** | 程式 | 登入場景、`hall`、`HallSceneFeatureBinder` | hall「牌組」→ **Deck Pack**（非直連 Buildbeck）；「自由對戰」→ **Free Battle**（見 §FLOW） |
+| **牌組管理（Deck Pack）** | `ARCHITECTURE_OVERVIEW.md`、`DECK_SAVE_IMPLEMENTATION.md` §11 | **定案**（2026-07） | 程式 | `DeckPackSceneController`、`DeckPackViewSession` | 查看／編輯分流；空槽不進背包 |
+| **自由對戰（Free Battle）** | `ARCHITECTURE_OVERVIEW.md`、`FreeBattleBattleCopy.cs` | **部分定案** | 程式 | `FreeBattleSceneController`、`FreeBattleViewSession`、`SceneLoader.FreeBattle` | 三 AI 風格；70% 隨機鬥鳥暖身（`BirdDuelRandomEventChance`）；無關卡 GDD |
+| **全局導覽（≡）** | `README.md`、`ARCHITECTURE_OVERVIEW.md` | **定案** | 程式 | `GlobalNavRuntime`、`GlobalNavBootstrap` | hub 白名單含 Deck Pack／Free Battle；對戰中仍隱藏 |
 | **對戰 UI 色票** | `BATTLE_UI_COLOR_SPEC.md` | 定案 | 美術、程式 | `BattleUiColors.cs` 等 | — |
 | **對戰 FX 色票** | `BATTLE_FX_COLOR_SPEC.md` | 定案 | 美術 | FX Token | — |
 | **背包 UI 色票** | `BACKPACK_INSPECT_UI_COLOR_SPEC.md` | 定案 | 美術 | — | — |
@@ -79,4 +82,5 @@
 |------|------|
 | 2026-05-30 | 初版：建立企劃總表，彙整 1-1 進度語意與各領域狀態 |
 | 2026-06-21 | 進度語意改為教學關／實戰關雙 Clear（GDD §2.3）；世界觀 §三、§七 對齊 |
+| 2026-07-03 | 新增 Deck Pack／Free Battle／全局 hub 白名單列；hall 牌組改接 Deck Pack |
 | 2026-06-19 | 新增「鬥鳥暖身賽」列；戰前謎題列改已停用；程式錨點對齊 `PROJECT_CODE_INDEX_v2` §I |

@@ -201,8 +201,15 @@ public sealed class M12BattleCoachUi : MonoBehaviour
     private void ApplyFont(TMP_Text tmp)
     {
         if (tmp == null) return;
-        TMP_FontAsset font = _preferredFont ?? SettingsUiFonts.ResolvePreferredFont();
+        TMP_FontAsset font = _preferredFont ?? ResolveFont();
         if (font != null)
             tmp.font = font;
+    }
+
+    private static TMP_FontAsset ResolveFont()
+    {
+        TMP_FontAsset settings = SettingsUiFonts.ResolveParameterDetailsFont();
+        if (settings != null) return settings;
+        return BuildbeckUiFonts.ResolveBuildbeckButtonFont();
     }
 }

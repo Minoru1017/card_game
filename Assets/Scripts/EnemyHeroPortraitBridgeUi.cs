@@ -102,10 +102,7 @@ public static class EnemyHeroPortraitBridgeUi
         GameObject panel = new GameObject("Panel", typeof(RectTransform), typeof(Image), typeof(Outline));
         panel.transform.SetParent(root.transform, false);
         RectTransform panelRt = panel.GetComponent<RectTransform>();
-        panelRt.anchorMin = new Vector2(0.5f, 0.5f);
-        panelRt.anchorMax = new Vector2(0.5f, 0.5f);
-        panelRt.pivot = new Vector2(0.5f, 0.5f);
-        panelRt.sizeDelta = new Vector2(920f, 560f);
+        BirdDuelMobileOverlayLayout.ApplyMobilePanel(panelRt);
         panel.GetComponent<Image>().color = PanelColor;
         Outline outline = panel.GetComponent<Outline>();
         outline.effectColor = PanelBorder;
@@ -131,7 +128,7 @@ public static class EnemyHeroPortraitBridgeUi
         RectTransform contentRt = content.GetComponent<RectTransform>();
         contentRt.anchorMin = new Vector2(0f, 0f);
         contentRt.anchorMax = new Vector2(1f, 1f);
-        contentRt.offsetMin = new Vector2(36f, 108f);
+        contentRt.offsetMin = new Vector2(36f, BirdDuelMobileOverlayLayout.ButtonAreaPadBottom + BirdDuelMobileOverlayLayout.ButtonHeightPrimary + 16f);
         contentRt.offsetMax = new Vector2(-36f, -88f);
 
         GameObject portraitFrame = new GameObject("PortraitFrame", typeof(RectTransform), typeof(Image));
@@ -238,11 +235,7 @@ public static class EnemyHeroPortraitBridgeUi
         GameObject buttonObj = new GameObject("ContinueBtn", typeof(RectTransform), typeof(Image), typeof(Button));
         buttonObj.transform.SetParent(panel, false);
         RectTransform rt = buttonObj.GetComponent<RectTransform>();
-        rt.anchorMin = new Vector2(0.5f, 0f);
-        rt.anchorMax = new Vector2(0.5f, 0f);
-        rt.pivot = new Vector2(0.5f, 0f);
-        rt.anchoredPosition = new Vector2(0f, 28f);
-        rt.sizeDelta = new Vector2(280f, 72f);
+        BirdDuelMobileOverlayLayout.PlaceStackedButton(rt, 0);
         buttonObj.GetComponent<Image>().color = ButtonColor;
 
         Button btn = buttonObj.GetComponent<Button>();
@@ -257,7 +250,7 @@ public static class EnemyHeroPortraitBridgeUi
             buttonObj.transform,
             "Label",
             label,
-            32f,
+            BirdDuelMobileOverlayLayout.ButtonFontPrimary,
             FontStyles.Bold,
             Vector2.zero,
             Vector2.one,

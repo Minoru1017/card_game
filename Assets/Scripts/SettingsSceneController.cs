@@ -6,9 +6,9 @@ using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
 /// <summary>
-/// Settings 場景：巢狀選單（顯示比例／畫面品質／關於）、離開回 hall、戰鬥預設一。
+/// Settings 場景：巢狀選單（顯示比例／FPS／音效設定／關於）、離開回 hall、戰鬥預設。
 /// </summary>
-public class SettingsSceneController : MonoBehaviour
+public partial class SettingsSceneController : MonoBehaviour
 {
     private const string SceneName = "Settings";
     private const string HallSceneName = "hall";
@@ -100,13 +100,16 @@ public class SettingsSceneController : MonoBehaviour
     private void Awake()
     {
         CacheUiRefs();
+        CacheSoundSettingsRefs();
         FixCanvasScale();
         FixSettingsCanvasNonInteractiveRaycasts();
         settingsUiFont = ResolveSettingsUiFont();
         EnsureParameterFeedbackUi();
         BuildPresetNestedUi();
         BuildQualityButtons();
+        BuildSoundVolumeSliders();
         WireNavigationButtons();
+        WireSoundSettingsNavigation();
         ApplyTierVisibility();
         BattleCardTuningUserSettings.ApplySavedTargetFps();
         RewriteQualitySectionAsFps();
@@ -497,6 +500,7 @@ public class SettingsSceneController : MonoBehaviour
         SetActive(presetNestedPanel, displayRatioTierOpen && presetNestedOpen);
         SetActive(imageQualityDetailBg, imageQualityTierOpen);
         ApplyParameterDetailsPanelState();
+        ApplySoundSettingsTierVisibility();
 
         if (displayRatioTierOpen && presetNestedOpen)
             BringPresetNestedToFront();

@@ -10,6 +10,12 @@ public static class PreBattleDuelContext
     /// <summary>是否為港灣訓練場戰鬥（決定設定還原路徑）。</summary>
     public static bool IsHarborTraining { get; private set; }
 
+    /// <summary>是否為自由對戰（決定 AI 風格與設定還原路徑）。</summary>
+    public static bool IsFreeBattle { get; private set; }
+
+    /// <summary>自由對戰所選 AI 風格（僅 <see cref="IsFreeBattle"/> 時有效）。</summary>
+    public static EnemyAiPlayStyle FreeBattleAiStyle { get; private set; } = EnemyAiPlayStyle.Balanced;
+
     /// <summary>鬥鳥結束後要載入的戰鬥場景名稱。</summary>
     public static string BattleSceneName { get; private set; }
 
@@ -39,11 +45,15 @@ public static class PreBattleDuelContext
         bool hasHiddenTier,
         BattleDifficultyTier hiddenTier,
         string heroId = null,
-        string enemyHeroDisplayName = null)
+        string enemyHeroDisplayName = null,
+        bool isFreeBattle = false,
+        EnemyAiPlayStyle freeBattleAiStyle = EnemyAiPlayStyle.Balanced)
     {
         IsActive = true;
         BattleSceneName = string.IsNullOrWhiteSpace(battleSceneName) ? null : battleSceneName.Trim();
         IsHarborTraining = isHarborTraining;
+        IsFreeBattle = isFreeBattle;
+        FreeBattleAiStyle = isFreeBattle ? freeBattleAiStyle : EnemyAiPlayStyle.Balanced;
         SelectedTier = selectedTier;
         HasHiddenTier = hasHiddenTier;
         HiddenTier = hiddenTier;
@@ -72,6 +82,8 @@ public static class PreBattleDuelContext
     {
         IsActive = false;
         IsHarborTraining = false;
+        IsFreeBattle = false;
+        FreeBattleAiStyle = EnemyAiPlayStyle.Balanced;
         BattleSceneName = null;
         HasHiddenTier = false;
         HeroId = null;

@@ -36,7 +36,7 @@ public sealed partial class FightingBirdGameSceneController
         switch (judgement.outcome)
         {
             case BirdBeatOutcome.Perfect: main = "Perfect"; color = ColorScoreFill; break;
-            case BirdBeatOutcome.Good: main = "Good"; color = new Color(0.55f, 0.85f, 0.6f, 1f); break;
+            case BirdBeatOutcome.Good: main = "Good"; color = BirdDuelUiColors.GoodFeedback; break;
             case BirdBeatOutcome.Guard: main = "Guard"; color = ColorPass; break;
             default: main = "Miss"; color = ColorPeck; break;
         }

@@ -71,6 +71,8 @@
 | 場景載入 | 預覽後進鬥鳥、結束接戰 | `SceneLoader.BirdDuel` / `LaunchBirdDuelThenBattle()` / `ResumeBattleAfterBirdDuel()` | 難度檔、港灣旗標 | `Fighting bird game` → `BattleSimulation` |
 | 判定音效 | Hi-Hat 母帶依 Perfect/Good/Guard/Miss 切片 | `BirdDuelHitSfxBank` / `AudioLibrary.birdDuelHitSfxSource` | 判定結果 | 單次 SFX |
 | CD 資料 | 光碟檔、陣營、勝利 draft 池 | `BirdDuelCdCatalog` / `BirdDuelCdSelectOverlayUi` | CD id | draft 白名單 |
+| UI 色票 | 暮光紫羅蘭＋極光金青（戰前儀式感） | `BirdDuelUiColors` | — | overlay／場景／手勢鈕色 |
+| 戰前 overlay 布局 | 行動端窄面板、加高觸控按鈕 | `BirdDuelMobileOverlayLayout` / `BirdDuelOverlayUiBuild` | canvas | 隨機事件／進場選擇 modal |
 | Editor 量測 | BGM BPM 寫入 RhythmSync | `BirdDuelBgmTempoAnalyzer` | `Assets/Music/*.mp3` | `BirdDuelRhythmSync.asset` |
 
 **流程摘要**：戰前預覽確認難度 → `LaunchBirdDuelThenBattle` → 鬥鳥（情報／加成 draft）→ `ResumeBattleAfterBirdDuel` → 正式對戰。
@@ -90,7 +92,10 @@
 
 | 模組 | 功能描述 | 主要類別/函式 | 典型輸入 | 典型輸出 |
 | --- | --- | --- | --- | --- |
-| 場景流程/導航 | 場景切換與前置條件檢查 | `SceneLoader` / `SceneLoader.BattlePreview` / `SceneLoader.BirdDuel` / `SceneLoader.HarborTraining` / `BattleSceneBootstrap` / `EnterBattle()` | 切換請求、組牌狀態 | 場景載入、戰前預覽→鬥鳥→戰鬥 |
+| 場景流程/導航 | 場景切換與前置條件檢查 | `SceneLoader` / `SceneLoader.BattlePreview` / `SceneLoader.BirdDuel` / `SceneLoader.HarborTraining` / `SceneLoader.FreeBattle` / `BattleSceneBootstrap` / `EnterBattle()` | 切換請求、組牌狀態 | 場景載入、戰前預覽→鬥鳥→戰鬥 |
+| Deck Pack | 五槽選中、浮動選單（查看／編輯） | `DeckPackSceneController` / `DeckPackViewSession` | 槽位點擊 | Persistent（限該槽）或 Buildbeck |
+| Free Battle | AI 風格選擇 → Buildbeck → 難度預覽 | `FreeBattleSceneController` / `FreeBattleViewSession` / `FreeBattleBattleCopy` / `SceneLoader.FreeBattle` | `EnemyAiPlayStyle` | 70% 隨機鬥鳥 overlay → 對戰 |
+| 全局導覽 | ≡ 選單、玩家資訊、hub 白名單 | `GlobalNavRuntime` / `GlobalNavBootstrap` / `RefreshActiveSceneNav()` | 場景名、`GlobalNavConfig.json` | trigger 顯示／隱藏 |
 | 開發日誌 | Editor 保留、Release 不洗版 | `GameDevLog` | 訊息字串 | Console 輸出 |
 | EditMode 測試 | 熟練度／牌組名稱煙霧測試 | `Assets/Editor/CardGameEditModeTests.cs` | NUnit | 斷言通過 |
 | Bug 場景（牌組名） | 存檔／跨槽／污染手動驗收 | `BugHandlingDeckSlotNameScenario` / `Bug handling scenarios` | Play Mode UI | 對照 `Docs/DECK_SLOT_NAME_BUG_CHECKLIST.md` |

@@ -64,6 +64,18 @@ public partial class DeckManager
             _owner.EnsureCoreRefs();
             _owner.EnsureDeckUIRefs();
             if (_owner.PlayerData == null) return;
+
+            if (DeckPackViewSession.RestrictBackpackToSelectedDeck)
+            {
+                int slot = Mathf.Clamp(_owner.PlayerData.selectedDeckSlot, 0, _owner.PlayerData.deckSlotCount - 1);
+                foreach (var kv in _owner.PlayerData.GetDeckMap(slot))
+                {
+                    if (kv.Value > 0)
+                        _owner.CreateCard(kv.Key, CardState.Library);
+                }
+                return;
+            }
+
             foreach (var kv in _owner.PlayerData.playerCollection)
             {
                 if (kv.Value > 0)

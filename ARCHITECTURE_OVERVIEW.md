@@ -26,6 +26,8 @@ flowchart TB
     subgraph SCENES["Scenes (UI recreated on each LoadScene)"]
         LOGIN["login<br/>sign-in · pick/create player slot"]
         HALL["hall<br/>home hub"]
+        DECKPACK["Deck Pack<br/>deck slots · view / edit"]
+        FREEBATTLE["Free Battle<br/>AI style pick"]
         BUILD["Buildbeck<br/>deck build · rename · save deck"]
         PERS["Persistent<br/>backpack / hub"]
         STORE["CardStore<br/>pack open · shop"]
@@ -57,9 +59,13 @@ flowchart TB
     LOGIN --> HALL
 
     HALL --> BINDER
-    BINDER -->|"Deck"| BUILD
+    BINDER -->|"Deck / 牌組"| DECKPACK
+    BINDER -->|"Free battle / 自由對戰"| FREEBATTLE
     BINDER -->|"Backpack"| PERS
     BINDER -->|"Shop"| STORE
+    DECKPACK -->|"View deck"| PERS
+    DECKPACK -->|"Edit deck"| BUILD
+    FREEBATTLE -->|"Pick AI style"| BUILD
 
     GNR -->|"Home"| HALL
     GNR -->|"Backpack"| PERS
@@ -89,7 +95,7 @@ flowchart TB
     classDef nav fill:#4a2c5c,stroke:#2e1a3a,color:#fff
 
     class PD,DM,DMGR core
-    class LOGIN,HALL,BUILD,PERS,STORE,SET,BIRD,BATTLE,PLOT scene
+    class LOGIN,HALL,DECKPACK,FREEBATTLE,BUILD,PERS,STORE,SET,BIRD,BATTLE,PLOT scene
     class PD_CSV,PROF_CSV disk
     class GNR nav
 ```
@@ -109,13 +115,19 @@ flowchart TB
 | From | Action | To |
 |------|--------|-----|
 | login | Sign-in success | hall |
-| hall | Deck | Buildbeck |
+| hall | Deck / 牌組 | **Deck Pack** |
+| hall | Free battle / 自由對戰 | **Free Battle** |
 | hall | Backpack | Persistent |
 | hall | Shop | CardStore |
+| Deck Pack | View deck | Persistent（`DeckPackViewSession`：背包僅顯示該槽牌組；空槽 toast） |
+| Deck Pack | Edit deck | Buildbeck（焦點該槽；**隱藏**「準備好了／準備完成」進戰鈕） |
+| Free Battle | Pick AI style | Buildbeck（`FreeBattleViewSession` 帶入 AI 風格） |
 | Buildbeck | Back | Persistent (`SceneLoader.EnterPersistent`) |
 | Buildbeck | Battle ready | Fighting bird game → BattleSimulation（戰前預覽→鬥鳥→開戰；見 `SceneLoader.BirdDuel`） |
+| Buildbeck（自由對戰） | 準備完成 | 難度預覽 → **70%** 隨機鬥鳥暖身 overlay → 可選鬥鳥 → 對戰（`SceneLoader.FreeBattle`） |
 | Any (≡ menu) | Home / Settings / Login | hall / Settings / login |
 | Any (≡ menu) | Player info | **Overlay** (same scene); **read-only** `LoadProfileForPlayerInfoDisplay`（不寫 `playerdata.csv`） |
+| **Hub 白名單** | Deck Pack、Free Battle 等 | 場景名含 `battle`／`deck` 仍顯示 ≡（`GlobalNavRuntime.ApplySceneState` + 各 hub `RefreshActiveSceneNav`） |
 
 ## Save / load timing (summary)
 

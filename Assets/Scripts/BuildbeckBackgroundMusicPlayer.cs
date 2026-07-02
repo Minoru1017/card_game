@@ -161,7 +161,7 @@ public sealed class BuildbeckBackgroundMusicPlayer : MonoBehaviour
 
         EnsureClipLoaded(clip);
         audioSource.clip = clip;
-        audioSource.volume = volume;
+        audioSource.volume = GameAudioUserSettings.ScaleBgm(volume);
         audioSource.loop = true;
         audioSource.time = 0f;
 
@@ -185,6 +185,12 @@ public sealed class BuildbeckBackgroundMusicPlayer : MonoBehaviour
             Debug.LogWarning("BuildbeckBackgroundMusicPlayer: Play() did not start. loadState=" + clip.loadState);
 
         playRoutine = null;
+    }
+
+    public void ApplyUserBgmVolume()
+    {
+        if (audioSource != null)
+            audioSource.volume = GameAudioUserSettings.ScaleBgm(volume);
     }
 
     private void EnsureBgmSource()

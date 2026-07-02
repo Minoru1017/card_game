@@ -81,7 +81,7 @@ public partial class SceneLoader
         pendingFixedEnemyDeckCardIds = M12PhaseABattleRules.EnemyDeckCardIds;
         pendingEnemyOverLimitAllowance = 0;
         pendingMinEnemySpellsInDeck = 1;
-        pendingEnemyAiPlayStyle = EnemyAiPlayStyle.IntroGreedy;
+        pendingEnemyAiPlayStyle = EnemyAiPlayStyle.Balanced;
         pendingDifficultyLabelZh = "段考A";
         BattleLaunchContext.SetPendingDifficultyLabelZh(pendingDifficultyLabelZh);
         BattleLaunchContext.BeginM12TrioTutorialBattleLaunch();
@@ -127,7 +127,7 @@ public partial class SceneLoader
                 M12PhaseABattleRules.EnemyDeckCardIds,
                 0,
                 1,
-                EnemyAiPlayStyle.IntroGreedy,
+                EnemyAiPlayStyle.Balanced,
                 "段考A");
             return;
         }

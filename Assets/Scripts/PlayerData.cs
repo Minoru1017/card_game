@@ -734,6 +734,13 @@ public partial class PlayerData : MonoBehaviour
     {
         EnsureDeckSlotMaps();
         int slot = Mathf.Clamp(selectedDeckSlot, 0, deckSlotCount - 1);
+        return GetDeckSlotTotalCount(slot);
+    }
+
+    public int GetDeckSlotTotalCount(int slot)
+    {
+        EnsureDeckSlotMaps();
+        slot = Mathf.Clamp(slot, 0, deckSlotCount - 1);
         int total = 0;
         foreach (var kv in deckSlotMaps[slot])
         {

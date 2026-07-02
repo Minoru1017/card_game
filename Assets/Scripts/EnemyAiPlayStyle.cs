@@ -1,16 +1,10 @@
-/// <summary>敵方出牌 AI 風格（由開戰前難度選擇注入）。</summary>
+/// <summary>敵方出牌 AI 攻擊風格（由開戰前難度或關卡注入）。</summary>
 public enum EnemyAiPlayStyle
 {
-    /// <summary>普通：有牌可出則依優先度立即打出。</summary>
-    Greedy = 0,
-    /// <summary>困難：SR 以上高稀有卡待良好時機再出。</summary>
-    SchemingHard = 1,
-    /// <summary>魔王：R 以上即可能囤牌，條件更嚴才出手。</summary>
-    SchemingBoss = 2,
-    /// <summary>入門：Greedy 且略偏先出怪（法術評分降低）。</summary>
-    IntroGreedy = 3,
-    /// <summary>簡單：Greedy 且略偏法術（法術評分提高）。</summary>
-    EasySpellLean = 4,
-    /// <summary>快攻：Greedy 且強烈偏先出怪、壓低非直傷法術評分（港灣訓練場）。</summary>
-    FastAttack = 5
+    /// <summary>綜合型：依評分出牌，無明顯攻守偏置。</summary>
+    Balanced = 0,
+    /// <summary>防禦型：囤高價值牌、偏治療與待時機出手。</summary>
+    Defensive = 1,
+    /// <summary>快攻型：強烈偏先出怪與直傷壓迫。</summary>
+    FastAttack = 2
 }

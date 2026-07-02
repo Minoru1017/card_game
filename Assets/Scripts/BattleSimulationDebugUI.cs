@@ -229,6 +229,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
     private float enemyHandAreaTargetY = float.NaN;
     private Coroutine enemyHandAreaTweenRoutine;
     private Coroutine playerHeroDamagedFxRoutine;
+    private bool deferPlayerHeroDamagedFxForDirectAttack;
     private RectTransform heroDamageMonochromeFlashRt;
     private CanvasGroup heroDamageMonochromeFlashCg;
     private Coroutine playerOpeningHandFlyRoutine;
@@ -886,17 +887,19 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
                 "<size=" + t + "><color=#E0AA90>" + enemyLabel + "</color></size>\n<b>" + e + "</b>";
         }
 
-        if (playerHeroDamaged && playerHeroDamagedFxRoutine == null && !BattleAutoSimPlugin.IsRunning)
+        if (playerHeroDamaged && playerHeroDamagedFxRoutine == null && !BattleAutoSimPlugin.IsRunning
+            && !deferPlayerHeroDamagedFxForDirectAttack)
             playerHeroDamagedFxRoutine = StartCoroutine(CoPlayPlayerHeroDamagedFeedback());
 
         RefreshPlayerHeroSacredShieldFx();
     }
 
-    private IEnumerator CoPlayPlayerHeroDamagedFeedback()
+    private IEnumerator CoPlayPlayerHeroDamagedFeedback(bool enhancedDirectHit = false)
     {
         float hitDur = battleManager != null ? Mathf.Max(0.1f, battleManager.hitShakeDuration * 0.9f) : 0.22f;
-        float heroShakeStrength = 26f;
-        float handShakeStrength = 36f;
+        if (enhancedDirectHit) hitDur *= 1.15f;
+        float heroShakeStrength = enhancedDirectHit ? 38f : 26f;
+        float handShakeStrength = enhancedDirectHit ? 48f : 36f;
 
         RectTransform heroRt = playerHeroHpText != null ? playerHeroHpText.rectTransform : null;
         if (heroRt != null) StartCoroutine(PlayHitShake(heroRt, hitDur, heroShakeStrength));
@@ -906,6 +909,17 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
 
         yield return new WaitForSecondsRealtime(hitDur + 0.06f);
         playerHeroDamagedFxRoutine = null;
+    }
+
+    private IEnumerator CoPlayEnemyHeroDamagedFeedback(bool enhancedDirectHit = false)
+    {
+        float hitDur = battleManager != null ? Mathf.Max(0.1f, battleManager.hitShakeDuration * 0.85f) : 0.2f;
+        if (enhancedDirectHit) hitDur *= 1.12f;
+        float shakeStrength = enhancedDirectHit ? 34f : 24f;
+        RectTransform heroRt = enemyHeroHpText != null ? enemyHeroHpText.rectTransform : null;
+        if (heroRt != null) yield return StartCoroutine(PlayHitShake(heroRt, hitDur, shakeStrength));
+        if (enemyHeroHpText != null) yield return StartCoroutine(PlayDamageFlash(enemyHeroHpText.gameObject, hitDur));
+        yield return new WaitForSecondsRealtime(hitDur * 0.35f);
     }
 
     private IEnumerator CoPlayHeroDamageMonochromeFlash()
@@ -1435,7 +1449,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
     private void PlayUIClip(AudioClip clip, float volume)
     {
         if (clip == null || uiAudioSource == null) return;
-        uiAudioSource.PlayOneShot(clip, Mathf.Clamp01(volume));
+        uiAudioSource.PlayOneShot(clip, GameAudioUserSettings.ScaleBattleSfx(Mathf.Clamp01(volume)));
     }
 
 
@@ -1926,15 +1940,15 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
             DisarmYourTurnBannerTurnStartAndHandTouchClocksOnly();
 
         if (BattleAutoSimPlugin.IsRunning) return;
-        if (!attackData.hasMonsterTarget)
+        if (!attackData.hasMonsterTarget && !attackData.targetsHero)
         {
-            // No field target: skip swing animation to avoid "air attack" visuals.
             return;
         }
         EnsureFieldMonstersForAttackFx();
         deferFieldRefreshDuringAttack = true;
         deferEnemyFieldRefresh = true;
         pendingFieldRefreshAfterAttack = true;
+        deferPlayerHeroDamagedFxForDirectAttack = attackData.targetsHero && !attackData.attackerIsPlayer;
         if (attackFxRoutine != null) StopCoroutine(attackFxRoutine);
         attackFxRoutine = StartCoroutine(PlayAttackFx(attackData));
     }
@@ -1969,6 +1983,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
     {
         bool attackerIsPlayer = attackData.attackerIsPlayer;
         bool hasMonsterTarget = attackData.hasMonsterTarget;
+        bool targetsHero = attackData.targetsHero;
         GameObject attackerObj = attackerIsPlayer ? playerFieldCardObj : enemyFieldCardObj;
         try
         {
@@ -1980,9 +1995,23 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         float dur = battleManager != null ? Mathf.Max(0.12f, battleManager.attackMotionDuration * 0.82f) : 0.32f;
         float hitFxDur = battleManager != null ? Mathf.Max(0.1f, battleManager.hitShakeDuration) : 0.28f;
         float counterGap = battleManager != null ? Mathf.Max(0f, battleManager.counterAttackGapDuration) : 0.45f;
+        if (targetsHero)
+        {
+            dur *= 1.14f;
+            hitFxDur *= 1.1f;
+        }
         Vector2 start = attackerRt.anchoredPosition;
-        // 主動攻擊：長距離水平衝刺 + 紅色受擊 + 回彈（反擊見 PlayCounterAttackFx，原地斬擊 + 藍色斬線／擴散環）。
-        Vector2 hitOffset = attackerIsPlayer ? new Vector2(74f, 0f) : new Vector2(-74f, 0f);
+        Vector2 hitOffset;
+        if (targetsHero)
+        {
+            RectTransform heroRt = GetHeroHudRectForDirectAttack(attackerIsPlayer);
+            if (!TryComputeLungeOffsetToward(attackerRt, heroRt, out hitOffset, 0.62f, 172f))
+                hitOffset = attackerIsPlayer ? new Vector2(42f, 148f) : new Vector2(-42f, -148f);
+        }
+        else
+        {
+            hitOffset = attackerIsPlayer ? new Vector2(74f, 0f) : new Vector2(-74f, 0f);
+        }
         Vector3 baseScale = attackerRt.localScale;
 
         float t = 0f;
@@ -1993,7 +2022,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
             float p = Mathf.Clamp01(t / half);
             float eased = 1f - (1f - p) * (1f - p);
             attackerRt.anchoredPosition = Vector2.Lerp(start, start + hitOffset, eased);
-            attackerRt.localScale = Vector3.Lerp(baseScale, baseScale * 1.06f, eased);
+            attackerRt.localScale = Vector3.Lerp(baseScale, baseScale * (targetsHero ? 1.1f : 1.06f), eased);
             yield return null;
         }
 
@@ -2022,6 +2051,26 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
                             hitFxDur,
                             counterFromPlayer));
                     }
+                }
+            }
+        }
+        else if (targetsHero)
+        {
+            GameObject heroHudObj = GetHeroHudObjectForDirectAttack(!attackerIsPlayer);
+            if (heroHudObj != null)
+            {
+                yield return StartCoroutine(PlayDamageFlash(heroHudObj, hitFxDur));
+                if (attackData.attackerDamage > 0)
+                    StartCoroutine(PlayFloatingDamageNumber(heroHudObj, attackData.attackerDamage, FloatingDamageKind.Attack));
+                if (!attackerIsPlayer)
+                {
+                    deferPlayerHeroDamagedFxForDirectAttack = false;
+                    if (playerHeroDamagedFxRoutine == null)
+                        playerHeroDamagedFxRoutine = StartCoroutine(CoPlayPlayerHeroDamagedFeedback(enhancedDirectHit: true));
+                }
+                else
+                {
+                    yield return StartCoroutine(CoPlayEnemyHeroDamagedFeedback(enhancedDirectHit: true));
                 }
             }
         }
@@ -2077,6 +2126,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         }
         finally
         {
+            deferPlayerHeroDamagedFxForDirectAttack = false;
             deferFieldRefreshDuringAttack = false;
             deferEnemyFieldRefresh = false;
             if (pendingFieldRefreshAfterAttack)
@@ -2094,6 +2144,44 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
     private GameObject GetFieldMonsterObject(bool isPlayerSide)
     {
         return isPlayerSide ? playerFieldCardObj : enemyFieldCardObj;
+    }
+
+    private GameObject GetHeroHudObjectForDirectAttack(bool targetIsPlayerHero)
+    {
+        if (targetIsPlayerHero)
+            return playerHeroHpText != null ? playerHeroHpText.gameObject : null;
+        return enemyHeroHpText != null ? enemyHeroHpText.gameObject : null;
+    }
+
+    private RectTransform GetHeroHudRectForDirectAttack(bool attackerIsPlayer)
+    {
+        bool targetIsPlayerHero = !attackerIsPlayer;
+        GameObject heroObj = GetHeroHudObjectForDirectAttack(targetIsPlayerHero);
+        return heroObj != null ? heroObj.GetComponent<RectTransform>() : null;
+    }
+
+    private static bool TryComputeLungeOffsetToward(
+        RectTransform from,
+        RectTransform to,
+        out Vector2 offsetInFromParent,
+        float travelRatio,
+        float maxTravelPx)
+    {
+        offsetInFromParent = Vector2.zero;
+        if (from == null || to == null) return false;
+
+        Vector3 fromWorld = from.TransformPoint(from.rect.center);
+        Vector3 toWorld = to.TransformPoint(to.rect.center);
+        Vector3 deltaWorld = toWorld - fromWorld;
+        float dist = deltaWorld.magnitude;
+        if (dist < 12f) return false;
+
+        float travel = Mathf.Min(dist * Mathf.Clamp01(travelRatio), maxTravelPx);
+        Vector3 targetWorld = fromWorld + deltaWorld.normalized * travel;
+        Vector2 fromLocal = from.InverseTransformPoint(fromWorld);
+        Vector2 targetLocal = from.InverseTransformPoint(targetWorld);
+        offsetInFromParent = targetLocal - fromLocal;
+        return offsetInFromParent.sqrMagnitude > 16f;
     }
 
     private void ApplyPreviewDamageToFieldCard(GameObject cardObj, int damage)

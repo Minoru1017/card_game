@@ -5,6 +5,7 @@ public static partial class BattleLaunchContext
     {
         IsIntroTutorialBattle = true;
         IsHarborTrainingGroundBattle = false;
+        IsFreeBattle = false;
         IsM12TrioTutorialBattle = false;
         IsM12CoachPracticeBattle = false;
         ReturnToStoryProgressAfterBattle = true;
@@ -14,15 +15,28 @@ public static partial class BattleLaunchContext
     {
         IsIntroTutorialBattle = false;
         IsHarborTrainingGroundBattle = true;
+        IsFreeBattle = false;
         IsM12TrioTutorialBattle = false;
         IsM12CoachPracticeBattle = false;
         ReturnToStoryProgressAfterBattle = true;
+    }
+
+    public static void BeginFreeBattleLaunch(EnemyAiPlayStyle aiStyle)
+    {
+        IsIntroTutorialBattle = false;
+        IsHarborTrainingGroundBattle = false;
+        IsFreeBattle = true;
+        FreeBattleAiStyle = aiStyle;
+        IsM12TrioTutorialBattle = false;
+        IsM12CoachPracticeBattle = false;
+        ReturnToStoryProgressAfterBattle = false;
     }
 
     public static void BeginM12TrioTutorialBattleLaunch()
     {
         IsIntroTutorialBattle = false;
         IsHarborTrainingGroundBattle = false;
+        IsFreeBattle = false;
         IsM12TrioTutorialBattle = true;
         IsM12CoachPracticeBattle = false;
         ReturnToStoryProgressAfterBattle = true;
@@ -32,6 +46,7 @@ public static partial class BattleLaunchContext
     {
         IsIntroTutorialBattle = false;
         IsHarborTrainingGroundBattle = false;
+        IsFreeBattle = false;
         IsM12TrioTutorialBattle = false;
         IsM12CoachPracticeBattle = true;
         ReturnToStoryProgressAfterBattle = true;

@@ -412,3 +412,15 @@ flowchart TD
 - Android / iOS 與 Editor 行為一致；正式路徑仍為 `Application.persistentDataPath`。
 
 **建置啟動**：`EditorBuildSettings` 第 0 場景為 `login`（非 `hall`），與 APK 首次安裝流程一致。
+
+## 17. Deck Pack 導流（2026-07）
+
+hall「牌組」進 **`Deck Pack`** 場景（非直連 Buildbeck）。`DeckPackViewSession` 在跨場景時帶入下列語意：
+
+| 玩家操作 | 目標場景 | Session 旗標 | 資料／UI 行為 |
+|----------|----------|----------------|---------------|
+| **查看牌組** | `Persistent` | `RestrictBackpackToSelectedDeck = true` | 背包館藏格只顯示**該槽牌組內卡牌**（`ResolveLibraryDisplayCount`）；空槽 toast「該牌組為空」，不進場 |
+| **編輯牌組** | `Buildbeck` | `ShouldPreserveSelectedDeckSlotInBuildbeck`、`HideReadyBattleButtonInBuildbeck` | `DeckManager` 焦點該槽；**隱藏**「準備好了／準備完成」進戰鈕（`BuildbeckLayoutAutoBinder`） |
+| 離開 Persistent（hall 背包等） | — | `DeckPackViewSession.Clear()` | 重置限制與 Buildbeck 進戰隱藏 |
+
+程式錨點：`DeckPackSceneController`、`HallSceneFeatureBinder`（`牌組` → `Deck Pack`）。

@@ -2742,6 +2742,11 @@ MonoBehaviour:
   previewMinEnemySpellsInDeck: 2
   battlePreviewPanelSprite: {fileID: 7725769104599324719, guid: 0264243783b371346b79b739c14d58a1, type: 3}
   runtimeRoundedUiSprite: {fileID: 0}
+  difficultySpriteBasics: {fileID: 0}
+  difficultySpriteEasy: {fileID: 0}
+  difficultySpriteNormal: {fileID: 0}
+  difficultySpriteHard: {fileID: 0}
+  difficultySpriteBoss: {fileID: 0}
   selectedDifficultyTier: 2
   difficultyProfiles:
   - tier: 0

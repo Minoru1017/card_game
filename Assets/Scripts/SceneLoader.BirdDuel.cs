@@ -17,7 +17,9 @@ public partial class SceneLoader
         bool harborTraining,
         BattleDifficultyTier selectedTier,
         bool hasHiddenTier,
-        BattleDifficultyTier hiddenTier)
+        BattleDifficultyTier hiddenTier,
+        bool freeBattle = false,
+        EnemyAiPlayStyle freeBattleAiStyle = EnemyAiPlayStyle.Balanced)
     {
         string battleScene = string.IsNullOrWhiteSpace(battleSceneName)
             ? DefaultHarborBattleScene
@@ -31,9 +33,22 @@ public partial class SceneLoader
             heroId = hero.HeroId;
             heroName = hero.DisplayName;
         }
+        else if (freeBattle)
+        {
+            heroId = EnemyHeroCatalog.HotBloodClassmateId;
+            heroName = FreeBattleBattleCopy.GetEnemyHeroDisplayName(freeBattleAiStyle);
+        }
 
         PreBattleDuelContext.Begin(
-            battleScene, harborTraining, selectedTier, hasHiddenTier, hiddenTier, heroId, heroName);
+            battleScene,
+            harborTraining,
+            selectedTier,
+            hasHiddenTier,
+            hiddenTier,
+            heroId,
+            heroName,
+            freeBattle,
+            freeBattleAiStyle);
         PreBattleBonusContext.Clear();
         HideBattlePreviewModal();
 
@@ -44,7 +59,7 @@ public partial class SceneLoader
             PreBattleDuelContext.ClearActive();
             PreBattleBonusContext.Clear();
             PreBattleCdContext.Clear();
-            ApplyPreBattleDifficultyPending(harborTraining, selectedTier);
+            ApplyPreBattleDifficultyPending(harborTraining, selectedTier, freeBattle, freeBattleAiStyle);
             StartBattleSceneLoad();
             return;
         }
@@ -60,6 +75,8 @@ public partial class SceneLoader
     public static void ResumeBattleAfterBirdDuel(bool challengeHiddenTier, string intelText)
     {
         bool harbor = PreBattleDuelContext.IsHarborTraining;
+        bool freeBattle = PreBattleDuelContext.IsFreeBattle;
+        EnemyAiPlayStyle freeBattleAiStyle = PreBattleDuelContext.FreeBattleAiStyle;
         bool hasHidden = PreBattleDuelContext.HasHiddenTier;
         BattleDifficultyTier finalTier = (challengeHiddenTier && hasHidden)
             ? PreBattleDuelContext.HiddenTier
@@ -72,7 +89,7 @@ public partial class SceneLoader
         if (!string.IsNullOrWhiteSpace(battleScene))
             loader.battleSceneName = battleScene;
 
-        loader.ApplyPreBattleDifficultyPending(harbor, finalTier);
+        loader.ApplyPreBattleDifficultyPending(harbor, finalTier, freeBattle, freeBattleAiStyle);
         PreBattleDuelContext.ClearActive();
 
         if (!Application.CanStreamedLevelBeLoaded(loader.battleSceneName))
@@ -84,12 +101,22 @@ public partial class SceneLoader
         loader.StartBattleSceneLoad();
     }
 
-    /// <summary>套用戰鬥前難度設定（港灣與標準各走既有路徑），供戰前鬥鳥流程共用。</summary>
-    private void ApplyPreBattleDifficultyPending(bool harborTraining, BattleDifficultyTier tier)
+    /// <summary>套用戰鬥前難度設定（港灣、自由對戰與標準各走既有路徑），供戰前鬥鳥流程共用。</summary>
+    private void ApplyPreBattleDifficultyPending(
+        bool harborTraining,
+        BattleDifficultyTier tier,
+        bool freeBattle = false,
+        EnemyAiPlayStyle freeBattleAiStyle = EnemyAiPlayStyle.Balanced)
     {
         if (harborTraining)
         {
             ConfigureHarborTrainingBattlePending(tier);
+            return;
+        }
+
+        if (freeBattle)
+        {
+            ConfigureFreeBattleBattlePending(tier, freeBattleAiStyle);
             return;
         }
 
@@ -101,6 +128,80 @@ public partial class SceneLoader
         pendingEnemyAiPlayStyle = MapDifficultyToEnemyAiPlayStyle(tier);
         pendingDifficultyLabelZh = cfg.LabelZh;
         BattleLaunchContext.SetPendingDifficultyLabelZh(cfg.LabelZh);
+    }
+
+    /// <summary>自由對戰：50% 隨機事件觸發鬥鳥暖身賽。</summary>
+    private void TryBeginFreeBattleRandomBirdDuelEvent(
+        EnemyAiPlayStyle aiStyle,
+        BattleDifficultyTier selected)
+    {
+        if (UnityEngine.Random.value >= FreeBattleBattleCopy.BirdDuelRandomEventChance)
+        {
+            EnterBattleDirectlyWithoutBirdDuel(false, true, aiStyle, selected);
+            return;
+        }
+
+        ShowFreeBattleRandomBirdDuelEventOverlay(aiStyle, selected);
+    }
+
+    private void ShowFreeBattleRandomBirdDuelEventOverlay(
+        EnemyAiPlayStyle aiStyle,
+        BattleDifficultyTier selected)
+    {
+        Canvas canvas = ResolveBattlePreviewParentCanvas();
+        if (canvas == null)
+        {
+            PreBattleCdContext.SetSelectedCd(BirdDuelCdCatalog.DefaultCdId);
+            LaunchBirdDuelThenBattle(false, selected, false, BattleDifficultyTier.Boss, true, aiStyle);
+            return;
+        }
+
+        CloseBirdDuelEntryChoice();
+
+        GameObject overlay = BirdDuelOverlayUiBuild.CreateDimOverlay(
+            canvas.transform, 5000, "FreeBattleRandomEventOverlay");
+        GameObject panel = BirdDuelOverlayUiBuild.CreateMobilePanel(overlay.transform);
+
+        RectTransform headerRt = BirdDuelOverlayUiBuild.CreateHeaderBand(
+            panel.transform, "✦ 隨機事件", battlePreviewFontAsset);
+        BirdDuelOverlayUiBuild.CreateTitle(
+            panel.transform, "鬥鳥暖身賽", battlePreviewFontAsset,
+            BirdDuelMobileOverlayLayout.HeaderHeight + 8f);
+
+        string aiLabel = FreeBattleBattleCopy.GetAiStyleDisplayZh(aiStyle);
+        string bodyText =
+            "對手為 " + aiLabel + " 陪練。\n暖身賽勝出可獲戰前加成；落敗亦有保底，但敵方小幅強化。";
+        BirdDuelOverlayUiBuild.CreateInfoCard(
+            panel.transform,
+            bodyText,
+            battlePreviewFontAsset,
+            BirdDuelOverlayUiBuild.ComputeInfoCardTop(),
+            BirdDuelOverlayUiBuild.ComputeInfoCardBottom());
+
+        Button startBtn = BirdDuelOverlayUiBuild.CreatePrimaryButton(
+            panel.transform, "StartWarmupBtn", "開始暖身賽", battlePreviewFontAsset);
+        BirdDuelMobileOverlayLayout.PlaceStackedButton(startBtn.GetComponent<RectTransform>(), 0);
+        startBtn.onClick.AddListener(() =>
+        {
+            CloseBirdDuelEntryChoice();
+            ShowBirdDuelCdSelect(false, selected, false, BattleDifficultyTier.Boss, true, aiStyle);
+        });
+
+        Button skipBtn = BirdDuelOverlayUiBuild.CreateSecondaryButton(
+            panel.transform, "SkipWarmupBtn", "略過，直接對戰", battlePreviewFontAsset);
+        BirdDuelMobileOverlayLayout.PlaceStackedButton(skipBtn.GetComponent<RectTransform>(), 1);
+        skipBtn.onClick.AddListener(() =>
+        {
+            CloseBirdDuelEntryChoice();
+            EnterBattleDirectlyWithoutBirdDuel(false, true, aiStyle, selected);
+        });
+
+        Button backBtn = BirdDuelOverlayUiBuild.CreateGhostBackButton(
+            headerRt, battlePreviewFontAsset);
+        backBtn.onClick.AddListener(CloseBirdDuelEntryChoice);
+
+        birdDuelEntryOverlay = overlay;
+        overlay.transform.SetAsLastSibling();
     }
 
     // ----------------------------------------------------------------- 進關卡選擇（roguelike 分支）
@@ -125,78 +226,50 @@ public partial class SceneLoader
 
         CloseBirdDuelEntryChoice();
 
-        GameObject overlay = new GameObject(
-            "BirdDuelEntryOverlay", typeof(RectTransform), typeof(CanvasGroup), typeof(Image));
-        overlay.transform.SetParent(canvas.transform, false);
-        Canvas overlayCanvas = overlay.AddComponent<Canvas>();
-        overlayCanvas.overrideSorting = true;
-        overlayCanvas.sortingOrder = 5000;
-        overlay.AddComponent<GraphicRaycaster>();
-        RectTransform overlayRt = overlay.GetComponent<RectTransform>();
-        overlayRt.anchorMin = Vector2.zero;
-        overlayRt.anchorMax = Vector2.one;
-        overlayRt.offsetMin = Vector2.zero;
-        overlayRt.offsetMax = Vector2.zero;
-        overlay.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.72f);
+        GameObject overlay = BirdDuelOverlayUiBuild.CreateDimOverlay(
+            canvas.transform, 5000, "BirdDuelEntryOverlay");
+        GameObject panel = BirdDuelOverlayUiBuild.CreateMobilePanel(overlay.transform);
 
-        GameObject panel = new GameObject("Panel", typeof(RectTransform), typeof(Image));
-        panel.transform.SetParent(overlay.transform, false);
-        RectTransform panelRt = panel.GetComponent<RectTransform>();
-        panelRt.anchorMin = new Vector2(0.5f, 0.5f);
-        panelRt.anchorMax = new Vector2(0.5f, 0.5f);
-        panelRt.pivot = new Vector2(0.5f, 0.5f);
-        panelRt.sizeDelta = new Vector2(940f, 480f);
-        panel.GetComponent<Image>().color = new Color(0.12f, 0.14f, 0.2f, 0.98f);
-
-        CreateBirdDuelEntryText(
-            panel.transform, "Title", "戰前抉擇", 52f, FontStyles.Bold,
-            new Vector2(0f, -64f), new Vector2(860f, 72f));
+        RectTransform headerRt = BirdDuelOverlayUiBuild.CreateHeaderBand(
+            panel.transform, "✦ 戰前抉擇", battlePreviewFontAsset);
+        BirdDuelOverlayUiBuild.CreateTitle(
+            panel.transform, "鬥鳥暖身賽", battlePreviewFontAsset,
+            BirdDuelMobileOverlayLayout.HeaderHeight + 8f);
 
         string bodyText;
         if (harbor)
-            bodyText = "對手是熱血同學。挑戰鬥鳥依表現得加成；\n敗北亦有保底，但敵方小幅強化。";
+            bodyText = "對手是熱血同學。挑戰鬥鳥依表現得加成；敗北亦有保底，但敵方小幅強化。";
         else if (hasHidden)
-            bodyText = "挑戰鬥鳥依表現得加成，勝出可挑戰魔王級；\n敗北亦有保底，但敵方小幅強化。";
+            bodyText = "挑戰鬥鳥依表現得加成，勝出可挑戰魔王級；敗北亦有保底，但敵方小幅強化。";
         else
-            bodyText = "挑戰鬥鳥依表現得加成；\n敗北亦有保底，但敵方小幅強化。";
-        CreateBirdDuelEntryText(
-            panel.transform, "Body", bodyText, 28f, FontStyles.Normal,
-            new Vector2(0f, -170f), new Vector2(840f, 110f));
+            bodyText = "挑戰鬥鳥依表現得加成；敗北亦有保底，但敵方小幅強化。";
+        BirdDuelOverlayUiBuild.CreateInfoCard(
+            panel.transform,
+            bodyText,
+            battlePreviewFontAsset,
+            BirdDuelOverlayUiBuild.ComputeInfoCardTop(),
+            BirdDuelOverlayUiBuild.ComputeInfoCardBottom());
 
-        Button challengeBtn = CreateModalButton(panel.transform, "ChallengeBtn", "挑戰鬥鳥");
-        RectTransform cRt = challengeBtn.GetComponent<RectTransform>();
-        cRt.anchorMin = new Vector2(0.5f, 0f);
-        cRt.anchorMax = new Vector2(0.5f, 0f);
-        cRt.pivot = new Vector2(0.5f, 0f);
-        cRt.anchoredPosition = new Vector2(-190f, 44f);
-        cRt.sizeDelta = new Vector2(320f, 88f);
+        Button challengeBtn = BirdDuelOverlayUiBuild.CreatePrimaryButton(
+            panel.transform, "ChallengeBtn", "挑戰鬥鳥", battlePreviewFontAsset);
+        BirdDuelMobileOverlayLayout.PlaceStackedButton(challengeBtn.GetComponent<RectTransform>(), 0);
         challengeBtn.onClick.AddListener(() =>
         {
             CloseBirdDuelEntryChoice();
             ShowBirdDuelCdSelect(harbor, selected, hasHidden, hiddenTier);
         });
 
-        Button directBtn = CreateModalButton(panel.transform, "DirectBtn", "直接進入對戰");
-        RectTransform dRt = directBtn.GetComponent<RectTransform>();
-        dRt.anchorMin = new Vector2(0.5f, 0f);
-        dRt.anchorMax = new Vector2(0.5f, 0f);
-        dRt.pivot = new Vector2(0.5f, 0f);
-        dRt.anchoredPosition = new Vector2(190f, 44f);
-        dRt.sizeDelta = new Vector2(320f, 88f);
+        Button directBtn = BirdDuelOverlayUiBuild.CreateSecondaryButton(
+            panel.transform, "DirectBtn", "直接進入對戰", battlePreviewFontAsset);
+        BirdDuelMobileOverlayLayout.PlaceStackedButton(directBtn.GetComponent<RectTransform>(), 1);
         directBtn.onClick.AddListener(() =>
         {
             CloseBirdDuelEntryChoice();
-            EnterBattleDirectlyWithoutBirdDuel(harbor, selected);
+            EnterBattleDirectlyWithoutBirdDuel(harbor, false, EnemyAiPlayStyle.Balanced, selected);
         });
 
-        // 返回：關閉抉擇、回到戰前預覽。
-        Button backBtn = CreateModalButton(panel.transform, "BackBtn", "返回");
-        RectTransform bRt = backBtn.GetComponent<RectTransform>();
-        bRt.anchorMin = new Vector2(1f, 1f);
-        bRt.anchorMax = new Vector2(1f, 1f);
-        bRt.pivot = new Vector2(1f, 1f);
-        bRt.anchoredPosition = new Vector2(-18f, -14f);
-        bRt.sizeDelta = new Vector2(120f, 56f);
+        Button backBtn = BirdDuelOverlayUiBuild.CreateGhostBackButton(
+            headerRt, battlePreviewFontAsset);
         backBtn.onClick.AddListener(CloseBirdDuelEntryChoice);
 
         birdDuelEntryOverlay = overlay;
@@ -208,13 +281,15 @@ public partial class SceneLoader
         bool harbor,
         BattleDifficultyTier selected,
         bool hasHidden,
-        BattleDifficultyTier hiddenTier)
+        BattleDifficultyTier hiddenTier,
+        bool freeBattle = false,
+        EnemyAiPlayStyle freeBattleAiStyle = EnemyAiPlayStyle.Balanced)
     {
         Canvas canvas = ResolveBattlePreviewParentCanvas();
         if (canvas == null)
         {
             PreBattleCdContext.SetSelectedCd(BirdDuelCdCatalog.DefaultCdId);
-            LaunchBirdDuelThenBattle(harbor, selected, hasHidden, hiddenTier);
+            LaunchBirdDuelThenBattle(harbor, selected, hasHidden, hiddenTier, freeBattle, freeBattleAiStyle);
             return;
         }
 
@@ -225,9 +300,15 @@ public partial class SceneLoader
             {
                 PreBattleCdContext.SetSelectedCd(
                     string.IsNullOrWhiteSpace(cdId) ? BirdDuelCdCatalog.DefaultCdId : cdId);
-                LaunchBirdDuelThenBattle(harbor, selected, hasHidden, hiddenTier);
+                LaunchBirdDuelThenBattle(harbor, selected, hasHidden, hiddenTier, freeBattle, freeBattleAiStyle);
             },
-            () => ShowBirdDuelEntryChoice(harbor, selected, hasHidden, hiddenTier));
+            () =>
+            {
+                if (freeBattle)
+                    ShowFreeBattleRandomBirdDuelEventOverlay(freeBattleAiStyle, selected);
+                else
+                    ShowBirdDuelEntryChoice(harbor, selected, hasHidden, hiddenTier);
+            });
     }
 
     private void CloseBirdDuelEntryChoice()
@@ -239,37 +320,18 @@ public partial class SceneLoader
         }
     }
 
-    private void CreateBirdDuelEntryText(
-        Transform parent, string objName, string text, float fontSize, FontStyles style,
-        Vector2 anchoredPos, Vector2 size)
-    {
-        GameObject obj = new GameObject(objName, typeof(RectTransform), typeof(TextMeshProUGUI));
-        obj.transform.SetParent(parent, false);
-        RectTransform rt = obj.GetComponent<RectTransform>();
-        rt.anchorMin = new Vector2(0.5f, 1f);
-        rt.anchorMax = new Vector2(0.5f, 1f);
-        rt.pivot = new Vector2(0.5f, 1f);
-        rt.anchoredPosition = anchoredPos;
-        rt.sizeDelta = size;
-        TextMeshProUGUI tmp = obj.GetComponent<TextMeshProUGUI>();
-        if (battlePreviewFontAsset != null) tmp.font = battlePreviewFontAsset;
-        tmp.text = text;
-        tmp.fontSize = fontSize;
-        tmp.fontStyle = style;
-        tmp.alignment = TextAlignmentOptions.Top;
-        tmp.enableWordWrapping = true;
-        tmp.color = new Color(0.92f, 0.95f, 0.99f, 1f);
-        tmp.raycastTarget = false;
-    }
-
     /// <summary>「直接進入對戰」：清空加成、套用所選難度後載入戰鬥（不經鬥鳥）。</summary>
-    private void EnterBattleDirectlyWithoutBirdDuel(bool harbor, BattleDifficultyTier selected)
+    private void EnterBattleDirectlyWithoutBirdDuel(
+        bool harbor,
+        bool freeBattle,
+        EnemyAiPlayStyle freeBattleAiStyle,
+        BattleDifficultyTier selected)
     {
         PreBattleBonusContext.Clear();
         PreBattleCdContext.Clear();
         PreBattleDuelContext.ClearActive();
         HideBattlePreviewModal();
-        ApplyPreBattleDifficultyPending(harbor, selected);
+        ApplyPreBattleDifficultyPending(harbor, selected, freeBattle, freeBattleAiStyle);
 
         if (!Application.CanStreamedLevelBeLoaded(battleSceneName))
         {

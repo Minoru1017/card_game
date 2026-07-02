@@ -59,7 +59,7 @@ public sealed class PlotNpcVoicePlayer : MonoBehaviour
         EnsureVoiceSource();
         Stop();
         voiceSource.clip = clip;
-        voiceSource.volume = volume;
+        voiceSource.volume = GameAudioUserSettings.ScaleNpcVoice(volume);
         voiceSource.loop = false;
         voiceSource.time = 0f;
         voiceSource.Play();

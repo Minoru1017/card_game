@@ -619,6 +619,11 @@ public class GlobalNavRuntime : MonoBehaviour
             }
         }
 
+        // Hub scenes that must keep the global nav trigger even if a hide key matches loosely (e.g. "deck", "battle").
+        if (string.Equals(sceneName, DeckPackSceneController.SceneName, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(sceneName, FreeBattleBattleCopy.SceneName, StringComparison.OrdinalIgnoreCase))
+            hidden = false;
+
         if (view != null && view.triggerButtonObject != null) view.triggerButtonObject.SetActive(!hidden);
         SetTabPanelOpen(false);
         if (playerInfoOverlayRoot != null) playerInfoOverlayRoot.SetActive(false);
@@ -708,6 +713,7 @@ public class GlobalNavRuntime : MonoBehaviour
 
     private static void TryLoadBackpackScene()
     {
+        DeckPackViewSession.Clear();
         string preferred = string.IsNullOrWhiteSpace(config != null ? config.backpackSceneName : null)
             ? "Persistent"
             : config.backpackSceneName;

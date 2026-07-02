@@ -8,6 +8,8 @@ public static class BattlePreviewPuzzleIndex
     public const string Pz02FindHardDifficulty = "PZ02";
     /// <summary>Story progress 港灣訓練場：僅簡單／普通／困難，無謎題解鎖。</summary>
     public const string HarborTrainingGround = "HARBOR_M11";
+    /// <summary>自由對戰：簡單／普通／困難，AI 由場景按鈕指定。</summary>
+    public const string FreeBattleGround = "FREE_BATTLE";
 
     /// <summary>戰前預覽隨機抽選：PZ01 權重（PZ02 = 1 - 此值）。</summary>
     public const float RandomPreviewPuzzlePz01Weight = 0.5f;
@@ -120,7 +122,7 @@ public static class BattlePreviewPuzzleIndex
 
     public static AuthoredArchSlot[] GetArchSlotsForPuzzle(string puzzleId)
     {
-        if (puzzleId == HarborTrainingGround)
+        if (puzzleId == HarborTrainingGround || puzzleId == FreeBattleGround)
             return HarborTrainingArchSlotsLeftToRight;
         if (puzzleId == Pz02FindHardDifficulty)
             return Pz02ArchSlotsLeftToRight;

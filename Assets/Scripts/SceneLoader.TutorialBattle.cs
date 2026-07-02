@@ -13,7 +13,7 @@ public partial class SceneLoader
         pendingFixedEnemyDeckCardIds = IntroTutorialBattleRules.WeakEnemyDeckCardIds;
         pendingEnemyOverLimitAllowance = 0;
         pendingMinEnemySpellsInDeck = Mathf.Min(cfg.MinSpellsInDeck, 2);
-        pendingEnemyAiPlayStyle = EnemyAiPlayStyle.IntroGreedy;
+        pendingEnemyAiPlayStyle = EnemyAiPlayStyle.Balanced;
         pendingDifficultyLabelZh = "入門級";
         BattleLaunchContext.SetPendingDifficultyLabelZh(pendingDifficultyLabelZh);
         BattleLaunchContext.BeginIntroTutorialBattleLaunch();
@@ -76,7 +76,7 @@ public partial class SceneLoader
         return DefaultTutorialBattleScene;
     }
 
-    /// <summary>Skip battle preview; launch intro tutorial battle (no weather, IntroGreedy AI).</summary>
+    /// <summary>Skip battle preview; launch intro tutorial battle (no weather, Balanced AI with teaching tweaks).</summary>
     public void LaunchIntroTutorialBattleDirect(string targetBattleScene = null)
     {
         string scene = PrepareIntroTutorialBattleLaunch(targetBattleScene);

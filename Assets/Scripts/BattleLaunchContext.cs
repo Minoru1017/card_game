@@ -6,6 +6,8 @@ public static partial class BattleLaunchContext
     public static bool ReturnToStoryProgressAfterBattle { get; private set; }
     public static bool IsIntroTutorialBattle { get; private set; }
     public static bool IsHarborTrainingGroundBattle { get; private set; }
+    public static bool IsFreeBattle { get; private set; }
+    public static EnemyAiPlayStyle FreeBattleAiStyle { get; private set; } = EnemyAiPlayStyle.Balanced;
     public static bool IsM12TrioTutorialBattle { get; private set; }
     public static bool IsM12CoachPracticeBattle { get; private set; }
     public static string EnemyHeroId { get; private set; }
@@ -43,6 +45,8 @@ public static partial class BattleLaunchContext
         ReturnToStoryProgressAfterBattle = false;
         IsIntroTutorialBattle = false;
         IsHarborTrainingGroundBattle = false;
+        IsFreeBattle = false;
+        FreeBattleAiStyle = EnemyAiPlayStyle.Balanced;
         IsM12TrioTutorialBattle = false;
         IsM12CoachPracticeBattle = false;
         EnemyHeroId = null;

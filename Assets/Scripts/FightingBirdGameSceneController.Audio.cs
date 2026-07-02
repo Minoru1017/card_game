@@ -48,7 +48,7 @@ public sealed partial class FightingBirdGameSceneController
         if (clip == null)
             return;
 
-        hitSfxSource.PlayOneShot(clip, BirdDuelHitSfxBank.ResolveVolume(outcome));
+        hitSfxSource.PlayOneShot(clip, GameAudioUserSettings.ScaleBattleSfx(BirdDuelHitSfxBank.ResolveVolume(outcome)));
     }
 
     /// <summary>鬥鳥預設曲：feinsmecker - Come Again。建立並備妥音源；實際排程於每場開始時 <see cref="RestartSongAndClock"/>。</summary>
@@ -70,7 +70,7 @@ public sealed partial class FightingBirdGameSceneController
         bgmSource.spatialBlend = 0f;
         bgmSource.bypassListenerEffects = true;
         bgmSource.ignoreListenerPause = true;
-        bgmSource.volume = BgmVolume;
+        bgmSource.volume = GameAudioUserSettings.ScaleBgm(BgmVolume);
         bgmSource.clip = bgmClip;
 
         if (bgmClip.loadState != AudioDataLoadState.Loaded)
@@ -158,6 +158,12 @@ public sealed partial class FightingBirdGameSceneController
     }
 #endif
 
+    public void ApplyUserBgmVolume()
+    {
+        if (bgmSource != null)
+            bgmSource.volume = GameAudioUserSettings.ScaleBgm(BgmVolume);
+    }
+
     private void OnDestroy()
     {
         if (bgmSource != null && bgmSource.isPlaying)
@@ -170,7 +176,11 @@ public sealed partial class FightingBirdGameSceneController
     {
         if (audioSource == null) return;
         AudioClip clip = downbeat ? downbeatClip : tickClip;
-        if (clip != null) audioSource.PlayOneShot(clip, downbeat ? 0.9f : 0.7f);
+        if (clip != null)
+        {
+            float tickVolume = downbeat ? 0.9f : 0.7f;
+            audioSource.PlayOneShot(clip, GameAudioUserSettings.ScaleBattleSfx(tickVolume));
+        }
     }
 
     private static AudioClip BuildClickClip(float frequency, float duration)
