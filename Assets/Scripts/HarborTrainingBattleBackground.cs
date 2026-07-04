@@ -2,11 +2,15 @@ using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
-/// 港灣訓練場（1-1 實戰）對戰場景背景：將 <c>戰鬥背景</c> 換為 bay 圖（自 UiSpriteLibrary 直接引用）；其餘對戰維持場景預設。
+/// 港灣訓練場（1-1 實戰）對戰場景背景：將 <c>戰鬥背景</c> 換為 bay 圖（自 UiSpriteLibrary 直接引用）；
+/// M-1-2 階段 A 段考換為教室圖（Classroom_FE；恐怖狀態為 Classroom_FR）；其餘對戰維持場景預設。
 /// </summary>
 public static class HarborTrainingBattleBackground
 {
     public const string BattleBackgroundObjectName = "戰鬥背景";
+
+    /// <summary>場景預設（自由對戰）「戰鬥背景」的版面：置中固定 2778×1284，超出畫布裁切（放大效果）。</summary>
+    private static readonly Vector2 DefaultZoomedSize = new Vector2(2778f, 1284f);
 
     private static Sprite cachedDefaultSprite;
     private static Sprite cachedHarborSprite;
@@ -18,7 +22,9 @@ public static class HarborTrainingBattleBackground
                 UnityEngine.SceneManagement.SceneManager.GetActiveScene().name))
             return;
 
-        if (BattleLaunchContext.IsHarborTrainingGroundBattle ||
+        if (BattleLaunchContext.IsM12TrioTutorialBattle)
+            ApplyClassroomBackground();
+        else if (BattleLaunchContext.IsHarborTrainingGroundBattle ||
             BattleLaunchContext.IsM12CoachPracticeBattle)
             ApplyHarborBackground();
         else
@@ -41,6 +47,35 @@ public static class HarborTrainingBattleBackground
         }
 
         ApplySpriteToBackground(image, harbor);
+    }
+
+    public static void ApplyClassroomBackground() => ApplyClassroomSprite(resolveNormal: true);
+
+    /// <summary>M-1-2 段考恐怖狀態：Classroom_FR。</summary>
+    public static void ApplyM12PhaseAHorrorBackground() => ApplyClassroomSprite(resolveNormal: false);
+
+    private static void ApplyClassroomSprite(bool resolveNormal)
+    {
+        Image image = ResolveBattleBackgroundImage();
+        if (image == null)
+            return;
+
+        CaptureDefaultIfNeeded(image);
+
+        UiSpriteLibrary library = UiSpriteLibrary.Instance;
+        Sprite classroom = library != null
+            ? (resolveNormal ? library.ClassroomBackground : library.ClassroomHorrorBackground)
+            : null;
+        if (classroom == null)
+        {
+            Debug.LogWarning(
+                "HarborTrainingBattleBackground: " +
+                (resolveNormal ? "Classroom_FE" : "Classroom_FR") +
+                " 不在 UiSpriteLibrary，請重跑 Tools/UI/Create or Refresh UI Sprite Library。");
+            return;
+        }
+
+        ApplySpriteToBackground(image, classroom);
     }
 
     private static void RestoreDefaultBackground()
@@ -121,11 +156,12 @@ public static class HarborTrainingBattleBackground
         if (rt == null)
             return;
 
-        rt.anchorMin = Vector2.zero;
-        rt.anchorMax = Vector2.one;
+        // 與自由對戰（場景預設）同一放大倍率：置中 2778×1284、超出畫布部分自然裁切。
+        rt.anchorMin = new Vector2(0.5f, 0.5f);
+        rt.anchorMax = new Vector2(0.5f, 0.5f);
         rt.pivot = new Vector2(0.5f, 0.5f);
         rt.anchoredPosition = Vector2.zero;
-        rt.sizeDelta = Vector2.zero;
+        rt.sizeDelta = DefaultZoomedSize;
         rt.localScale = Vector3.one;
         rt.SetAsFirstSibling();
     }

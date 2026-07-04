@@ -87,6 +87,7 @@ public sealed class TutorialBattleSettlementUi : MonoBehaviour
     private IEnumerator CoShowSettlement(int result)
     {
         _showing = true;
+        yield return BattleSimulationDebugUI.CoWaitForVictoryPresentationIfNeeded(result);
         yield return null;
         yield return new WaitForEndOfFrame();
 
@@ -468,6 +469,7 @@ public sealed class TutorialBattleSettlementUi : MonoBehaviour
             _victoryAnimRoutine = null;
         }
         if (_overlayRoot != null) _overlayRoot.SetActive(false);
+        BattleUiGrayscaleFx.Release();
     }
 
     private void EnsureUi()

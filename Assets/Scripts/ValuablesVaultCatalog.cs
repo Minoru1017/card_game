@@ -5,6 +5,10 @@ public static class ValuablesVaultCatalog
 {
     public const int CdFragmentDefinitionBase = 900000;
     public const int CdDiscDefinitionBase = 910000;
+    public const int KeyItemDefinitionBase = 920000;
+
+    /// <summary>M-1-2 中段拾取的封印法術（LEVEL_DESIGN_M-1-2.md §3.3.3；支線解封前效果未知）。</summary>
+    public const int SealedSpellRelicDefinitionId = KeyItemDefinitionBase + 1;
 
     private static readonly Dictionary<string, int> CdFragmentDefinitionIds =
         new Dictionary<string, int>
@@ -37,6 +41,13 @@ public static class ValuablesVaultCatalog
         foreach (KeyValuePair<string, int> pair in CdDiscDefinitionIds)
             CdDiscDefinitionToCdId[pair.Value] = pair.Key;
     }
+
+    public static bool IsSealedSpellRelicDefinition(int definitionId) =>
+        definitionId == SealedSpellRelicDefinitionId;
+
+    /// <summary>關鍵道具（劇情伏筆）：不可丟棄、不換算寶石。</summary>
+    public static bool IsKeyItemDefinition(int definitionId) =>
+        IsSealedSpellRelicDefinition(definitionId);
 
     public static bool IsCdFragmentDefinition(int definitionId) =>
         CdFragmentDefinitionToCdId.ContainsKey(definitionId);
@@ -99,13 +110,31 @@ public static class ValuablesVaultCatalog
             TryAutoPlaceOwnedCdDisc(playerSlot, ownedIds[i]);
     }
 
-    private static bool IsCdDiscInVault(int playerSlot, int discDefinitionId)
+    /// <summary>M-1-2 中段已拾取封印法術但尚未入庫時，放入第一個空格。</summary>
+    public static bool TrySyncSealedSpellRelicToVault(int playerSlot)
+    {
+        playerSlot = UnityEngine.Mathf.Clamp(playerSlot, 1, PlayerData.MaxPlayerSlots);
+        if (!M12SeawallPatrolProgressState.IsSealedSpellFound(playerSlot))
+            return false;
+        if (IsDefinitionInVault(playerSlot, SealedSpellRelicDefinitionId))
+            return false;
+        if (!TryFindFirstEmptyVaultCell(playerSlot, out int cellIndex))
+            return false;
+
+        ValuablesVaultState.SetStack(playerSlot, cellIndex, SealedSpellRelicDefinitionId, 1);
+        return true;
+    }
+
+    private static bool IsCdDiscInVault(int playerSlot, int discDefinitionId) =>
+        IsDefinitionInVault(playerSlot, discDefinitionId);
+
+    private static bool IsDefinitionInVault(int playerSlot, int definitionId)
     {
         for (int cell = 0; cell < ValuablesVaultState.SlotCount; cell++)
         {
             if (!ValuablesVaultState.TryGetStack(playerSlot, cell, out ValuablesVaultState.VaultStack stack))
                 continue;
-            if (stack.DefinitionId == discDefinitionId)
+            if (stack.DefinitionId == definitionId)
                 return true;
         }
 

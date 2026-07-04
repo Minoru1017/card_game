@@ -23,8 +23,8 @@ public sealed class HarborCombatCoachUi : MonoBehaviour
     /// <summary>棄牌階段左側為棄牌區，林可姐改到右側以免遮擋。</summary>
     private static readonly Vector2 DiscardCollapsedPanelPosition = new Vector2(-PanelLeftMarginPx, 32f);
     private static readonly Vector2 DiscardExpandedPanelPosition = new Vector2(-PanelLeftMarginPx, 88f);
-    private const float ExpandedPanelWidth = 520f;
-    private const float ExpandedPortraitSize = 140f;
+    private const float ExpandedPanelWidth = 560f;
+    private const float ExpandedPortraitSize = 180f;
     private const float ExpandedEdgePad = 20f;
     private const float ExpandedPortraitTextGap = 16f;
     private const float ExpandedNameFontSize = 32f;
@@ -546,13 +546,12 @@ public sealed class HarborCombatCoachUi : MonoBehaviour
 
         if (_nameRt != null)
         {
+            // 只能用 offset 設定：之後再改 sizeDelta 會把左邊界歸零，名字會壓到立繪。
             _nameRt.anchorMin = new Vector2(0f, 1f);
             _nameRt.anchorMax = new Vector2(1f, 1f);
             _nameRt.pivot = new Vector2(0.5f, 1f);
-            _nameRt.offsetMin = new Vector2(contentLeft, 0f);
-            _nameRt.offsetMax = new Vector2(-ExpandedEdgePad, 0f);
-            _nameRt.sizeDelta = new Vector2(0f, ExpandedNameRowHeight);
-            _nameRt.anchoredPosition = new Vector2(0f, -ExpandedEdgePad);
+            _nameRt.offsetMin = new Vector2(contentLeft, -(ExpandedEdgePad + ExpandedNameRowHeight));
+            _nameRt.offsetMax = new Vector2(-ExpandedEdgePad, -ExpandedEdgePad);
         }
 
         if (_speakerNameText != null)

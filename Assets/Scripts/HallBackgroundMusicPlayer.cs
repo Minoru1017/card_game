@@ -43,6 +43,7 @@ public sealed class HallBackgroundMusicPlayer : MonoBehaviour
         {
             StoryProgressBackgroundMusicPlayer.StopAll();
             TutorialBattleBackgroundMusicPlayer.StopAll();
+            FreeBattleBackgroundMusicPlayer.StopAll();
             PlotBackgroundMusicPlayer.StopAllInMainPlotIfLoaded();
             EnsureInScene(scene)?.PlayHallBgm();
             return;

@@ -3,7 +3,7 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
-/// <summary>M-1-2 段考專用結算（A/B 戰技達標 + 發獎流程）。</summary>
+/// <summary>M-1-2 專用結算（A 段考／B 教會三張加練；戰技達標 + 發獎流程）。</summary>
 public sealed class M12BattleSettlementUi : MonoBehaviour
 {
     private const float PanelWidth = 640f;
@@ -56,6 +56,7 @@ public sealed class M12BattleSettlementUi : MonoBehaviour
     private IEnumerator CoShowSettlement(int result)
     {
         _showing = true;
+        yield return BattleSimulationDebugUI.CoWaitForVictoryPresentationIfNeeded(result);
         yield return null;
         yield return new WaitForEndOfFrame();
 
@@ -78,6 +79,8 @@ public sealed class M12BattleSettlementUi : MonoBehaviour
     {
         M12BattleCoachUi coach = Object.FindFirstObjectByType<M12BattleCoachUi>();
         coach?.HideForSettlement();
+        M12BattleMissionBarUi missionBar = Object.FindFirstObjectByType<M12BattleMissionBarUi>();
+        missionBar?.HideForSettlement();
     }
 
     private void ApplyContent(int result)
@@ -119,17 +122,17 @@ public sealed class M12BattleSettlementUi : MonoBehaviour
             bool granted = M12ReligiousLineRewardService.TryGrantReligiousLineReward();
             M12SeawallPatrolProgressState.MarkNodeCleared(slot);
             string cards = M12ReligiousLineRewardService.FormatRewardCardNames(_manager?.cardStore);
-            _titleText.text = "海牆巡邏段考通過";
+            _titleText.text = "海牆巡邏通關";
             _bodyText.text = granted
                 ? "獲得 " + cards + "\n熟練度 B"
-                : "段考通過\n" + cards + " 已於首通取得";
+                : "教會三張加練完成\n" + cards + " 已於首通取得";
             CreateFooterButton("繼續", true, OnClickPhaseBContinue);
             return;
         }
 
         if (won)
         {
-            _titleText.text = "勝利 · 段考未達標";
+            _titleText.text = "勝利 · 戰技合計未達標";
             _bodyText.text = M12SeawallPatrolProgressState.BuildCombinedTrioMissingHint(slot) +
                              "\n\n請重打階段 B";
             CreateFooterButton("再試一次", true, OnClickRetry);

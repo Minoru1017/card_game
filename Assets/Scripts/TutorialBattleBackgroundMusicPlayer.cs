@@ -7,21 +7,30 @@ using UnityEditor;
 #endif
 
 /// <summary>
-/// 1-1 對戰 BGM：入門教學戰（Forgotten Dreams）、港灣訓練場實戰（Shades - Mysterious，簡單～困難共用）。
+/// 1-1／1-2 對戰 BGM：入門教學戰（Forgotten Dreams）、港灣訓練場實戰（Shades - Mysterious，簡單～困難共用）、
+/// M-1-2 階段 A 段考（Lalinea - Cut to the Chase - Instrumental version；恐怖狀態 Whisper）。
 /// </summary>
 public class TutorialBattleBackgroundMusicPlayer : MonoBehaviour
 {
     public const string ForgottenDreamsResourcesPath = "Music/Aves - Forgotten Dreams";
     public const string HarborTrainingBgmResourcesPath = "Music/Ziv Moran - Shades - Mysterious";
+    public const string M12PhaseABgmResourcesPath = "Music/Lalinea - Cut to the Chase - Instrumental version";
+    public const string M12PhaseAHorrorBgmResourcesPath = "Music/Whisper";
     public const string DefaultTutorialBattleSceneName = "BattleSimulation";
 
 #if UNITY_EDITOR
     public const string ForgottenDreamsAssetPath = "Assets/Resources/Music/Aves - Forgotten Dreams.mp3";
     public const string HarborTrainingBgmAssetPath = "Assets/Music/Ziv Moran - Shades - Mysterious.mp3";
+    public const string M12PhaseABgmAssetPath = "Assets/Music/Lalinea - Cut to the Chase - Instrumental version.mp3";
+    public const string M12PhaseAHorrorBgmAssetPath = "Assets/Music/Whisper.mp3";
 #endif
+
+    private const float M12BattleBgmVolume = 0.78f;
 
     [SerializeField] private AudioClip introTutorialBgmClip;
     [SerializeField] private AudioClip harborTrainingBgmClip;
+    [SerializeField] private AudioClip m12PhaseABgmClip;
+    [SerializeField] private AudioClip m12PhaseAHorrorBgmClip;
     [SerializeField] [Range(0f, 1.5f)] private float volume = 1.1f;
 
     private AudioSource audioSource;
@@ -52,9 +61,21 @@ public class TutorialBattleBackgroundMusicPlayer : MonoBehaviour
 
         HarborTrainingBattleBackground.ApplyForActiveBattleContext();
 
+        if (BattleLaunchContext.IsFreeBattle)
+        {
+            StopInScene(scene);
+            return;
+        }
+
+        FreeBattleBackgroundMusicPlayer.StopAll();
+
         if (BattleLaunchContext.IsIntroTutorialBattle)
             EnsureInScene(scene)?.PlayIntroTutorialBattleBgm();
         else if (BattleLaunchContext.IsHarborTrainingGroundBattle)
+            EnsureInScene(scene)?.PlayHarborTrainingBattleBgm();
+        else if (BattleLaunchContext.IsM12TrioTutorialBattle)
+            EnsureInScene(scene)?.PlayM12PhaseABattleBgm();
+        else if (BattleLaunchContext.IsM12CoachPracticeBattle)
             EnsureInScene(scene)?.PlayHarborTrainingBattleBgm();
         else
             StopInScene(scene);
@@ -121,6 +142,12 @@ public class TutorialBattleBackgroundMusicPlayer : MonoBehaviour
     /// <summary>港灣訓練場（簡單／普通／困難）共用 BGM。</summary>
     public void PlayHarborTrainingBattleBgm() => PlayBattleBgm(ResolveHarborTrainingClip());
 
+    /// <summary>M-1-2 階段 A 段考 BGM。</summary>
+    public void PlayM12PhaseABattleBgm() => PlayBattleBgm(ResolveM12PhaseAClip());
+
+    /// <summary>M-1-2 階段 A 段考恐怖狀態 BGM。</summary>
+    public void PlayM12PhaseAHorrorBgm() => PlayBattleBgm(ResolveM12PhaseAHorrorClip());
+
     public void PlayTutorialBattleBgm() => PlayIntroTutorialBattleBgm();
 
     private void PlayBattleBgm(AudioClip clip)
@@ -154,6 +181,8 @@ public class TutorialBattleBackgroundMusicPlayer : MonoBehaviour
         EnsureBgmSource();
         ResolveIntroTutorialClipIfMissing();
         ResolveHarborTrainingClipIfMissing();
+        ResolveM12PhaseAClipIfMissing();
+        ResolveM12PhaseAHorrorClipIfMissing();
     }
 
     private void OnDestroy() => StopTutorialBattleBgm();
@@ -167,8 +196,11 @@ public class TutorialBattleBackgroundMusicPlayer : MonoBehaviour
         AudioClip clip = activeClip;
         if (clip == null)
         {
-            if (BattleLaunchContext.IsHarborTrainingGroundBattle)
+            if (BattleLaunchContext.IsHarborTrainingGroundBattle ||
+                BattleLaunchContext.IsM12CoachPracticeBattle)
                 clip = ResolveHarborTrainingClip();
+            else if (BattleLaunchContext.IsM12TrioTutorialBattle)
+                clip = ResolveM12PhaseAClip();
             else
                 clip = ResolveIntroTutorialClip();
         }
@@ -181,7 +213,7 @@ public class TutorialBattleBackgroundMusicPlayer : MonoBehaviour
 
         EnsureClipLoaded(clip);
         audioSource.clip = clip;
-        audioSource.volume = GameAudioUserSettings.ScaleBgm(volume);
+        audioSource.volume = GameAudioUserSettings.ScaleBgm(ResolvePlaybackVolume());
         audioSource.loop = true;
         audioSource.time = 0f;
 
@@ -211,7 +243,28 @@ public class TutorialBattleBackgroundMusicPlayer : MonoBehaviour
     public void ApplyUserBgmVolume()
     {
         if (audioSource != null)
-            audioSource.volume = GameAudioUserSettings.ScaleBgm(volume);
+            audioSource.volume = GameAudioUserSettings.ScaleBgm(ResolvePlaybackVolume());
+    }
+
+    private float ResolvePlaybackVolume()
+    {
+        if (IsM12BattleContext() || IsM12BattleClip(activeClip))
+            return M12BattleBgmVolume;
+        return volume;
+    }
+
+    private static bool IsM12BattleContext() =>
+        BattleLaunchContext.IsM12TrioTutorialBattle ||
+        BattleLaunchContext.IsM12CoachPracticeBattle;
+
+    private bool IsM12BattleClip(AudioClip clip)
+    {
+        if (clip == null)
+            return false;
+
+        ResolveM12PhaseAClipIfMissing();
+        ResolveM12PhaseAHorrorClipIfMissing();
+        return clip == m12PhaseABgmClip || clip == m12PhaseAHorrorBgmClip;
     }
 
     private void EnsureBgmSource()
@@ -298,12 +351,51 @@ public class TutorialBattleBackgroundMusicPlayer : MonoBehaviour
 #endif
     }
 
+    private AudioClip ResolveM12PhaseAClip()
+    {
+        ResolveM12PhaseAClipIfMissing();
+        return m12PhaseABgmClip;
+    }
+
+    private void ResolveM12PhaseAClipIfMissing()
+    {
+        if (m12PhaseABgmClip != null)
+            return;
+
+        m12PhaseABgmClip = Resources.Load<AudioClip>(M12PhaseABgmResourcesPath);
+#if UNITY_EDITOR
+        if (m12PhaseABgmClip == null)
+            m12PhaseABgmClip = AssetDatabase.LoadAssetAtPath<AudioClip>(M12PhaseABgmAssetPath);
+#endif
+    }
+
+    private AudioClip ResolveM12PhaseAHorrorClip()
+    {
+        ResolveM12PhaseAHorrorClipIfMissing();
+        return m12PhaseAHorrorBgmClip;
+    }
+
+    private void ResolveM12PhaseAHorrorClipIfMissing()
+    {
+        if (m12PhaseAHorrorBgmClip != null)
+            return;
+
+        m12PhaseAHorrorBgmClip = Resources.Load<AudioClip>(M12PhaseAHorrorBgmResourcesPath);
+#if UNITY_EDITOR
+        if (m12PhaseAHorrorBgmClip == null)
+            m12PhaseAHorrorBgmClip = AssetDatabase.LoadAssetAtPath<AudioClip>(M12PhaseAHorrorBgmAssetPath);
+#endif
+    }
+
     private bool IsOnSupportedBattleScene() =>
         gameObject.scene.IsValid() && IsSupportedBattleScene(gameObject.scene.name);
 
     private static bool ShouldPlayStoryProgressBattleBgm() =>
         BattleLaunchContext.ReturnToStoryProgressAfterBattle &&
-        (BattleLaunchContext.IsIntroTutorialBattle || BattleLaunchContext.IsHarborTrainingGroundBattle);
+        (BattleLaunchContext.IsIntroTutorialBattle ||
+         BattleLaunchContext.IsHarborTrainingGroundBattle ||
+         BattleLaunchContext.IsM12TrioTutorialBattle ||
+         BattleLaunchContext.IsM12CoachPracticeBattle);
 
     public static bool IsSupportedBattleScene(string sceneName) =>
         sceneName == DefaultTutorialBattleSceneName || sceneName == "BattleScene";

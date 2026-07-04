@@ -309,7 +309,11 @@ public static class MonsterSkillRegistry
     }
 
     /// <summary>國王·庭訓號令：減傷後至少 1；每局最多觸發 maxCharges 次。</summary>
-    public static int ApplyTrainingCourtDecree(ref int chargesRemaining, int incomingDamage, Action<string> logHistory)
+    public static int ApplyTrainingCourtDecree(
+        ref int chargesRemaining,
+        int incomingDamage,
+        Action<string> logHistory,
+        bool isPlayerSide)
     {
         if (chargesRemaining <= 0 || incomingDamage <= 0)
             return incomingDamage;
@@ -317,7 +321,7 @@ public static class MonsterSkillRegistry
         if (reduced >= incomingDamage)
             return incomingDamage;
         chargesRemaining--;
-        M12TrioMasteryBattleTracker.NotifyKingDecreeTriggered();
+        M12TrioMasteryBattleTracker.NotifyKingDecreeTriggered(isPlayerSide);
         logHistory?.Invoke("庭訓號令：這次傷害少 5 點 本局還可觸發 " + chargesRemaining + " 次");
         return reduced;
     }
@@ -495,7 +499,11 @@ public static class MonsterSkillRegistry
     }
 
     /// <summary>王后·王室庇護：每局首次受到傷害時 −3（減後至少 1）。</summary>
-    public static int ApplyQueenShelter(ref bool firstHitConsumed, int incomingDamage, Action<string> logHistory)
+    public static int ApplyQueenShelter(
+        ref bool firstHitConsumed,
+        int incomingDamage,
+        Action<string> logHistory,
+        bool isPlayerSide)
     {
         if (firstHitConsumed || incomingDamage <= 0)
             return incomingDamage;
@@ -503,7 +511,7 @@ public static class MonsterSkillRegistry
         if (reduced >= incomingDamage)
             return incomingDamage;
         firstHitConsumed = true;
-        M12TrioMasteryBattleTracker.NotifyQueenShelterTriggered();
+        M12TrioMasteryBattleTracker.NotifyQueenShelterTriggered(isPlayerSide);
         logHistory?.Invoke("王室庇護：這次傷害少 3 點 本局不再觸發");
         return reduced;
     }

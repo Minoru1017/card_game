@@ -40,6 +40,13 @@ public static class HarborCombatCoachExpressionCatalog
             : HarborCoachExpression.Neutral;
     }
 
+    /// <summary>對戰教練立繪的預設圖：第一表情（Neutral，Linkk_Smile）；缺檔退回劇情立繪。</summary>
+    public static Sprite ResolveNeutralOrFallback()
+    {
+        Sprite sprite = ResolveSprite(HarborCoachExpression.Neutral);
+        return sprite != null ? sprite : TutorialPlotScriptFactory.GetLinKePortraitSprite();
+    }
+
     public static void ApplyToPortrait(Image portraitImage, string hintKey)
     {
         if (portraitImage == null) return;

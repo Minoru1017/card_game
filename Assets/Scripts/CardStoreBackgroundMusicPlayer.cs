@@ -47,6 +47,7 @@ public sealed class CardStoreBackgroundMusicPlayer : MonoBehaviour
             BuildbeckBackgroundMusicPlayer.StopAll();
             StoryProgressBackgroundMusicPlayer.StopAll();
             TutorialBattleBackgroundMusicPlayer.StopAll();
+            FreeBattleBackgroundMusicPlayer.StopAll();
             PlotBackgroundMusicPlayer.StopAllInMainPlotIfLoaded();
             EnsureInScene(scene)?.PlayCardStoreBgm();
             return;

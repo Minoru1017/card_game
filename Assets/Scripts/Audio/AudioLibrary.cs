@@ -36,6 +36,8 @@ public sealed class AudioLibrary : ScriptableObject
     [SerializeField] private AudioClip birdDuelHitSfxSource;
     [SerializeField] private AudioClip menuClickSfx;
     [SerializeField] private AudioClip typingSfx;
+    [SerializeField] private AudioClip monsterCardAttackSfx;
+    [SerializeField] private AudioClip monsterCardCounterattackSfx;
 
     [Header("Bird Duel CD BGM（id = cdId，例 court_march）")]
     [SerializeField] private NamedAudioClip[] birdDuelCdBgms = new NamedAudioClip[0];
@@ -48,6 +50,8 @@ public sealed class AudioLibrary : ScriptableObject
     public AudioClip BirdDuelHitSfxSource => birdDuelHitSfxSource;
     public AudioClip MenuClickSfx => menuClickSfx;
     public AudioClip TypingSfx => typingSfx;
+    public AudioClip MonsterCardAttackSfx => monsterCardAttackSfx;
+    public AudioClip MonsterCardCounterattackSfx => monsterCardCounterattackSfx;
 
     private Dictionary<string, AudioClip> voiceLookup;
     private Dictionary<string, AudioClip> birdDuelCdBgmLookup;
@@ -181,6 +185,16 @@ public sealed class AudioLibrary : ScriptableObject
     public void EditorSetBirdDuelHitSfxSource(AudioClip clip)
     {
         birdDuelHitSfxSource = clip;
+    }
+
+    public void EditorSetMonsterCardAttackSfx(AudioClip clip)
+    {
+        monsterCardAttackSfx = clip;
+    }
+
+    public void EditorSetMonsterCardCounterattackSfx(AudioClip clip)
+    {
+        monsterCardCounterattackSfx = clip;
     }
 
     /// <summary>供 Editor 自動填表工具使用，請勿在執行期呼叫。</summary>

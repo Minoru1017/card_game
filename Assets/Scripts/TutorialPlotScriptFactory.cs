@@ -182,33 +182,29 @@ public static class TutorialPlotScriptFactory
     {
         var steps = new List<MainPlotSceneController.PlotStep>(5);
         TapStep(steps, LinKeSpeaker,
-            "海堤上的風比館內硬 這一段叫" + StoryTextStyle.Em("海牆巡邏") + " 是御三家戰技段考",
+            "海堤上的風比館內硬 這一段叫" + StoryTextStyle.Em("海牆巡邏") + " 先考御三家戰技 再練教會三張",
             1);
         TapStep(steps, LinKeSpeaker,
             "牌組我幫你鎖好了 只要" + StoryTextStyle.Hi("國王") + " " + StoryTextStyle.Hi("王后") + " " +
             StoryTextStyle.Hi("民兵") + " 三項戰技本局各觸發一次 再加勝利",
             2);
         TapStepEndPlot(steps, LinKeSpeaker,
-            "準備好了就進" + StoryTextStyle.Em("階段 A") + " 我在旁邊提示");
+            "準備好了就進" + StoryTextStyle.Em("階段 A") + " 這一場我不出聲 看你自己打");
         return steps;
     }
 
-    /// <summary>中段 MVP：1 熱區散策（封印法術）→ 階段 B。</summary>
+    /// <summary>中段開場短劇情（§3.3.1）→ 海牆散策熱區場景（M12SeawallStrollOverlay）→ 階段 B。</summary>
     public static List<MainPlotSceneController.PlotStep> BuildM12MidPatrolPlotSteps()
     {
-        var steps = new List<MainPlotSceneController.PlotStep>(6);
+        var steps = new List<MainPlotSceneController.PlotStep>(3);
         TapStep(steps, LinKeSpeaker,
-            "段考 A 過關 先沿海牆走一段 別急著馬上開第二場",
+            "段考 A 過關 " + StoryTextStyle.Em("御三家戰技") + " 三項都觸發了 別急著馬上開第二場",
             1);
-        ChoiceStep(steps, LinKeSpeaker,
-            "海牆縫裡卡著一頁蠟封殘卷 要看看嗎",
-            "查看殘卷", 2,
-            "直接前往加練", 3);
         TapStep(steps, LinKeSpeaker,
-            "……封印的法術 學院還沒歸檔 先收進貴重品 以後再說",
-            3);
+            "先沿" + StoryTextStyle.Em("海牆") + " 走一段 這才叫巡邏 順便讓腦袋喘口氣",
+            2);
         TapStepEndPlot(steps, LinKeSpeaker,
-            "接下來是" + StoryTextStyle.Em("教會三張搭配") + " 港灣簡單檔加練 出發吧");
+            "看到什麼想看的就點一點 巡過一處 我們就去" + StoryTextStyle.Em("教會三張搭配") + " 加練");
         return steps;
     }
 
@@ -221,7 +217,7 @@ public static class TutorialPlotScriptFactory
             " 各一張入收藏了 熟練度到 B 戰技會照規則生效",
             1);
         TapStepEndPlot(steps, LinKeSpeaker,
-            "海牆巡邏段考通過 按下回到遊戲進度");
+            "海牆巡邏通關 按下回到遊戲進度");
         return steps;
     }
 

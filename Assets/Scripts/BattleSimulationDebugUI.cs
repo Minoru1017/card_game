@@ -218,6 +218,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
     private static Sprite s_unitWhiteSprite;
     private bool deferFieldRefreshDuringAttack;
     private bool pendingFieldRefreshAfterAttack;
+    private readonly HashSet<int> pendingLethalFieldMonsterFxIds = new HashSet<int>();
     private RectTransform playerDeckPileRt;
     private RectTransform enemyDeckPileRt;
     private RectTransform pausePanel;
@@ -302,10 +303,12 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         }
 
         CreateDebugPanel(canvas2);
+        BindLethalGrayscaleFx();
         UpdateBattleResultText();
         EnsureTutorialBattleCoach(canvas2);
         EnsureHarborCombatCoach(canvas2);
         EnsureM12BattleCoach(canvas2);
+        EnsureM12BattleMissionBar(canvas2);
         EnsureTutorialBattleSettlement(canvas2);
         EnsureM12BattleSettlement(canvas2);
         SyncHandUiIfBattleAlreadyStarted();
@@ -745,6 +748,14 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         TutorialBattleSettlementUi settlement = GetComponent<TutorialBattleSettlementUi>();
         if (settlement == null) settlement = gameObject.AddComponent<TutorialBattleSettlementUi>();
         settlement.Initialize(battleManager, canvasRoot, sharedUIFont, battleCardPrefab);
+    }
+
+    private void EnsureM12BattleMissionBar(Transform canvasRoot)
+    {
+        if (!M12BattleMissionBarUi.IsActiveForCurrentBattle) return;
+        M12BattleMissionBarUi missionBar = GetComponent<M12BattleMissionBarUi>();
+        if (missionBar == null) missionBar = gameObject.AddComponent<M12BattleMissionBarUi>();
+        missionBar.Initialize(battleManager, canvasRoot, sharedUIFont);
     }
 
     private void EnsureM12BattleSettlement(Transform canvasRoot)
@@ -1396,6 +1407,9 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         uiAudioSource.loop = false;
         uiAudioSource.spatialBlend = 0f;
         uiAudioSource.volume = 0.95f;
+        uiAudioSource.bypassEffects = true;
+        uiAudioSource.bypassListenerEffects = true;
+        uiAudioSource.ignoreListenerPause = true;
     }
 
     private void EnsureHeroDamageMonochromeFlashOverlay(Transform parent)
@@ -1458,6 +1472,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
 
     private void OnDestroy()
     {
+        UnbindLethalGrayscaleFx();
         Time.timeScale = 1f;
         BattleAutoSimPlugin.ProgressUiParent = null;
         BattleAutoSimPlugin.Started -= OnBatchWinRateSimStarted;
@@ -1792,7 +1807,8 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
 
     private IEnumerator PlayFireballProjectileRoutine(bool casterIsPlayer, bool aimedAtFieldMonster)
     {
-        const float travel = 0.38f;
+        const float baseTravel = 0.38f;
+        float travel = LethalBlowCinematicFx.ScaleDuration(baseTravel);
         try
         {
             yield return null;
@@ -1865,7 +1881,8 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
             if (proj != null)
                 Destroy(proj);
 
-            float hitDur = battleManager != null ? Mathf.Max(0.1f, battleManager.hitShakeDuration * 0.82f) : 0.24f;
+            float hitDur = LethalBlowCinematicFx.ScaleDuration(
+                battleManager != null ? Mathf.Max(0.1f, battleManager.hitShakeDuration * 0.82f) : 0.24f);
             if (aimedAtFieldMonster && fieldCardObj != null)
                 yield return StartCoroutine(PlayDamageFlash(fieldCardObj, hitDur * 0.95f));
             else if (!aimedAtFieldMonster)
@@ -1944,38 +1961,150 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         {
             return;
         }
-        EnsureFieldMonstersForAttackFx();
         deferFieldRefreshDuringAttack = true;
         deferEnemyFieldRefresh = true;
         pendingFieldRefreshAfterAttack = true;
         deferPlayerHeroDamagedFxForDirectAttack = attackData.targetsHero && !attackData.attackerIsPlayer;
+        EnsureFieldMonstersForAttackFx(
+            ensureEnemyAttackerVisual: !attackData.attackerIsPlayer,
+            ensurePlayerCounterAttacker: attackData.counterTriggered && !attackData.attackerIsPlayer,
+            ensureEnemyCounterAttacker: attackData.counterTriggered && attackData.attackerIsPlayer);
+        if (attackData.hasMonsterTarget)
+            ResolveFieldMonsterVisualForFx(!attackData.attackerIsPlayer);
+        if (M12PhaseAHorrorStateRuntime.ShouldPlayRoundSixLastAttackTransitionSfx(
+                battleManager, attackData.attackerIsPlayer))
+        {
+            M12PhaseATransitionSfx.Play(this);
+            M12PhaseAHorrorStateRuntime.MarkRoundSixTransitionSfxPlayed();
+        }
         if (attackFxRoutine != null) StopCoroutine(attackFxRoutine);
         attackFxRoutine = StartCoroutine(PlayAttackFx(attackData));
     }
 
     /// <summary>敵方攻擊／我方反擊前確保場上怪獸物件存在（出牌動畫 defer 期間可能尚未建立 enemyFieldCardObj）。</summary>
-    private void EnsureFieldMonstersForAttackFx()
+    private void EnsureFieldMonstersForAttackFx(
+        bool ensureEnemyAttackerVisual = false,
+        bool ensurePlayerCounterAttacker = false,
+        bool ensureEnemyCounterAttacker = false,
+        bool createMissingOnly = false)
     {
         if (battleManager == null) return;
+
+        if (createMissingOnly)
+        {
+            EnsureMissingFieldMonsterVisual(isPlayerSide: true);
+            EnsureMissingFieldMonsterVisual(isPlayerSide: false);
+            return;
+        }
+
         bool needRefresh = false;
         if (battleManager.PlayerHasFieldMonster() && playerFieldCardObj == null) needRefresh = true;
         if (battleManager.EnemyHasFieldMonster() && enemyFieldCardObj == null) needRefresh = true;
+        if (ensureEnemyAttackerVisual && battleManager.EnemyHasFieldMonster()) needRefresh = true;
+        if (ensurePlayerCounterAttacker && battleManager.PlayerHasFieldMonster()) needRefresh = true;
+        if (ensureEnemyCounterAttacker && battleManager.EnemyHasFieldMonster()) needRefresh = true;
         if (!needRefresh) return;
 
+        if (deferFieldRefreshDuringAttack)
+        {
+            EnsureMissingFieldMonsterVisual(isPlayerSide: true);
+            EnsureMissingFieldMonsterVisual(isPlayerSide: false);
+            return;
+        }
+
         bool prevDeferEnemy = deferEnemyFieldRefresh;
-        bool prevDeferAttack = deferFieldRefreshDuringAttack;
         deferEnemyFieldRefresh = false;
-        deferFieldRefreshDuringAttack = false;
         RefreshFieldCards();
         lastFieldSignature = ComputeFieldSignature();
         deferEnemyFieldRefresh = prevDeferEnemy;
-        deferFieldRefreshDuringAttack = prevDeferAttack;
+    }
+
+    private void EnsureMissingFieldMonsterVisual(bool isPlayerSide)
+    {
+        if (battleManager == null) return;
+        if (isPlayerSide)
+        {
+            if (playerFieldCardObj != null || playerFieldArea == null) return;
+            Card card = battleManager.GetPlayerFieldCard();
+            if (card == null) return;
+            RebuildSingleFieldCard(playerFieldArea, ref playerFieldCardObj, card, false, lastPlayerFieldExists, true);
+            lastPlayerFieldExists = true;
+            return;
+        }
+
+        if (enemyFieldCardObj != null || enemyFieldArea == null) return;
+        Card enemyCard = battleManager.GetEnemyFieldCard();
+        if (enemyCard == null) return;
+        bool prevDeferEnemy = deferEnemyFieldRefresh;
+        deferEnemyFieldRefresh = false;
+        RebuildSingleFieldCard(enemyFieldArea, ref enemyFieldCardObj, enemyCard, true, lastEnemyFieldExists, true);
+        lastEnemyFieldExists = true;
+        deferEnemyFieldRefresh = prevDeferEnemy;
+    }
+
+    private GameObject ResolveFieldMonsterForCounterFx(bool isPlayerSide)
+    {
+        GameObject obj = ResolveFieldMonsterVisualForFx(isPlayerSide);
+        if (obj != null) return obj;
+        EnsureMissingFieldMonsterVisual(isPlayerSide);
+        return ResolveFieldMonsterVisualForFx(isPlayerSide);
+    }
+
+    private GameObject ResolveFieldMonsterVisualForFx(bool isPlayerSide)
+    {
+        GameObject obj = GetFieldMonsterObject(isPlayerSide);
+        if (obj != null) return obj;
+        obj = FindExistingFieldMonsterVisualInArea(isPlayerSide);
+        if (obj != null)
+        {
+            if (isPlayerSide) playerFieldCardObj = obj;
+            else enemyFieldCardObj = obj;
+        }
+        return obj;
+    }
+
+    private GameObject FindExistingFieldMonsterVisualInArea(bool isPlayerSide)
+    {
+        RectTransform area = isPlayerSide ? playerFieldArea : enemyFieldArea;
+        if (area == null) return null;
+        string expectedName = isPlayerSide ? "PlayerFieldCard" : "EnemyFieldCard";
+        for (int i = 0; i < area.childCount; i++)
+        {
+            Transform child = area.GetChild(i);
+            if (child != null && child.name == expectedName)
+                return child.gameObject;
+        }
+        return null;
     }
 
     /// <summary>供 <see cref="BattleSimulationManager"/> 在敵方回合／我方結束回合攻擊後等待衝刺＋反擊動畫播畢。</summary>
     public IEnumerator WaitForAttackFxRoutine()
     {
         while (attackFxRoutine != null)
+            yield return null;
+    }
+
+    /// <summary>我方勝利結算前：等待直擊／反擊／火球等致勝演出播畢。</summary>
+    public IEnumerator WaitForPendingVictoryPresentationFx()
+    {
+        if (BattleAutoSimPlugin.IsRunning) yield break;
+        yield return WaitForAttackFxRoutine();
+        yield return WaitForFireballFxRoutine();
+    }
+
+    /// <summary>供各結算 UI 在顯示面板前等待致勝演出。</summary>
+    public static IEnumerator CoWaitForVictoryPresentationIfNeeded(int battleResult)
+    {
+        if (battleResult != 1 || BattleAutoSimPlugin.IsRunning) yield break;
+        BattleSimulationDebugUI ui = UnityEngine.Object.FindFirstObjectByType<BattleSimulationDebugUI>();
+        if (ui == null) yield break;
+        yield return ui.WaitForPendingVictoryPresentationFx();
+    }
+
+    /// <summary>供致死火球慢動作：等待火球飛行＋命中特效播畢。</summary>
+    public IEnumerator WaitForFireballFxRoutine()
+    {
+        while (fireballFxRoutine != null)
             yield return null;
     }
 
@@ -1987,62 +2116,95 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         GameObject attackerObj = attackerIsPlayer ? playerFieldCardObj : enemyFieldCardObj;
         try
         {
-        if (attackerObj == null) yield break;
+        RectTransform attackerRt = attackerObj != null ? attackerObj.GetComponent<RectTransform>() : null;
+        bool canLungeAttacker = attackerRt != null;
+        if (!canLungeAttacker && !hasMonsterTarget && !targetsHero)
+            yield break;
 
-        RectTransform attackerRt = attackerObj.GetComponent<RectTransform>();
-        if (attackerRt == null) yield break;
-
-        float dur = battleManager != null ? Mathf.Max(0.12f, battleManager.attackMotionDuration * 0.82f) : 0.32f;
-        float hitFxDur = battleManager != null ? Mathf.Max(0.1f, battleManager.hitShakeDuration) : 0.28f;
-        float counterGap = battleManager != null ? Mathf.Max(0f, battleManager.counterAttackGapDuration) : 0.45f;
+        float dur = LethalBlowCinematicFx.ScaleDuration(
+            battleManager != null ? Mathf.Max(0.12f, battleManager.attackMotionDuration * 0.82f) : 0.32f);
+        float hitFxDur = LethalBlowCinematicFx.ScaleDuration(
+            battleManager != null ? Mathf.Max(0.1f, battleManager.hitShakeDuration) : 0.28f);
+        float counterGap = LethalBlowCinematicFx.ScaleDuration(
+            battleManager != null ? Mathf.Max(0f, battleManager.counterAttackGapDuration) : 0.45f);
         if (targetsHero)
         {
             dur *= 1.14f;
             hitFxDur *= 1.1f;
         }
-        Vector2 start = attackerRt.anchoredPosition;
-        Vector2 hitOffset;
-        if (targetsHero)
-        {
-            RectTransform heroRt = GetHeroHudRectForDirectAttack(attackerIsPlayer);
-            if (!TryComputeLungeOffsetToward(attackerRt, heroRt, out hitOffset, 0.62f, 172f))
-                hitOffset = attackerIsPlayer ? new Vector2(42f, 148f) : new Vector2(-42f, -148f);
-        }
-        else
-        {
-            hitOffset = attackerIsPlayer ? new Vector2(74f, 0f) : new Vector2(-74f, 0f);
-        }
-        Vector3 baseScale = attackerRt.localScale;
 
-        float t = 0f;
+        Vector2 start = Vector2.zero;
+        Vector2 hitOffset = Vector2.zero;
+        Vector3 baseScale = Vector3.one;
         float half = dur * 0.5f;
-        while (t < half && attackerRt != null)
+        float t = 0f;
+
+        if (canLungeAttacker)
         {
-            t += Time.unscaledDeltaTime;
-            float p = Mathf.Clamp01(t / half);
-            float eased = 1f - (1f - p) * (1f - p);
-            attackerRt.anchoredPosition = Vector2.Lerp(start, start + hitOffset, eased);
-            attackerRt.localScale = Vector3.Lerp(baseScale, baseScale * (targetsHero ? 1.1f : 1.06f), eased);
-            yield return null;
+            start = attackerRt.anchoredPosition;
+            if (targetsHero)
+            {
+                RectTransform heroRt = GetHeroHudRectForDirectAttack(attackerIsPlayer);
+                if (!TryComputeLungeOffsetToward(attackerRt, heroRt, out hitOffset, 0.62f, 172f))
+                    hitOffset = attackerIsPlayer ? new Vector2(42f, 148f) : new Vector2(-42f, -148f);
+            }
+            else
+            {
+                hitOffset = attackerIsPlayer ? new Vector2(74f, 0f) : new Vector2(-74f, 0f);
+            }
+            baseScale = attackerRt.localScale;
+
+            BattleFieldMonsterAttackSfx.Play(this);
+
+            t = 0f;
+            while (t < half && attackerRt != null)
+            {
+                t += Time.unscaledDeltaTime;
+                float p = Mathf.Clamp01(t / half);
+                float eased = 1f - (1f - p) * (1f - p);
+                attackerRt.anchoredPosition = Vector2.Lerp(start, start + hitOffset, eased);
+                attackerRt.localScale = Vector3.Lerp(baseScale, baseScale * (targetsHero ? 1.1f : 1.06f), eased);
+                yield return null;
+            }
         }
 
         if (hasMonsterTarget)
         {
-            GameObject targetObj = attackerIsPlayer ? enemyFieldCardObj : playerFieldCardObj;
+            bool defenderIsPlayer = !attackerIsPlayer;
+            GameObject targetObj = ResolveFieldMonsterVisualForFx(defenderIsPlayer);
             if (targetObj != null)
             {
                 // First show defender getting hit, then add a pause before counter-hit feedback.
                 yield return StartCoroutine(PlayDamageFlash(targetObj, hitFxDur));
-                if (attackData.attackerDamage > 0)
-                    StartCoroutine(PlayFloatingDamageNumber(targetObj, attackData.attackerDamage, FloatingDamageKind.Attack));
-                ApplyPreviewDamageToFieldCard(targetObj, attackData.attackerDamage);
-                if (counterGap > 0f) yield return new WaitForSecondsRealtime(counterGap);
-                if (attackData.counterTriggered)
+                bool defenderLethal = IsFieldMonsterDeadInSimulation(defenderIsPlayer);
+                if (defenderLethal)
                 {
-                    bool counterFromPlayer = !attackerIsPlayer;
-                    GameObject counterAttacker = GetFieldMonsterObject(counterFromPlayer);
-                    GameObject counterTarget = GetFieldMonsterObject(attackerIsPlayer);
-                    if (counterAttacker != null && counterTarget != null)
+                    yield return CoPlayFieldMonsterLethalHitSequence(
+                        targetObj,
+                        defenderIsPlayer,
+                        attackData.attackerDamage,
+                        FloatingDamageKind.Attack);
+                }
+                else
+                {
+                    ApplyFieldMonsterHpFromSimulation(targetObj, defenderIsPlayer);
+                    if (attackData.attackerDamage > 0)
+                        StartCoroutine(PlayFloatingDamageNumber(targetObj, attackData.attackerDamage, FloatingDamageKind.Attack));
+                }
+            }
+
+            if (attackData.counterTriggered)
+            {
+                bool counterFromPlayer = !attackerIsPlayer;
+                GameObject counterAttackerObj = targetObj ?? ResolveFieldMonsterForCounterFx(counterFromPlayer);
+                if (ShouldPlayFieldMonsterCounterFx(counterFromPlayer, counterAttackerObj))
+                {
+                    if (counterGap > 0f) yield return new WaitForSecondsRealtime(counterGap);
+                    EnsureFieldMonstersForAttackFx(createMissingOnly: true);
+                    BattleFieldMonsterCounterattackSfx.Play(this);
+                    GameObject counterAttacker = counterAttackerObj ?? ResolveFieldMonsterForCounterFx(counterFromPlayer);
+                    GameObject counterTarget = ResolveFieldMonsterForCounterFx(attackerIsPlayer);
+                    if (counterAttacker != null)
                     {
                         yield return StartCoroutine(PlayCounterAttackFx(
                             counterAttacker,
@@ -2060,8 +2222,14 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
             if (heroHudObj != null)
             {
                 yield return StartCoroutine(PlayDamageFlash(heroHudObj, hitFxDur));
+                bool enemyHeroLethal = attackerIsPlayer && battleManager != null && battleManager.GetEnemyHeroHp() <= 0;
                 if (attackData.attackerDamage > 0)
-                    StartCoroutine(PlayFloatingDamageNumber(heroHudObj, attackData.attackerDamage, FloatingDamageKind.Attack));
+                {
+                    if (enemyHeroLethal)
+                        yield return StartCoroutine(PlayFloatingDamageNumber(heroHudObj, attackData.attackerDamage, FloatingDamageKind.Attack));
+                    else
+                        StartCoroutine(PlayFloatingDamageNumber(heroHudObj, attackData.attackerDamage, FloatingDamageKind.Attack));
+                }
                 if (!attackerIsPlayer)
                 {
                     deferPlayerHeroDamagedFxForDirectAttack = false;
@@ -2074,6 +2242,9 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
                 }
             }
         }
+
+        if (!canLungeAttacker)
+            yield break;
 
         attackerObj = GetFieldMonsterObject(attackerIsPlayer);
         attackerRt = attackerObj != null ? attackerObj.GetComponent<RectTransform>() : null;
@@ -2184,27 +2355,110 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         return offsetInFromParent.sqrMagnitude > 16f;
     }
 
-    private void ApplyPreviewDamageToFieldCard(GameObject cardObj, int damage)
+    /// <summary>受擊後將場上怪獸 UI 生命值對齊模擬結果（避免重複扣血 preview 先顯示 0）。</summary>
+    private void ApplyFieldMonsterHpFromSimulation(GameObject cardObj, bool isPlayerSide)
     {
-        if (cardObj == null || damage <= 0) return;
+        if (cardObj == null || battleManager == null) return;
+        Card fieldCard = isPlayerSide ? battleManager.GetPlayerFieldCard() : battleManager.GetEnemyFieldCard();
         CardDisplay display = cardObj.GetComponentInChildren<CardDisplay>();
-        if (display == null || display.healthText == null) return;
+        if (display == null) return;
 
-        int currentHp;
-        if (!int.TryParse(display.healthText.text, out currentHp))
+        if (fieldCard == null)
         {
-            if (display.card is MonsterCard mc)
-                currentHp = mc.healthPoint;
+            if (display.healthText != null)
+            {
+                display.healthText.richText = false;
+                display.healthText.text = "0";
+                display.healthText.color = BattleFxColors.FieldHpHurt;
+            }
+            return;
+        }
+
+        display.SetCard(fieldCard);
+        ApplyFieldDamageHealthColor(display, fieldCard);
+    }
+
+    private bool IsFieldMonsterDeadInSimulation(bool isPlayerSide)
+    {
+        if (battleManager == null) return true;
+        return isPlayerSide ? !battleManager.PlayerHasFieldMonster() : !battleManager.EnemyHasFieldMonster();
+    }
+
+    private static int GetFieldMonsterFxInstanceId(GameObject obj) => obj != null ? obj.GetInstanceID() : 0;
+
+    private bool IsFieldMonsterLethalFxPending(GameObject obj)
+    {
+        if (obj == null) return false;
+        return pendingLethalFieldMonsterFxIds.Contains(obj.GetInstanceID());
+    }
+
+    private void MarkFieldMonsterLethalFxPending(GameObject obj)
+    {
+        if (obj == null) return;
+        pendingLethalFieldMonsterFxIds.Add(obj.GetInstanceID());
+    }
+
+    private void ClearFieldMonsterLethalFxPending(GameObject obj)
+    {
+        if (obj == null) return;
+        pendingLethalFieldMonsterFxIds.Remove(obj.GetInstanceID());
+    }
+
+    private IEnumerator CoPlayFieldMonsterLethalHitSequence(
+        GameObject targetObj,
+        bool targetIsPlayer,
+        int damage,
+        FloatingDamageKind kind)
+    {
+        if (targetObj == null) yield break;
+        MarkFieldMonsterLethalFxPending(targetObj);
+        try
+        {
+            ApplyFieldMonsterHpFromSimulation(targetObj, targetIsPlayer);
+            if (damage > 0)
+                yield return StartCoroutine(PlayFloatingDamageNumber(targetObj, damage, kind));
             else
-                return;
+                yield return new WaitForSecondsRealtime(FloatingDamageTotalDuration * 0.45f);
+            yield return AnimateFieldMonsterDeathAndClear(targetIsPlayer, targetObj);
         }
-        int nextHp = Mathf.Max(0, currentHp - damage);
-        display.healthText.richText = false;
-        display.healthText.text = nextHp.ToString();
-        if (nextHp < currentHp)
+        finally
         {
-            display.healthText.color = BattleFxColors.FieldHpHurt;
+            ClearFieldMonsterLethalFxPending(targetObj);
         }
+    }
+
+    private bool ShouldPlayFieldMonsterCounterFx(bool counterFromPlayer, GameObject counterAttackerObj)
+    {
+        if (!CanFieldMonsterCounterInSimulation(counterFromPlayer))
+            return false;
+        if (TryReadFieldMonsterUiHp(counterAttackerObj, out int hp) && hp <= 0)
+            return false;
+        return true;
+    }
+
+    private bool CanFieldMonsterCounterInSimulation(bool isPlayerSide)
+    {
+        if (battleManager == null) return false;
+        Card fieldCard = isPlayerSide ? battleManager.GetPlayerFieldCard() : battleManager.GetEnemyFieldCard();
+        if (fieldCard is MonsterCard mc)
+            return mc.healthPoint > 0;
+        return fieldCard != null;
+    }
+
+    private static bool TryReadFieldMonsterUiHp(GameObject fieldCardObj, out int hp)
+    {
+        hp = 0;
+        if (fieldCardObj == null) return false;
+        CardDisplay display = fieldCardObj.GetComponentInChildren<CardDisplay>();
+        if (display == null) return false;
+        if (display.healthText != null && int.TryParse(display.healthText.text, out hp))
+            return true;
+        if (display.card is MonsterCard mc)
+        {
+            hp = mc.healthPoint;
+            return true;
+        }
+        return false;
     }
 
     private IEnumerator PlayHitShake(RectTransform targetRt, float duration, float strength)
@@ -2290,10 +2544,10 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         float hitFxDur,
         bool counterFromPlayer)
     {
-        if (counterAttackerObj == null || counterTargetObj == null) yield break;
+        if (counterAttackerObj == null) yield break;
         RectTransform counterRt = counterAttackerObj.GetComponent<RectTransform>();
-        RectTransform targetRt = counterTargetObj.GetComponent<RectTransform>();
         if (counterRt == null) yield break;
+        RectTransform targetRt = counterTargetObj != null ? counterTargetObj.GetComponent<RectTransform>() : null;
 
         bool counterIsPlayer = counterFromPlayer;
         Vector2 counterPosStart = counterRt.anchoredPosition;
@@ -2318,6 +2572,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         }
 
         if (TryGetCardCenterInUiRoot(counterAttackerObj, out Vector2 slashFrom) &&
+            counterTargetObj != null &&
             TryGetCardCenterInUiRoot(counterTargetObj, out Vector2 slashTo))
         {
             yield return StartCoroutine(PlayCounterSlashBeam(slashFrom, slashTo, 0.11f));
@@ -2336,14 +2591,30 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
             yield return null;
         }
 
-        if (TryGetCardCenterInUiRoot(counterTargetObj, out Vector2 ringCenter))
+        if (counterTargetObj != null && TryGetCardCenterInUiRoot(counterTargetObj, out Vector2 ringCenter))
             yield return StartCoroutine(PlayCounterImpactRing(ringCenter, hitFxDur * 0.85f));
         if (targetRt != null)
             yield return StartCoroutine(PlayHitShake(targetRt, hitFxDur * 0.75f, 11f));
-        if (counterDamage > 0)
-            StartCoroutine(PlayFloatingDamageNumber(counterTargetObj, counterDamage, FloatingDamageKind.Counter));
-        yield return StartCoroutine(PlayCounterDamageFlash(counterTargetObj, hitFxDur * 0.55f));
-        ApplyPreviewDamageToFieldCard(counterTargetObj, counterDamage);
+        if (counterTargetObj != null)
+        {
+            yield return StartCoroutine(PlayCounterDamageFlash(counterTargetObj, hitFxDur * 0.55f));
+            bool counterTargetIsPlayer = !counterFromPlayer;
+            bool counterTargetLethal = IsFieldMonsterDeadInSimulation(counterTargetIsPlayer);
+            if (counterTargetLethal)
+            {
+                yield return CoPlayFieldMonsterLethalHitSequence(
+                    counterTargetObj,
+                    counterTargetIsPlayer,
+                    counterDamage,
+                    FloatingDamageKind.Counter);
+            }
+            else
+            {
+                ApplyFieldMonsterHpFromSimulation(counterTargetObj, counterTargetIsPlayer);
+                if (counterDamage > 0)
+                    StartCoroutine(PlayFloatingDamageNumber(counterTargetObj, counterDamage, FloatingDamageKind.Counter));
+            }
+        }
 
         const float recoverDur = 0.1f;
         t = 0f;

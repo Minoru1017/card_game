@@ -783,14 +783,12 @@ public class MainPlotSceneController : MonoBehaviour
 
         if (StoryProgressSession.IsM12MidPatrolPlotActive)
         {
-            int slot = PlayerData.GetActivePlayerSlotOrDefault();
-            M12SeawallPatrolProgressState.MarkMidPatrolComplete(slot, sealedSpellFound: true);
-            StoryProgressSession.EndM12MidPatrolPlotSession();
-            if (StoryProgressSession.TryConsumeLaunchM12PhaseBBattleAfterPlot())
-            {
-                StoryProgressSession.LaunchM12PhaseBBattleAfterPlot(fastCloseAnimation: skippedPlot);
-                return;
-            }
+            // 劇情收尾後進入海牆散策熱區場景（§3.3.2）；散策按「前往加練」才開階段 B。
+            HideAllChoiceButtons();
+            ApplyTapToContinueUi(false);
+            bool skipped = skippedPlot;
+            M12SeawallStrollOverlay.Show(() => CompleteM12MidPatrolAndLaunchPhaseB(skipped));
+            return;
         }
 
         if (StoryProgressSession.IsM12IntroPlotActive)
@@ -820,6 +818,22 @@ public class MainPlotSceneController : MonoBehaviour
         }
 
         HideAllChoiceButtons();
+    }
+
+    /// <summary>海牆散策完成：預設拾取封印法術（§3.3.3 首通必給）→ 開階段 B。</summary>
+    private void CompleteM12MidPatrolAndLaunchPhaseB(bool skippedPlot)
+    {
+        int slot = PlayerData.GetActivePlayerSlotOrDefault();
+        M12SeawallPatrolProgressState.MarkMidPatrolComplete(slot, sealedSpellFound: true);
+        StoryProgressSession.EndM12MidPatrolPlotSession();
+        if (StoryProgressSession.TryConsumeLaunchM12PhaseBBattleAfterPlot())
+        {
+            StoryProgressSession.LaunchM12PhaseBBattleAfterPlot(fastCloseAnimation: skippedPlot);
+            return;
+        }
+
+        if (Application.CanStreamedLevelBeLoaded(StoryProgressSession.StoryProgressSceneName))
+            SceneManager.LoadScene(StoryProgressSession.StoryProgressSceneName);
     }
 
     public void ShowStep(int stepIndex)

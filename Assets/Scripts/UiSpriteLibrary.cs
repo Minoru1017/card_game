@@ -25,6 +25,8 @@ public sealed class UiSpriteLibrary : ScriptableObject
 
     [Header("對戰場景")]
     [SerializeField] private Sprite harborBayBackground;
+    [SerializeField] private Sprite classroomBackground;
+    [SerializeField] private Sprite classroomHorrorBackground;
     [SerializeField] private Sprite battlePreviewPanel;
 
     [Header("難度分級圖")]
@@ -47,11 +49,21 @@ public sealed class UiSpriteLibrary : ScriptableObject
     [Tooltip("《庭訓進行曲》— Assets/UI/CD/CD_2")]
     [SerializeField] private Sprite birdDuelCdCourtMarch;
 
+    [Header("戰鬥狀態演出")]
+    [Tooltip("You will die 致死預警 — Assets/UI/Combat status/You will die.png（sprite: You will die_0，完整圖示）")]
+    [SerializeField] private Sprite youWillDieIcon;
+
     public Sprite ReturnButton => returnButton;
     /// <summary>響應式左右底板（361×1080）；右側以水平翻轉共用同一張。</summary>
     public Sprite ResponsiveBasePlate => responsiveBasePlate;
     public Sprite HarborBayBackground => harborBayBackground;
+    /// <summary>教室背景（Classroom_FE）；M-1-2 階段 A 段考一般狀態。</summary>
+    public Sprite ClassroomBackground => classroomBackground;
+    /// <summary>教室恐怖背景（Classroom_FR）；M-1-2 階段 A 段考恐怖狀態。</summary>
+    public Sprite ClassroomHorrorBackground => classroomHorrorBackground;
     public Sprite BattlePreviewPanel => battlePreviewPanel;
+    /// <summary>「You will die」致死預警全屏圖示；白色線稿，需搭配暗色底顯示。</summary>
+    public Sprite YouWillDieIcon => youWillDieIcon;
 
     public Sprite GetCoachExpression(HarborCoachExpression expression)
     {
@@ -149,10 +161,12 @@ public sealed class UiSpriteLibrary : ScriptableObject
     }
 
     /// <summary>供 Editor 填表工具使用，請勿在執行期呼叫。</summary>
-    public void EditorSetBattleScene(Sprite harborBay, Sprite previewPanel)
+    public void EditorSetBattleScene(Sprite harborBay, Sprite previewPanel, Sprite classroom, Sprite classroomHorror = null)
     {
         harborBayBackground = harborBay;
         battlePreviewPanel = previewPanel;
+        classroomBackground = classroom;
+        classroomHorrorBackground = classroomHorror;
     }
 
     /// <summary>供 Editor 填表工具使用，請勿在執行期呼叫。</summary>
@@ -180,6 +194,12 @@ public sealed class UiSpriteLibrary : ScriptableObject
     {
         birdDuelCdHarborPractice = harborPracticeTape;
         birdDuelCdCourtMarch = courtMarch;
+    }
+
+    /// <summary>供 Editor 填表工具使用，請勿在執行期呼叫。</summary>
+    public void EditorSetCombatStatus(Sprite youWillDie)
+    {
+        youWillDieIcon = youWillDie;
     }
 #endif
 }

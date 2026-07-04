@@ -139,6 +139,7 @@ public static class StoryProgressSession
         BattleLaunchContext.ClearActiveBattle();
         StoryProgressBackgroundMusicPlayer.StopAll();
         TutorialBattleBackgroundMusicPlayer.StopAll();
+        FreeBattleBackgroundMusicPlayer.StopAll();
         tutorialPlotBgmRequested = true;
         SetPendingPlotSteps(TutorialPlotScriptFactory.BuildTutorialPlotEpilogueSteps());
 
@@ -173,6 +174,7 @@ public static class StoryProgressSession
         BattleLaunchContext.ClearActiveBattle();
         StoryProgressBackgroundMusicPlayer.StopAll();
         TutorialBattleBackgroundMusicPlayer.StopAll();
+        FreeBattleBackgroundMusicPlayer.StopAll();
         SetPendingPlotSteps(TutorialPlotScriptFactory.BuildHarborCombatClearBridgeSteps());
 
         if (!UnityEngine.Application.CanStreamedLevelBeLoaded(MainPlotSceneName))

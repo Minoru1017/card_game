@@ -31,7 +31,10 @@ public static class UiSpriteLibraryPopulator
             Debug.Log($"UiSpriteLibraryPopulator: 已建立新資產 {LibraryAssetPath}");
         }
 
-        Sprite neutral = LoadSprite(CoachPrefix + "neutral");
+        // 第一個表情（Neutral）定案用 Linkk_Smile；其餘表情仍等 Resources/UI/LinKeCoach 美術。
+        Sprite neutral = LoadSpriteFromAssetPath(CoachNeutralAssetPath);
+        if (neutral == null)
+            neutral = LoadSprite(CoachPrefix + "neutral");
         Sprite alert = LoadSprite(CoachPrefix + "alert");
         Sprite serious = LoadSprite(CoachPrefix + "serious");
         Sprite encourage = LoadSprite(CoachPrefix + "encourage");
@@ -45,7 +48,9 @@ public static class UiSpriteLibraryPopulator
 
         Sprite harborBay = LoadSprite(HarborBayPath);
         Sprite previewPanel = LoadPreviewPanelSprite(BattlePreviewPanelPath);
-        library.EditorSetBattleScene(harborBay, previewPanel);
+        Sprite classroom = LoadSpriteFromAssetPath(ClassroomAssetPath);
+        Sprite classroomHorror = LoadSpriteFromAssetPath(ClassroomHorrorAssetPath);
+        library.EditorSetBattleScene(harborBay, previewPanel, classroom, classroomHorror);
 
         Sprite dIntro = LoadSprite(DifficultyRoot + "/Basics");
         Sprite dEasy = LoadSprite(DifficultyRoot + "/Easy");
@@ -65,6 +70,9 @@ public static class UiSpriteLibraryPopulator
         Sprite cdCourtMarch = LoadCdCoverSprite(BirdDuelCdCatalog.CourtMarchCoverAssetKey);
         library.EditorSetBirdDuelCdCovers(cdHarborPractice, cdCourtMarch);
 
+        Sprite youWillDieSprite = LoadYouWillDieSpriteFromAsset();
+        library.EditorSetCombatStatus(youWillDieSprite);
+
         EditorUtility.SetDirty(library);
         AssetDatabase.SaveAssets();
         AssetDatabase.Refresh();
@@ -73,11 +81,12 @@ public static class UiSpriteLibraryPopulator
             $"UiSpriteLibraryPopulator: coach(neutral={neutral != null}, alert={alert != null}, " +
             $"serious={serious != null}, encourage={encourage != null}), return={returnButton != null}, " +
             $"basePlate={basePlate != null}, " +
-            $"harborBay={harborBay != null}, previewPanel={previewPanel != null}, " +
+            $"harborBay={harborBay != null}, previewPanel={previewPanel != null}, classroom={classroom != null}, classroomHorror={classroomHorror != null}, " +
             $"difficulty(intro={dIntro != null}, easy={dEasy != null}, normal={dNormal != null}, " +
             $"hard={dHard != null}, boss={dBoss != null}), " +
             $"rarity(N={rN != null}, R={rR != null}, SR={rSr != null}, SSR={rSsr != null}, UR={rUr != null}), " +
-            $"cdHarborPractice={cdHarborPractice != null}, cdCourtMarch={cdCourtMarch != null} " +
+            $"cdHarborPractice={cdHarborPractice != null}, cdCourtMarch={cdCourtMarch != null}, " +
+            $"youWillDie={youWillDieSprite != null} " +
             $"→ {LibraryAssetPath}");
     }
 
@@ -152,6 +161,44 @@ public static class UiSpriteLibraryPopulator
     }
 
     private const string BasePlateAssetPath = "Assets/UI/base plate.png";
+    private const string ClassroomAssetPath = "Assets/UI/Level background/Classroom_FE.png";
+    private const string ClassroomHorrorAssetPath = "Assets/UI/Level background/Classroom_FR.png";
+    private const string CoachNeutralAssetPath = "Assets/UI/NPC/Linkk_Smile.jpeg";
+    private const string YouWillDieAssetPath = "Assets/UI/Combat status/You will die.png";
+
+    private static Sprite LoadYouWillDieSpriteFromAsset()
+    {
+        Object[] assets = AssetDatabase.LoadAllAssetsAtPath(YouWillDieAssetPath);
+        if (assets == null)
+            return null;
+
+        Sprite preferred = null;
+        Sprite fallback = null;
+        for (int i = 0; i < assets.Length; i++)
+        {
+            if (assets[i] is not Sprite sprite)
+                continue;
+            fallback ??= sprite;
+            if (string.Equals(sprite.name, "You will die_0", System.StringComparison.Ordinal))
+                preferred = sprite;
+        }
+        return preferred != null ? preferred : fallback;
+    }
+
+    // 不在 Resources 下的貼圖：直接以 AssetDatabase 載入第一個 Sprite 子資產。
+    private static Sprite LoadSpriteFromAssetPath(string assetPath)
+    {
+        Object[] assets = AssetDatabase.LoadAllAssetsAtPath(assetPath);
+        if (assets == null)
+            return null;
+
+        for (int i = 0; i < assets.Length; i++)
+        {
+            if (assets[i] is Sprite sprite)
+                return sprite;
+        }
+        return null;
+    }
 
     private static Sprite LoadBasePlateSprite()
     {

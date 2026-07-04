@@ -842,6 +842,8 @@ public partial class BattleSimulationManager : MonoBehaviour
         enemyKingWasOnFieldThisBattle = false;
         if (BattleLaunchContext.IsM12TrioMasteryBattle)
             M12TrioMasteryBattleTracker.ResetForNewBattle();
+        if (BattleLaunchContext.IsM12TrioTutorialBattle)
+            M12PhaseAHorrorStateRuntime.ResetForNewBattle();
     }
 
     private bool IsPlayerBishopSkillActive() => IsPlayerMonsterSkillBattleActive(MonsterSkillIds.Bishop);
@@ -979,7 +981,7 @@ public partial class BattleSimulationManager : MonoBehaviour
                 {
                     playerMilitiaFormationUsed = true;
                     field.attack += 5;
-                    M12TrioMasteryBattleTracker.NotifyMilitiaFormationTriggered();
+                    M12TrioMasteryBattleTracker.NotifyMilitiaFormationTriggered(true);
                     LogBattleHistory(side + " 列陣：這次攻擊力多 5 點 本局僅1次");
                     ShowBattleToast(side + "民兵·列陣：攻擊力多 5 點", 2.2f);
                 }
@@ -1049,7 +1051,7 @@ public partial class BattleSimulationManager : MonoBehaviour
         if (playerField == null || rawDamage <= 0) return rawDamage;
         int dmg = rawDamage;
         if (playerField.id == MonsterSkillIds.Queen)
-            dmg = MonsterSkillRegistry.ApplyQueenShelter(ref playerQueenShelterUsed, dmg, LogBattleHistory);
+            dmg = MonsterSkillRegistry.ApplyQueenShelter(ref playerQueenShelterUsed, dmg, LogBattleHistory, true);
         bool consecrationPending = IsPlayerBishopSkillActive() && playerConsecration.awaitingFirstHit;
         if (IsPlayerBishopSkillActive())
         {
@@ -1079,7 +1081,7 @@ public partial class BattleSimulationManager : MonoBehaviour
             }
         }
         if (playerField.id == MonsterSkillIds.King)
-            dmg = MonsterSkillRegistry.ApplyTrainingCourtDecree(ref playerKingTrainingCharges, dmg, LogBattleHistory);
+            dmg = MonsterSkillRegistry.ApplyTrainingCourtDecree(ref playerKingTrainingCharges, dmg, LogBattleHistory, true);
         return dmg;
     }
 
@@ -1088,7 +1090,7 @@ public partial class BattleSimulationManager : MonoBehaviour
         if (enemyField == null || rawDamage <= 0) return rawDamage;
         int dmg = rawDamage;
         if (enemyField.id == MonsterSkillIds.Queen)
-            dmg = MonsterSkillRegistry.ApplyQueenShelter(ref enemyQueenShelterUsed, dmg, LogBattleHistory);
+            dmg = MonsterSkillRegistry.ApplyQueenShelter(ref enemyQueenShelterUsed, dmg, LogBattleHistory, false);
         bool consecrationPending = IsEnemyBishopSkillActiveForBattle() && enemyConsecration.awaitingFirstHit;
         if (IsEnemyBishopSkillActiveForBattle())
         {
@@ -1118,7 +1120,7 @@ public partial class BattleSimulationManager : MonoBehaviour
             }
         }
         if (enemyField.id == MonsterSkillIds.King)
-            dmg = MonsterSkillRegistry.ApplyTrainingCourtDecree(ref enemyKingTrainingCharges, dmg, LogBattleHistory);
+            dmg = MonsterSkillRegistry.ApplyTrainingCourtDecree(ref enemyKingTrainingCharges, dmg, LogBattleHistory, false);
         return dmg;
     }
 
@@ -1127,7 +1129,7 @@ public partial class BattleSimulationManager : MonoBehaviour
         int dmg = ApplyFogDirectDamageReductionIfNeeded(rawDamage);
         if (playerKingWasOnFieldThisBattle && playerKingTrainingCharges > 0 &&
             (playerField == null || playerField.id == MonsterSkillIds.King))
-            dmg = MonsterSkillRegistry.ApplyTrainingCourtDecree(ref playerKingTrainingCharges, dmg, LogBattleHistory);
+            dmg = MonsterSkillRegistry.ApplyTrainingCourtDecree(ref playerKingTrainingCharges, dmg, LogBattleHistory, true);
         return dmg;
     }
 
@@ -1136,7 +1138,7 @@ public partial class BattleSimulationManager : MonoBehaviour
         int dmg = ApplyFogDirectDamageReductionIfNeeded(rawDamage);
         if (enemyKingWasOnFieldThisBattle && enemyKingTrainingCharges > 0 &&
             (enemyField == null || enemyField.id == MonsterSkillIds.King))
-            dmg = MonsterSkillRegistry.ApplyTrainingCourtDecree(ref enemyKingTrainingCharges, dmg, LogBattleHistory);
+            dmg = MonsterSkillRegistry.ApplyTrainingCourtDecree(ref enemyKingTrainingCharges, dmg, LogBattleHistory, false);
         return dmg;
     }
 
@@ -1151,6 +1153,7 @@ public partial class BattleSimulationManager : MonoBehaviour
     {
         if (!IsWeatherSystemEnabledForBattle()) return;
         if (currentWeather != BattleWeatherType.FireRain) return;
+        if (IsM12HorrorDamageFrozen) return;
         const int dot = 5;
         bool any = false;
         bool hitPlayerMonster = false;
@@ -1159,16 +1162,14 @@ public partial class BattleSimulationManager : MonoBehaviour
         {
             hitPlayerMonster = true;
             int playerDot = ModifyDamageToPlayerMonster(dot);
-            playerField.currentHp -= playerDot;
-            if (playerField.currentHp <= 0) playerField = null;
+            ApplyDamageToPlayerFieldMonster(playerDot);
             any = true;
         }
         if (enemyField != null)
         {
             hitEnemyMonster = true;
             int enemyDot = ModifyDamageToEnemyMonster(dot);
-            enemyField.currentHp -= enemyDot;
-            if (enemyField.currentHp <= 0) enemyField = null;
+            ApplyDamageToEnemyFieldMonster(enemyDot);
             any = true;
         }
         if (!any) return;
@@ -1923,18 +1924,19 @@ public partial class BattleSimulationManager : MonoBehaviour
             string defenderName = enemyField.cardName;
             string attackerName = playerField.cardName;
             int playerAtkDmg = ModifyDamageToEnemyMonster(playerField.attack);
-            enemyField.currentHp -= playerAtkDmg;
-            if (enemyField.currentHp <= 0) enemyField = null;
+            ApplyDamageToEnemyFieldMonster(playerAtkDmg);
             LogBattleHistory("我方場地上 怪物牌 " + attackerName + " 對敵方造成" + playerAtkDmg + " 點傷害");
             bool counterTriggered = false;
             int counterDamage = 0;
             if (enemyField != null && playerField != null && playerField.currentHp > 0 && !enemyCounterUsedThisRound)
             {
+                string counterAttackerName = enemyField.cardName;
+                string counterDefenderName = playerField.cardName;
                 counterDamage = ModifyDamageToPlayerMonster(enemyField.attack);
-                playerField.currentHp -= counterDamage;
+                ApplyDamageToPlayerFieldMonster(counterDamage);
                 enemyCounterUsedThisRound = true;
                 counterTriggered = true;
-                LogBattleHistory("敵方場地上 怪物牌 " + enemyField.cardName + " 反擊了我方場地上 怪物牌 " + playerField.cardName + " 1次");
+                LogBattleHistory("敵方場地上 怪物牌 " + counterAttackerName + " 反擊了我方場地上 怪物牌 " + counterDefenderName + " 1次");
             }
             AttackPerformed?.Invoke(new AttackVisualData
             {
@@ -1944,7 +1946,6 @@ public partial class BattleSimulationManager : MonoBehaviour
                 counterTriggered = counterTriggered,
                 counterDamage = counterDamage
             });
-            if (playerField.currentHp <= 0) playerField = null;
         }
         else
         {
@@ -1960,7 +1961,7 @@ public partial class BattleSimulationManager : MonoBehaviour
                 return;
             }
             int directDmg = ModifyDirectDamageToEnemyHero(playerField.attack);
-            enemyHp -= directDmg;
+            ApplyDamageToEnemyHero(directDmg);
             LogBattleHistory("我方場地上 怪物牌 " + playerField.cardName + " 對敵方英雄造成" + directDmg + " 點傷害");
             AttackPerformed?.Invoke(new AttackVisualData
             {
@@ -2065,9 +2066,20 @@ public partial class BattleSimulationManager : MonoBehaviour
         if (!BattleAutoSimPlugin.IsRunning && attackDelayAfterEndTurn > 0f)
             yield return new WaitForSeconds(attackDelayAfterEndTurn);
 
+        // 致死預警：敵方下一步攻擊會打死我方英雄 → 先播「You will die」演出，再讓致死一擊以慢動作播放。
+        bool lethalAttackCinematic =
+            !BattleAutoSimPlugin.IsRunning && !battleOver && WouldEnemyAttackBeLethalToPlayerHero();
+        if (lethalAttackCinematic)
+        {
+            yield return LethalBlowCinematicFx.CoPlayWarning();
+            LethalBlowCinematicFx.BeginSlowMotionWindow(6f);
+        }
+
         if (enemyAI != null) enemyAI.ExecuteAttack(this);
         else EnemyAttackIfPossible();
         yield return WaitForBattleAttackFxIfAny();
+        if (lethalAttackCinematic)
+            LethalBlowCinematicFx.EndSlowMotionWindow();
         BattleVerbose("Enemy turn: after attack");
         if (!BattleAutoSimPlugin.IsRunning)
             yield return new WaitForSeconds(0.2f);
@@ -2133,6 +2145,18 @@ public partial class BattleSimulationManager : MonoBehaviour
         EnemyPlayCardFromHand(chosen);
     }
 
+    /// <summary>鏡像 <see cref="EnemyAttackIfPossible"/> 入場條件（無副作用），供 M-1-2 段考第 6 回合轉場音效判定。</summary>
+    public bool WillEnemyPerformAttackThisRoundIfPossible()
+    {
+        if (IsOpeningRoundAttackBlocked()) return false;
+        if (enemyField == null) return false;
+        if (PlayerLinGazeActive()) return false;
+        if (playerField != null) return true;
+        if (!enemyCanDirectAttackThisTurn) return false;
+        if (enemyDirectAttackBlockedByPlayerSanctumThisEnemyTurn) return false;
+        return true;
+    }
+
     private void EnemyAttackIfPossible()
     {
         if (IsOpeningRoundAttackBlocked())
@@ -2159,18 +2183,19 @@ public partial class BattleSimulationManager : MonoBehaviour
             string attackerName = enemyField.cardName;
             int enemyAtkDmg = ScaleContextualEnemyDamage(
                 ModifyDamageToPlayerMonster(enemyField.attack));
-            playerField.currentHp -= enemyAtkDmg;
-            if (playerField.currentHp <= 0) playerField = null;
+            ApplyDamageToPlayerFieldMonster(enemyAtkDmg);
             LogBattleHistory("敵方場地上 怪物牌 " + attackerName + " 對我方造成" + enemyAtkDmg + " 點傷害");
             bool counterTriggered = false;
             int counterDamage = 0;
             if (playerField != null && enemyField != null && enemyField.currentHp > 0 && !playerCounterUsedThisRound)
             {
+                string counterAttackerName = playerField.cardName;
+                string counterDefenderName = enemyField.cardName;
                 counterDamage = ModifyDamageToEnemyMonster(playerField.attack);
-                enemyField.currentHp -= counterDamage;
+                ApplyDamageToEnemyFieldMonster(counterDamage);
                 playerCounterUsedThisRound = true;
                 counterTriggered = true;
-                LogBattleHistory("我方場地上 怪物牌 " + playerField.cardName + " 反擊了敵方場地上 怪物牌 " + enemyField.cardName + " 1次");
+                LogBattleHistory("我方場地上 怪物牌 " + counterAttackerName + " 反擊了敵方場地上 怪物牌 " + counterDefenderName + " 1次");
             }
             AttackPerformed?.Invoke(new AttackVisualData
             {
@@ -2180,7 +2205,6 @@ public partial class BattleSimulationManager : MonoBehaviour
                 counterTriggered = counterTriggered,
                 counterDamage = counterDamage
             });
-            if (enemyField.currentHp <= 0) enemyField = null;
         }
         else
         {
@@ -2212,6 +2236,65 @@ public partial class BattleSimulationManager : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// 純預測（無副作用）：敵方本回合的攻擊步驟是否會直擊我方英雄且足以致死。
+    /// 鏡像 <see cref="EnemyAttackIfPossible"/> 直擊分支＋<see cref="ModifyDirectDamageToPlayerHero"/> 的計算，
+    /// 但不消耗庭訓號令次數、不寫入戰鬥紀錄。
+    /// </summary>
+    private bool WouldEnemyAttackBeLethalToPlayerHero()
+    {
+        if (battleOver || playerHp <= 0) return false;
+        if (enemyField == null) return false;
+        if (IsOpeningRoundAttackBlocked()) return false;
+        if (PlayerLinGazeActive()) return false;
+        if (playerField != null) return false;
+        if (!enemyCanDirectAttackThisTurn) return false;
+        if (enemyDirectAttackBlockedByPlayerSanctumThisEnemyTurn) return false;
+        if (bonusPlayerHeroShieldRemaining) return false;
+
+        // 與實際攻擊相同順序：先直擊減免，再情境倍率。
+        return ScaleContextualEnemyDamage(
+            PredictDirectDamageModifierToPlayerHero(enemyField.attack)) >= playerHp;
+    }
+
+    /// <summary>
+    /// 純預測（無副作用）：敵方即將結算的火球術是否會直擊我方英雄且足以致死。
+    /// 鏡像 <see cref="ApplyEnemySpellFireball"/> 的計算順序（天候加成 → 情境倍率 → 直擊減免）。
+    /// </summary>
+    private bool WouldEnemyFireballBeLethalToPlayerHero(SpellCard spell)
+    {
+        if (spell == null || spell.SpellOrdinal != 0) return false;
+        if (battleOver || playerHp <= 0) return false;
+        if (playerField != null) return false;
+        if (enemyDirectAttackBlockedByPlayerSanctumThisEnemyTurn) return false;
+        if (bonusPlayerHeroShieldRemaining) return false;
+
+        int dmg = 20;
+        if (IsWeatherSystemEnabledForBattle() &&
+            currentWeather == BattleWeatherType.Gale &&
+            enemyFirstSpellBoostAvailable)
+            dmg = Mathf.CeilToInt(dmg * 1.2f);
+        // 與實際火球相同順序：天候加成 → 情境倍率 → 直擊減免。
+        dmg = ScaleContextualEnemyDamage(dmg);
+        return PredictDirectDamageModifierToPlayerHero(dmg) >= playerHp;
+    }
+
+    /// <summary>鏡像 <see cref="ModifyDirectDamageToPlayerHero"/> 的純計算版（霧天減半＋庭訓號令 -5），不消耗次數、不寫紀錄。</summary>
+    private int PredictDirectDamageModifierToPlayerHero(int rawDamage)
+    {
+        int dmg = rawDamage;
+        if (IsWeatherSystemEnabledForBattle() && currentWeather == BattleWeatherType.Fog)
+            dmg = Mathf.Max(0, Mathf.CeilToInt(dmg * 0.5f));
+        if (playerKingWasOnFieldThisBattle && playerKingTrainingCharges > 0 &&
+            (playerField == null || playerField.id == MonsterSkillIds.King) && dmg > 0)
+        {
+            int reduced = Mathf.Max(1, dmg - 5);
+            if (reduced < dmg)
+                dmg = reduced;
+        }
+        return dmg;
+    }
+
     private bool IsOpeningRoundAttackBlocked()
     {
         return currentRound <= 1;
@@ -2232,6 +2315,9 @@ public partial class BattleSimulationManager : MonoBehaviour
         if (!playerPlacedCardThisRound || !enemyPlacedCardThisRound) return;
 
         currentRound++;
+        if (BattleLaunchContext.IsM12TrioTutorialBattle)
+            M12PhaseAHorrorStateRuntime.OnRoundAdvanced(currentRound, battleOver);
+
         if (BattleLaunchContext.IsIntroTutorialBattle &&
             currentRound > IntroTutorialBattleRules.MaxRoundsInclusive)
         {
@@ -2340,6 +2426,9 @@ public partial class BattleSimulationManager : MonoBehaviour
 
     private void ApplyLinGazePeriodicDamage(int amount)
     {
+        if (IsM12HorrorDamageFrozen)
+            return;
+
         int playerHpBefore = playerHp;
         playerHp = Mathf.Max(0, playerHp - amount);
         enemyHp = Mathf.Max(0, enemyHp - amount);
@@ -2349,14 +2438,12 @@ public partial class BattleSimulationManager : MonoBehaviour
         if (playerField != null)
         {
             int gazeDmgPlayer = ModifyDamageToPlayerMonster(amount);
-            playerField.currentHp -= gazeDmgPlayer;
-            if (playerField.currentHp <= 0) playerField = null;
+            ApplyDamageToPlayerFieldMonster(gazeDmgPlayer);
         }
         if (enemyField != null)
         {
             int gazeDmgEnemy = ModifyDamageToEnemyMonster(amount);
-            enemyField.currentHp -= gazeDmgEnemy;
-            if (enemyField.currentHp <= 0) enemyField = null;
+            ApplyDamageToEnemyFieldMonster(gazeDmgEnemy);
         }
     }
 
@@ -2413,9 +2500,7 @@ public partial class BattleSimulationManager : MonoBehaviour
         if (enemyField != null)
         {
             int toMonster = ModifyDamageToEnemyMonster(dmg);
-            deal = Mathf.Min(toMonster, Mathf.Max(0, enemyField.currentHp));
-            enemyField.currentHp -= deal;
-            if (enemyField.currentHp <= 0) enemyField = null;
+            deal = ApplyCappedDamageToEnemyFieldMonster(toMonster);
         }
         else
         {
@@ -2426,9 +2511,7 @@ public partial class BattleSimulationManager : MonoBehaviour
                 return;
             }
             int toHero = ModifyDirectDamageToEnemyHero(dmg);
-            int before = enemyHp;
-            enemyHp = Mathf.Max(0, enemyHp - toHero);
-            deal = before - enemyHp;
+            deal = ApplyDamageToEnemyHero(toHero);
         }
         LogBattleHistory("我方咒術區 法術牌 " + spell.cardName + " 對敵方造成" + deal + "點傷害");
     }
@@ -2576,9 +2659,7 @@ public partial class BattleSimulationManager : MonoBehaviour
         if (playerField != null)
         {
             int toMonster = ModifyDamageToPlayerMonster(dmg);
-            int deal = Mathf.Min(toMonster, Mathf.Max(0, playerField.currentHp));
-            playerField.currentHp -= deal;
-            if (playerField.currentHp <= 0) playerField = null;
+            int deal = ApplyCappedDamageToPlayerFieldMonster(toMonster);
             LogBattleHistory("敵方咒術區 法術牌 " + spell.cardName + " 對我方造成" + deal + "點傷害");
             return;
         }
@@ -2609,6 +2690,9 @@ public partial class BattleSimulationManager : MonoBehaviour
             PlayerHeroShieldConsumed?.Invoke();
             return 0;
         }
+
+        if (IsM12HorrorDamageFrozen)
+            return dmg;
 
         int hpBefore = playerHp;
         playerHp = Mathf.Max(0, playerHp - dmg);
@@ -3088,6 +3172,14 @@ public partial class BattleSimulationManager : MonoBehaviour
         yield return ui.WaitForAttackFxRoutine();
     }
 
+    private IEnumerator WaitForBattleFireballFxIfAny()
+    {
+        if (BattleAutoSimPlugin.IsRunning) yield break;
+        BattleSimulationDebugUI ui = UnityEngine.Object.FindFirstObjectByType<BattleSimulationDebugUI>();
+        if (ui == null) yield break;
+        yield return ui.WaitForFireballFxRoutine();
+    }
+
     private IEnumerator WaitForEnemyDiscardPopupLockRelease()
     {
         while (IsEnemyDiscardPopupLockActive())
@@ -3155,7 +3247,8 @@ public partial class BattleSimulationManager : MonoBehaviour
             int baseMonster = m.attack * 2 + m.healthPointMax + rarityBonus;
             int withSkills = ApplyEnemyReligiousLineSkillPlayBonus(baseMonster, card);
             withSkills = ApplyEnemyStarterTrioSkillPlayBonus(withSkills, card);
-            return ApplyEnemyAiStylePriorityTweak(withSkills, card);
+            return ApplyM12PhaseAEarlySurvivalPlayPriorityTweak(
+                ApplyEnemyAiStylePriorityTweak(withSkills, card), card);
         }
         if (card is SpellCard sp)
         {
@@ -3167,9 +3260,11 @@ public partial class BattleSimulationManager : MonoBehaviour
             if (sp.SpellOrdinal == 0 && IsOpeningRoundFireballBlocked()) spellValue = int.MinValue / 4;
             int withSkills = ApplyEnemyReligiousLineSkillPlayBonus(spellValue + rarityBonus, card);
             withSkills = ApplyEnemyStarterTrioSkillPlayBonus(withSkills, card);
-            return ApplyEnemyAiStylePriorityTweak(withSkills, card);
+            return ApplyM12PhaseAEarlySurvivalPlayPriorityTweak(
+                ApplyEnemyAiStylePriorityTweak(withSkills, card), card);
         }
-        return ApplyEnemyAiStylePriorityTweak(rarityBonus, card);
+        return ApplyM12PhaseAEarlySurvivalPlayPriorityTweak(
+            ApplyEnemyAiStylePriorityTweak(rarityBonus, card), card);
     }
 
     /// <summary>國王／王后／民兵（御三家）戰技：調整敵方出牌優先度。</summary>
@@ -3448,12 +3543,6 @@ public partial class BattleSimulationManager : MonoBehaviour
                 1,
                 Mathf.RoundToInt(rawDamage * IntroTutorialBattleRules.EnemyDamageMultiplier));
         }
-        else if (BattleLaunchContext.IsM12TrioTutorialBattle)
-        {
-            scaled = Mathf.Max(
-                1,
-                Mathf.RoundToInt(rawDamage * M12PhaseABattleRules.EnemyDamageMultiplier));
-        }
         else if (HarborTrainingDifficultyRuntime.IsHarborBattleActive)
         {
             scaled = HarborTrainingDifficultyRuntime.ScaleEnemyDamage(rawDamage);
@@ -3642,6 +3731,13 @@ public partial class BattleSimulationManager : MonoBehaviour
     public int ChooseEnemyHandCardToPlayIndex()
     {
         if (enemyHand.Count == 0) return -1;
+
+        if (IsM12PhaseAEarlySurvivalAiActive())
+        {
+            int survival = TryChooseM12PhaseAEarlySurvivalHandIndex();
+            if (survival >= 0)
+                return survival;
+        }
 
         int lethal = TryPickLethalMonsterIndex();
         if (lethal >= 0) return lethal;
@@ -4601,14 +4697,26 @@ public partial class BattleSimulationManager : MonoBehaviour
     private IEnumerator EnemyResolveSpellAfterPresentation(SpellCard spell, Card eventCard, int insertIndexIfFail)
     {
         enemySpellPresentationDepth++;
+        bool lethalFireballCinematic = false;
         try
         {
             bool skipPresent = BattleAutoSimPlugin.IsRunning;
+
+            // 致死預警：敵方火球下一步直擊英雄且足以致死 → 先播「You will die」，再慢動作結算。
+            if (!skipPresent && !battleOver && spell.SpellOrdinal == 0 &&
+                WouldEnemyFireballBeLethalToPlayerHero(spell))
+            {
+                lethalFireballCinematic = true;
+                yield return LethalBlowCinematicFx.CoPlayWarning();
+                LethalBlowCinematicFx.BeginSlowMotionWindow(8f);
+            }
+
             if (!skipPresent)
             {
                 SpellCastPresentationStarted?.Invoke(false, spell.cardName, GetSpellEffectTextForPresentation(spell));
             }
-            yield return new WaitForSecondsRealtime(skipPresent ? 0f : spellCastPresentationSeconds);
+            yield return new WaitForSecondsRealtime(
+                skipPresent ? 0f : LethalBlowCinematicFx.ScaleDuration(spellCastPresentationSeconds));
             bool hadPlayerMonsterForFireball = spell.SpellOrdinal == 0 && playerField != null;
             bool resolved = TryApplyEnemySpell(spell);
             if (!resolved)
@@ -4635,6 +4743,16 @@ public partial class BattleSimulationManager : MonoBehaviour
                 FireballVisualRequested?.Invoke(false, hadPlayerMonsterForFireball);
             if (resolved && spell.SpellOrdinal == 1)
                 EnemyLesserHealVisualRequested?.Invoke(pendingEnemyLesserHealVisual);
+
+            if (lethalFireballCinematic && resolved && spell.SpellOrdinal == 0 && !hadPlayerMonsterForFireball)
+            {
+                yield return WaitForBattleFireballFxIfAny();
+                LethalBlowCinematicFx.EndSlowMotionWindow();
+            }
+            else if (lethalFireballCinematic && !resolved)
+            {
+                LethalBlowCinematicFx.EndSlowMotionWindow();
+            }
         }
         finally
         {

@@ -25,42 +25,61 @@ public static class M12SeawallPatrolProgressState
         TutorialProgressState.SetM12PhaseATrioKing(slot, M12TrioMasteryBattleTracker.QueryKingTriggered());
     }
 
-    public static bool QueryCombinedTrioSatisfied(int slot)
+    public static bool QueryCombinedMilitiaTriggered(int slot)
     {
         slot = UnityEngine.Mathf.Clamp(slot, 1, PlayerData.MaxPlayerSlots);
-        bool militia = TutorialProgressState.IsM12PhaseATrioMilitia(slot) ||
-                       M12TrioMasteryBattleTracker.QueryMilitiaTriggered();
-        bool queen = TutorialProgressState.IsM12PhaseATrioQueen(slot) ||
-                     M12TrioMasteryBattleTracker.QueryQueenTriggered();
-        bool king = TutorialProgressState.IsM12PhaseATrioKing(slot) ||
-                    M12TrioMasteryBattleTracker.QueryKingTriggered();
-        return militia && queen && king;
+        return TutorialProgressState.IsM12PhaseATrioMilitia(slot) ||
+               M12TrioMasteryBattleTracker.QueryMilitiaTriggered();
+    }
+
+    public static bool QueryCombinedQueenTriggered(int slot)
+    {
+        slot = UnityEngine.Mathf.Clamp(slot, 1, PlayerData.MaxPlayerSlots);
+        return TutorialProgressState.IsM12PhaseATrioQueen(slot) ||
+               M12TrioMasteryBattleTracker.QueryQueenTriggered();
+    }
+
+    public static bool QueryCombinedKingTriggered(int slot)
+    {
+        slot = UnityEngine.Mathf.Clamp(slot, 1, PlayerData.MaxPlayerSlots);
+        return TutorialProgressState.IsM12PhaseATrioKing(slot) ||
+               M12TrioMasteryBattleTracker.QueryKingTriggered();
+    }
+
+    public static bool QueryCombinedTrioSatisfied(int slot)
+    {
+        return QueryCombinedMilitiaTriggered(slot) &&
+               QueryCombinedQueenTriggered(slot) &&
+               QueryCombinedKingTriggered(slot);
     }
 
     public static string BuildCombinedTrioMissingHint(int slot)
     {
-        slot = UnityEngine.Mathf.Clamp(slot, 1, PlayerData.MaxPlayerSlots);
-        bool militia = TutorialProgressState.IsM12PhaseATrioMilitia(slot) ||
-                       M12TrioMasteryBattleTracker.QueryMilitiaTriggered();
-        bool queen = TutorialProgressState.IsM12PhaseATrioQueen(slot) ||
-                     M12TrioMasteryBattleTracker.QueryQueenTriggered();
-        bool king = TutorialProgressState.IsM12PhaseATrioKing(slot) ||
-                    M12TrioMasteryBattleTracker.QueryKingTriggered();
+        bool militia = QueryCombinedMilitiaTriggered(slot);
+        bool queen = QueryCombinedQueenTriggered(slot);
+        bool king = QueryCombinedKingTriggered(slot);
 
         if (!militia)
-            return "段考目標：御三家合計仍缺 民兵·列陣（A+B）。";
+            return "加練目標：御三家合計仍缺 民兵·列陣（A+B）。";
         if (!queen)
-            return "段考目標：御三家合計仍缺 王后·王室庇護（A+B）。";
+            return "加練目標：御三家合計仍缺 王后·王室庇護（A+B）。";
         if (!king)
-            return "段考目標：御三家合計仍缺 國王·庭訓號令（A+B）。";
+            return "加練目標：御三家合計仍缺 國王·庭訓號令（A+B）。";
         return string.Empty;
     }
 
     public static void MarkMidPatrolComplete(int slot, bool sealedSpellFound)
     {
         TutorialProgressState.SetM12MidPatrolComplete(slot, true);
-        if (sealedSpellFound)
-            TutorialProgressState.SetM12SealedSpellFound(slot, true);
+        if (!sealedSpellFound)
+            return;
+
+        TutorialProgressState.SetM12SealedSpellFound(slot, true);
+        if (ValuablesVaultCatalog.TrySyncSealedSpellRelicToVault(slot) &&
+            ValuablesVaultState.HasPendingChanges)
+        {
+            PlayerSaveCoordinator.FlushDebouncedThenSavePlayerData();
+        }
     }
 
     public static void MarkNodeCleared(int slot)

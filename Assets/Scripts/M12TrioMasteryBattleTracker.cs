@@ -1,5 +1,6 @@
 /// <summary>
 /// M-1-2 段考：記錄本局是否已觸發御三家戰技（對局開始呼叫 Reset，結束呼叫 QuerySatisfied）。
+/// 階段 A 關卡目標僅計我方場上怪獸／牌組觸發，不含敵方。
 /// </summary>
 public static class M12TrioMasteryBattleTracker
 {
@@ -14,11 +15,32 @@ public static class M12TrioMasteryBattleTracker
         kingDecreeTriggered = false;
     }
 
-    public static void NotifyMilitiaFormationTriggered() => militiaFormationTriggered = true;
+    public static void NotifyMilitiaFormationTriggered(bool isPlayerSide)
+    {
+        if (ShouldCountSkillTrigger(isPlayerSide))
+            militiaFormationTriggered = true;
+    }
 
-    public static void NotifyQueenShelterTriggered() => queenShelterTriggered = true;
+    public static void NotifyQueenShelterTriggered(bool isPlayerSide)
+    {
+        if (ShouldCountSkillTrigger(isPlayerSide))
+            queenShelterTriggered = true;
+    }
 
-    public static void NotifyKingDecreeTriggered() => kingDecreeTriggered = true;
+    public static void NotifyKingDecreeTriggered(bool isPlayerSide)
+    {
+        if (ShouldCountSkillTrigger(isPlayerSide))
+            kingDecreeTriggered = true;
+    }
+
+    private static bool ShouldCountSkillTrigger(bool isPlayerSide)
+    {
+        if (!BattleLaunchContext.IsM12TrioMasteryBattle)
+            return false;
+        if (BattleLaunchContext.IsM12TrioTutorialBattle)
+            return isPlayerSide;
+        return true;
+    }
 
     public static bool QueryMilitiaTriggered() => militiaFormationTriggered;
 

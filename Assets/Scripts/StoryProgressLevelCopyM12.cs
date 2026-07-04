@@ -14,7 +14,7 @@ public static class StoryProgressLevelCopyM12
         {
             return FormatSectionTag("關卡說明") + "\n" +
                    "<line-height=128%>" +
-                   "你已通過" + FormatEmphasis("海牆巡邏段考") + " 可重溫加練 首通獎不重發" +
+                   "你已通關" + FormatEmphasis("海牆巡邏") + " 可從頭重溫整關 劇情 段考 散策 加練 首通獎不重發" +
                    "</line-height>";
         }
 
@@ -36,8 +36,8 @@ public static class StoryProgressLevelCopyM12
 
         return FormatSectionTag("關卡說明") + "\n" +
                "<line-height=128%>" +
-               "段考分兩階段 先" + FormatEmphasis("御三家戰技") + " 再" +
-               FormatEmphasis("修女／主教／城堡") + " 搭配 鎖定牌組不可換" +
+               "關卡分兩階段 先" + FormatEmphasis("御三家戰技") + " 段考 再" +
+               FormatEmphasis("修女／主教／城堡") + " 應用加練 鎖定牌組不可換" +
                "</line-height>\n\n" +
                FormatSectionTag("關卡流程") + "\n" +
                "<line-height=128%>" +
@@ -67,8 +67,8 @@ public static class StoryProgressLevelCopyM12
         {
             return FormatBulletinTag("海牆佈告") + " " +
                    FormatBulletinEmphasis("海牆巡邏") +
-                   FormatBulletinBody(" 段考已通過 按") +
-                   FormatBulletinEmphasis("重溫段考");
+                   FormatBulletinBody(" 已通關 按") +
+                   FormatBulletinEmphasis("重溫關卡");
         }
 
         return FormatBulletinTag("海牆佈告") + " " +
@@ -80,7 +80,7 @@ public static class StoryProgressLevelCopyM12
     public static string ResolveEnterButtonLabel(int slot)
     {
         if (M12SeawallPatrolProgressState.IsNodeCleared(slot))
-            return "重溫段考";
+            return "重溫關卡";
         if (M12SeawallPatrolProgressState.IsMidPatrolComplete(slot))
             return "進入加練";
         if (M12SeawallPatrolProgressState.IsPhaseAComplete(slot))

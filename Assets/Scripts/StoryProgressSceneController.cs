@@ -27,11 +27,13 @@ public class StoryProgressSceneController : MonoBehaviour
     // Story Progress palette: medieval map tone with cozy AC-like softness.
     private static readonly Color ProgressPanelShellColor = new Color(0.20f, 0.27f, 0.22f, 0.96f);     // mossy forest shell
     private static readonly Color ProgressCardPrimaryColor = new Color(0.95f, 0.91f, 0.79f, 0.99f);    // brighter parchment story card
-    private static readonly Color ProgressCardSecondaryColor = new Color(0.88f, 0.80f, 0.65f, 0.98f);  // warm tan reward card
+    private static readonly Color ProgressCardSecondaryColor = new Color(0.13f, 0.34f, 0.36f, 0.98f);  // deep teal reward card
     private static readonly Color ProgressTitleColor = new Color(0.97f, 0.94f, 0.82f, 1f);             // warm parchment on moss shell
     private static readonly Color ProgressSubtitleColor = new Color(0.49f, 0.36f, 0.24f, 1f);          // wood-brown subtitle
     private static readonly Color ProgressBodyColor = new Color(0.20f, 0.17f, 0.13f, 1f);              // ink-like body text
     private static readonly Color ProgressBulletinBodyColor = new Color(0.86f, 0.93f, 0.88f, 1f);    // soft light on bottom bar
+    private static readonly Color FooterRewardBodyColor = new Color(0.95f, 0.97f, 0.94f, 1f);
+    private static readonly Color FooterRewardShadowColor = new Color(0.04f, 0.10f, 0.11f, 0.55f);
 
     private const float DetailPanelInset = 0.11f;
     private const float DetailPanelInsetMax = 0.89f;
@@ -50,6 +52,11 @@ public class StoryProgressSceneController : MonoBehaviour
     private const float FooterButtonSpacing = 14f;
     private const float FooterButtonWidth = 280f;
     private const float FooterButtonHeight = 64f;
+    private const float FooterPanelDefaultHeight = 165f;
+    private const float FooterPanelTallPhoneHeight = 208f;
+    private const float FooterButtonWidthTallPhone = 220f;
+    private const float FooterButtonHeightTallPhone = 60f;
+    private const float FooterButtonSpacingTallPhone = 10f;
     private RectTransform footerButtonRowRt;
     private const float HarborBulletinPadLeft = 24f;
     private const float HarborBulletinBreathingLeft = 24f;
@@ -152,34 +159,25 @@ public class StoryProgressSceneController : MonoBehaviour
         if (viewLevelFlowRt == null)
         {
             GameObject viewFlow = GameObject.Find(StoryProgressLevelCopy.ViewLevelFlowPanelName);
-            viewLevelFlowRt = viewFlow != null ? viewFlow.GetComponent<RectTransform>() : null;
+            if (viewFlow != null)
+            {
+                viewFlow.SetActive(false);
+                viewLevelFlowRt = viewFlow.GetComponent<RectTransform>();
+            }
         }
 
         if (chapterMapTitleTmp == null)
             chapterMapTitleTmp = FindChapterMapTitleTmp();
+        HideLegacyChapterMapLabels();
 
-        if (levelPanelTitleTmp == null)
-        {
-            levelPanelTitleTmp = FindViewLevelFlowTitleTmp();
-            if (levelPanelTitleTmp == null)
-                levelPanelTitleTmp = FindTmpByExactText(StoryProgressLevelCopy.LevelPanelTitlePlaceholder);
-        }
+        levelPanelTitleTmp = null;
 
-        if (chapterSummaryTmp == null)
-        {
-            chapterSummaryTmp = FindTmpByExactText("關卡介紹一句話");
-            if (chapterSummaryTmp == null)
-                chapterSummaryTmp = FindTmpContaining("港灣佈告");
-            if (chapterSummaryTmp == null)
-                chapterSummaryTmp = FindTmpContaining("關卡介紹");
-        }
+        chapterSummaryTmp = null;
 
-        if (scenarioPreviewTmp == null)
-            scenarioPreviewTmp = FindTmpUnderParentNamed(ScenarioPreviewPanelObjectName);
-        ResolveScenarioPreviewPanelReference();
+        scenarioPreviewTmp = null;
 
         if (scenarioRewardsTmp == null)
-            scenarioRewardsTmp = FindViewLevelFlowRewardsTmp();
+            scenarioRewardsTmp = FindFooterRewardsTmp();
         if (scenarioRewardsTmp != null)
         {
             rewardsPanelImage = scenarioRewardsTmp.GetComponentInParent<Image>();
@@ -239,7 +237,8 @@ public class StoryProgressSceneController : MonoBehaviour
 
         if (TutorialProgressState.IsAcademyIntroGraduated(slot))
         {
-            SceneLoader.OpenHarborTrainingBattlePreviewFromStoryProgress();
+            // 已畢業走港灣實戰：一樣先播進關演出，黑幕後開啟難度預覽。
+            StoryLevelEntryTransition.PlayToHarborTrainingPreview();
             return;
         }
 
@@ -253,7 +252,7 @@ public class StoryProgressSceneController : MonoBehaviour
         ctrl?.RefreshPresentation();
     }
 
-    /// <summary>1-1 學院入門：劇情 → 選項 → 教學對戰。</summary>
+    /// <summary>1-1 學院入門：進關演出 → 劇情 → 選項 → 教學對戰。</summary>
     private void OnReplayIntroClicked()
     {
         if (!Application.CanStreamedLevelBeLoaded(StoryProgressSession.MainPlotSceneName))
@@ -262,7 +261,9 @@ public class StoryProgressSceneController : MonoBehaviour
             return;
         }
 
-        StoryProgressSession.LaunchTutorialPlotScene(battleAfterPlot: true);
+        int slot = PlayerData.GetActivePlayerSlotOrDefault();
+        bool replay = TutorialProgressState.IsAcademyIntroGraduated(slot);
+        StoryLevelEntryTransition.PlayToAcademyIntroPlot(replay);
     }
 
     private void RefreshPresentation()
@@ -277,58 +278,37 @@ public class StoryProgressSceneController : MonoBehaviour
         TutorialProgressState.GetAcademyIntroProgressForDisplay(slot, out bool plotComplete, out bool battleComplete);
         bool introGraduated = TutorialProgressState.IsAcademyIntroGraduated(slot);
 
-        EnsureChapterMapStatusLabel();
-        if (chapterMapStatusTmp != null)
-            ApplyChapterMapStatus(chapterMapStatusTmp);
-
-        if (chapterMapTitleTmp != null)
-            ApplyStoryProgressPlainText(chapterMapTitleTmp, ChapterTitleDefault, 28f);
+        HideLegacyChapterMapLabels();
 
         if (scenarioOverviewPlaceholderRoot != null)
             scenarioOverviewPlaceholderRoot.SetActive(false);
 
         CardStore cardStore = PlayerData.ResolveCanonical()?.CardStore;
         string selectedNode = StoryProgressWorldMapRuntime.SelectedStageNodeId;
-        bool showingM12 = string.Equals(selectedNode, StoryProgressSession.SeawallPatrolNodeId,
-            System.StringComparison.OrdinalIgnoreCase) &&
-                          M12SeawallPatrolFlow.CanEnterFromStoryProgress(slot);
-
-        if (levelPanelTitleTmp != null)
-        {
-            string title = showingM12 ? StoryProgressLevelCopyM12.LevelTitle : StoryProgressLevelCopy.LevelTitle;
-            ApplyStoryProgressPlainText(levelPanelTitleTmp, title, 28f);
-        }
-
-        if (scenarioPreviewTmp != null)
-        {
-            string intro = showingM12
-                ? StoryProgressLevelCopyM12.BuildScenarioIntro(slot)
-                : StoryProgressLevelCopy.BuildScenarioIntro(introGraduated);
-            ApplyStoryProgressBodyText(scenarioPreviewTmp, intro);
-            SyncScenarioIntroScrollContentHeight();
-            StartCoroutine(CoSyncScenarioIntroScrollAfterLayout());
-        }
+        bool isM12Selected = string.Equals(selectedNode, StoryProgressSession.SeawallPatrolNodeId,
+            System.StringComparison.OrdinalIgnoreCase);
+        bool canEnterM12 = M12SeawallPatrolFlow.CanEnterFromStoryProgress(slot);
 
         if (scenarioRewardsTmp == null)
-            scenarioRewardsTmp = FindViewLevelFlowRewardsTmp();
+            scenarioRewardsTmp = FindFooterRewardsTmp();
+        string footerRewards = null;
         if (scenarioRewardsTmp != null)
         {
-            string rewards = showingM12
+            footerRewards = isM12Selected
                 ? StoryProgressLevelCopyM12.BuildScenarioRewards(cardStore, slot)
                 : StoryProgressLevelCopy.BuildScenarioRewards(cardStore);
-            ApplyStoryProgressRewardsText(scenarioRewardsTmp, rewards);
         }
 
         if (enterStageButtonLabel != null)
         {
-            string enterLabel = showingM12
+            string enterLabel = isM12Selected
                 ? StoryProgressLevelCopyM12.ResolveEnterButtonLabel(slot)
                 : (introGraduated ? "挑戰港灣訓練場" : "進入關卡");
-            PlotUiTextUtil.ApplyButtonLabel(enterStageButtonLabel, enterLabel, scenarioPreviewTmp);
+            PlotUiTextUtil.ApplyButtonLabel(enterStageButtonLabel, enterLabel, ResolveUiFontSource());
         }
 
         if (enterStageButton != null)
-            enterStageButton.interactable = !showingM12 || M12SeawallPatrolFlow.CanEnterFromStoryProgress(slot);
+            enterStageButton.interactable = !isM12Selected || canEnterM12;
 
         if (introGraduated)
         {
@@ -375,24 +355,18 @@ public class StoryProgressSceneController : MonoBehaviour
             }
         }
 
-        ApplyFooterActionButtonLayout(introGraduated);
+        ApplyFooterActionButtonLayout(introGraduated, isM12Selected);
+        if (scenarioRewardsTmp != null && !string.IsNullOrEmpty(footerRewards))
+            ApplyFooterRewardsText(scenarioRewardsTmp, footerRewards);
 
         ApplyResponsiveRightDockLayout();
         ApplyRightDetailPanelThemeAndLayout();
         ApplyResponsiveRightDockTextScale();
-        if (chapterSummaryTmp != null)
-        {
-            string bulletin = showingM12
-                ? StoryProgressLevelCopyM12.BuildBulletin(slot)
-                : StoryProgressLevelCopy.BuildHarborBulletin(introGraduated);
-            ApplyHarborBulletinText(chapterSummaryTmp, bulletin);
-        }
-
     }
 
     private void ApplyResponsiveRightDockLayout()
     {
-        if (viewLevelFlowRt == null)
+        if (viewLevelFlowRt == null || !viewLevelFlowRt.gameObject.activeInHierarchy)
             return;
 
         float h = Mathf.Max(1f, Screen.height);
@@ -444,6 +418,9 @@ public class StoryProgressSceneController : MonoBehaviour
 
     private void ApplyResponsiveRightDockTextScale()
     {
+        if (viewLevelFlowRt == null || !viewLevelFlowRt.gameObject.activeInHierarchy)
+            return;
+
         float scale = ResolveRightDockTextScale();
 
         if (levelPanelTitleTmp != null)
@@ -466,6 +443,9 @@ public class StoryProgressSceneController : MonoBehaviour
 
     private void ApplyRightDetailPanelThemeAndLayout()
     {
+        if (viewLevelFlowRt == null || !viewLevelFlowRt.gameObject.activeInHierarchy)
+            return;
+
         if (viewLevelFlowRt != null)
         {
             Image shellImage = viewLevelFlowRt.GetComponent<Image>();
@@ -711,17 +691,35 @@ public class StoryProgressSceneController : MonoBehaviour
             scenarioIntroScrollRect.verticalNormalizedPosition = 1f;
     }
 
-    private void ApplyFooterActionButtonLayout(bool tutorialComplete)
+    private void ApplyFooterActionButtonLayout(bool tutorialComplete, bool isM12Selected)
     {
         Transform footerParent = ResolveFooterPanelTransform();
         if (footerParent == null || enterStageButton == null) return;
 
+        ApplyFooterPanelLayout(footerParent as RectTransform);
         EnsureFooterButtonRow(footerParent);
         if (footerButtonRowRt == null) return;
 
         TMP_Text labelFontSource = ResolveUiFontSource();
+        float buttonWidth = IsTallPhoneLandscape() ? FooterButtonWidthTallPhone : FooterButtonWidth;
+        float buttonHeight = IsTallPhoneLandscape() ? FooterButtonHeightTallPhone : FooterButtonHeight;
+        float buttonSpacing = IsTallPhoneLandscape() ? FooterButtonSpacingTallPhone : FooterButtonSpacing;
+        HorizontalLayoutGroup layout = footerButtonRowRt.GetComponent<HorizontalLayoutGroup>();
+        if (layout != null)
+            layout.spacing = buttonSpacing;
 
-        if (tutorialComplete)
+        if (isM12Selected)
+        {
+            if (replayIntroButton != null)
+                replayIntroButton.gameObject.SetActive(false);
+            if (goToHallButton != null)
+                goToHallButton.gameObject.SetActive(false);
+
+            ReparentFooterButton(enterStageButton, 0);
+            StyleFooterPrimaryButton(enterStageButton, labelFontSource, buttonWidth, buttonHeight);
+            AnchorFooterButtonRow(bottomRight: true);
+        }
+        else if (tutorialComplete)
         {
             if (goToHallButton == null)
                 goToHallButton = EnsureGoToHallButton(enterStageButton);
@@ -737,9 +735,9 @@ public class StoryProgressSceneController : MonoBehaviour
             ReparentFooterButton(goToHallButton, 1);
             ReparentFooterButton(enterStageButton, 2);
 
-            StyleFooterSecondaryButton(replayIntroButton, labelFontSource, FooterButtonWidth, FooterButtonHeight, lighter: true);
-            StyleFooterSecondaryButton(goToHallButton, labelFontSource, FooterButtonWidth, FooterButtonHeight, lighter: false);
-            StyleFooterPrimaryButton(enterStageButton, labelFontSource, FooterButtonWidth, FooterButtonHeight);
+            StyleFooterSecondaryButton(replayIntroButton, labelFontSource, buttonWidth, buttonHeight, lighter: true);
+            StyleFooterSecondaryButton(goToHallButton, labelFontSource, buttonWidth, buttonHeight, lighter: false);
+            StyleFooterPrimaryButton(enterStageButton, labelFontSource, buttonWidth, buttonHeight);
 
             AnchorFooterButtonRow(bottomRight: true);
         }
@@ -751,11 +749,24 @@ public class StoryProgressSceneController : MonoBehaviour
                 goToHallButton.gameObject.SetActive(false);
 
             ReparentFooterButton(enterStageButton, 0);
-            StyleFooterPrimaryButton(enterStageButton, labelFontSource, FooterButtonWidth, FooterButtonHeight);
+            StyleFooterPrimaryButton(enterStageButton, labelFontSource, buttonWidth, buttonHeight);
             AnchorFooterButtonRow(bottomRight: true);
         }
 
         LayoutRebuilder.ForceRebuildLayoutImmediate(footerButtonRowRt);
+    }
+
+    private void ApplyFooterPanelLayout(RectTransform footerRt)
+    {
+        if (footerRt == null) return;
+
+        Vector2 size = footerRt.sizeDelta;
+        size.y = IsTallPhoneLandscape() ? FooterPanelTallPhoneHeight : FooterPanelDefaultHeight;
+        footerRt.sizeDelta = size;
+
+        Image footerImage = footerRt.GetComponent<Image>();
+        if (footerImage != null)
+            footerImage.color = ProgressCardSecondaryColor;
     }
 
     private Transform ResolveFooterPanelTransform()
@@ -1345,6 +1356,19 @@ public class StoryProgressSceneController : MonoBehaviour
         return null;
     }
 
+    private static TMP_Text FindFooterRewardsTmp()
+    {
+        TMP_Text byPlaceholder = FindTmpByExactText("關卡介紹一句話");
+        if (byPlaceholder != null && IsUnderNamedAncestor(byPlaceholder.transform, FooterPanelObjectName))
+            return byPlaceholder;
+
+        TMP_Text byParent = FindTmpUnderParentNamed(FooterPanelObjectName);
+        if (byParent != null)
+            return byParent;
+
+        return null;
+    }
+
     private IEnumerator DeferredRefreshChapterMapStatus()
     {
         const int maxFrames = 10;
@@ -1475,6 +1499,28 @@ public class StoryProgressSceneController : MonoBehaviour
         tmp.ForceMeshUpdate(true, true);
     }
 
+    private void HideLegacyChapterMapLabels()
+    {
+        if (chapterMapTitleTmp == null)
+            chapterMapTitleTmp = FindChapterMapTitleTmp();
+
+        if (chapterMapTitleTmp != null)
+        {
+            chapterMapTitleTmp.gameObject.SetActive(false);
+
+            Transform iconRoot = chapterMapTitleTmp.transform.parent;
+            if (iconRoot != null)
+            {
+                Transform legacyStatus = iconRoot.Find(ChapterMapStatusObjectName);
+                if (legacyStatus != null)
+                    legacyStatus.gameObject.SetActive(false);
+            }
+        }
+
+        if (chapterMapStatusTmp != null)
+            chapterMapStatusTmp.gameObject.SetActive(false);
+    }
+
     private void ApplyUiFont(TMP_Text tmp)
     {
         if (tmp == null) return;
@@ -1533,6 +1579,85 @@ public class StoryProgressSceneController : MonoBehaviour
         tmp.overflowMode = TextOverflowModes.Overflow;
         tmp.raycastTarget = false;
         tmp.ForceMeshUpdate(true, true);
+    }
+
+    private void ApplyFooterRewardsText(TMP_Text tmp, string richText)
+    {
+        if (tmp == null) return;
+
+        tmp.gameObject.SetActive(true);
+        ApplyFooterRewardsLayout(tmp.rectTransform);
+        ApplyStoryProgressDetailFont(tmp);
+
+        tmp.richText = true;
+        tmp.text = NormalizeFooterRewardsRichText(richText);
+        tmp.color = FooterRewardBodyColor;
+        tmp.faceColor = FooterRewardBodyColor;
+        tmp.fontSize = IsTallPhoneLandscape() ? 24f : 26f;
+        tmp.fontStyle = FontStyles.Normal;
+        tmp.alignment = TextAlignmentOptions.TopLeft;
+        tmp.enableWordWrapping = true;
+        tmp.lineSpacing = IsTallPhoneLandscape() ? 8f : 6f;
+        tmp.paragraphSpacing = IsTallPhoneLandscape() ? 12f : 10f;
+        tmp.characterSpacing = 0.2f;
+        tmp.margin = new Vector4(18f, 10f, 18f, 10f);
+        tmp.overflowMode = TextOverflowModes.Ellipsis;
+        tmp.raycastTarget = false;
+        tmp.enableAutoSizing = true;
+        tmp.fontSizeMin = 20f;
+        tmp.fontSizeMax = IsTallPhoneLandscape() ? 25f : 27f;
+        tmp.outlineWidth = 0.12f;
+        tmp.outlineColor = FooterRewardShadowColor;
+        tmp.ForceMeshUpdate(true, true);
+    }
+
+    private void ApplyFooterRewardsLayout(RectTransform rt)
+    {
+        if (rt == null) return;
+
+        float reserveRight = ResolveFooterRewardsReserveRight();
+        float topPad = IsTallPhoneLandscape() ? 14f : 12f;
+        float bottomPad = IsTallPhoneLandscape() ? 18f : 14f;
+
+        rt.anchorMin = Vector2.zero;
+        rt.anchorMax = Vector2.one;
+        rt.pivot = new Vector2(0f, 0.5f);
+        rt.anchoredPosition = Vector2.zero;
+        rt.offsetMin = new Vector2(HarborBulletinPadLeft + HarborBulletinBreathingLeft, bottomPad);
+        rt.offsetMax = new Vector2(-reserveRight, -topPad);
+        rt.localScale = Vector3.one;
+        rt.SetAsFirstSibling();
+    }
+
+    private float ResolveFooterRewardsReserveRight()
+    {
+        float reserve = IsTallPhoneLandscape() ? 340f : 420f;
+        if (footerButtonRowRt == null)
+            return reserve;
+
+        Canvas.ForceUpdateCanvases();
+        reserve = Mathf.Max(
+            reserve,
+            footerButtonRowRt.rect.width + (IsTallPhoneLandscape() ? 84f : 112f));
+        return reserve;
+    }
+
+    private static string NormalizeFooterRewardsRichText(string richText)
+    {
+        if (string.IsNullOrEmpty(richText))
+            return string.Empty;
+
+        return richText
+            .Replace("#8F6A36", "#F4C768")
+            .Replace("#2C6F8F", "#86F0D5")
+            .Replace("#7A4A92", "#D9A8FF")
+            .Replace("#4F5B62", "#D6E2E6");
+    }
+
+    private static bool IsTallPhoneLandscape()
+    {
+        float h = Mathf.Max(1f, Screen.height);
+        return (Screen.width / h) >= 1.95f;
     }
 
     private static void ApplyHarborBulletinFont(TMP_Text tmp)

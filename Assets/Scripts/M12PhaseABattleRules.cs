@@ -6,16 +6,11 @@ public static class M12PhaseABattleRules
     public const int MaxRoundsInclusive = 12;
     public const int EnemyStartHealth = 15;
     public const int EnemyDrawPerTurn = 1;
-    public const float EnemyDamageMultiplier = 0.68f;
 
+    /// <summary>第 6 回合前（currentRound &lt; 6）敵方 AI 以生存、保場為優先，避免過早被擊敗。</summary>
+    public const int EnemySurvivalAiUntilRoundExclusive = 6;
+
+    /// <summary>敵方牌表與玩家階段 A 定案 15 張完全相同（鏡像對局）；複製一份避免外部改動共用陣列。</summary>
     public static readonly int[] EnemyDeckCardIds =
-    {
-        4, 4, 4,
-        5, 5, 5,
-        22, 22,
-        17,
-        DeckCardId.SpellKeyFromOrdinal(1),
-        DeckCardId.SpellKeyFromOrdinal(1),
-        4, 5, 22, 4, 5
-    };
+        (int[])M12PhaseDeckCatalog.PhaseADeckCardIds.Clone();
 }

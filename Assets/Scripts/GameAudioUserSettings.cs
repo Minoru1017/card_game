@@ -102,6 +102,11 @@ public static class GameAudioUserSettings
         for (int i = 0; i < battle.Length; i++)
             battle[i].ApplyUserBgmVolume();
 
+        FreeBattleBackgroundMusicPlayer[] freeBattle =
+            UnityEngine.Object.FindObjectsByType<FreeBattleBackgroundMusicPlayer>(FindObjectsSortMode.None);
+        for (int i = 0; i < freeBattle.Length; i++)
+            freeBattle[i].ApplyUserBgmVolume();
+
         PlotBackgroundMusicPlayer[] plot =
             UnityEngine.Object.FindObjectsByType<PlotBackgroundMusicPlayer>(FindObjectsSortMode.None);
         for (int i = 0; i < plot.Length; i++)

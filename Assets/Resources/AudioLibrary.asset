@@ -81,6 +81,8 @@ MonoBehaviour:
   birdDuelHitSfxSource: {fileID: 8300000, guid: fb1ea4f47e2e1d04d871dcb6d676cc54, type: 3}
   menuClickSfx: {fileID: 8300000, guid: 8dbfc0c4a49b96544bfa00b4c16ac70f, type: 3}
   typingSfx: {fileID: 8300000, guid: 0f8f909b48a801f438799c3c19bafda9, type: 3}
+  monsterCardAttackSfx: {fileID: 8300000, guid: 1dc1211166abfc14ab9b571c92cd3ec7, type: 3}
+  monsterCardCounterattackSfx: {fileID: 8300000, guid: 687a9a3997f66e1479eb06558e65e141, type: 3}
   birdDuelCdBgms:
   - id: court_march
     clip: {fileID: 8300000, guid: 798a926c3312d464394a0e4dfa537ac8, type: 3}

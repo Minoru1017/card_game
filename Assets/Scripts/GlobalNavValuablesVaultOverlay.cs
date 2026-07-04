@@ -110,7 +110,9 @@ public sealed class GlobalNavValuablesVaultOverlay
         if (root == null)
             return;
         selectedCellIndex = -1;
-        ValuablesVaultCatalog.SyncOwnedCdsToVault(PlayerData.GetActivePlayerSlotOrDefault());
+        int activeSlot = PlayerData.GetActivePlayerSlotOrDefault();
+        ValuablesVaultCatalog.SyncOwnedCdsToVault(activeSlot);
+        ValuablesVaultCatalog.TrySyncSealedSpellRelicToVault(activeSlot);
         if (ValuablesVaultState.HasPendingChanges)
             PlayerSaveCoordinator.FlushDebouncedThenSavePlayerData();
         RefreshAllCells();
@@ -570,7 +572,8 @@ public sealed class GlobalNavValuablesVaultOverlay
             return;
 
         float y = 0f;
-        if (hasItem && cellDefinitionId > 0 && cellQuantity > 0)
+        if (hasItem && cellDefinitionId > 0 && cellQuantity > 0 &&
+            !ValuablesVaultCatalog.IsKeyItemDefinition(cellDefinitionId))
         {
             CreateDiscardButton(ValuablesVaultUiCopy.DiscardButtonLabel, y, cellIndex);
             y -= 50f;

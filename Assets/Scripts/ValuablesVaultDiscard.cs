@@ -71,6 +71,12 @@ public static class ValuablesVaultDiscard
             return false;
         }
 
+        if (ValuablesVaultCatalog.IsKeyItemDefinition(definitionId))
+        {
+            failureReason = ValuablesVaultUiCopy.KeyItemCannotDiscard;
+            return false;
+        }
+
         int gemRefund = ResolveGemRefund(definitionId, quantity);
 
         if (ValuablesVaultCatalog.TryResolveCdIdFromDiscDefinition(definitionId, out string discCdId))

@@ -17,6 +17,13 @@ public partial class SceneLoader
         loader.LaunchM12PhaseBBattleInternal(targetBattleScene);
     }
 
+    /// <summary>進關演出用：先取得 M-1-2 戰鬥將載入的場景名稱（不觸發載入）。</summary>
+    public static string PeekM12BattleSceneName()
+    {
+        SceneLoader loader = Object.FindFirstObjectByType<SceneLoader>();
+        return ResolveM12BattleSceneName(loader, null);
+    }
+
     public static string PrepareM12PhaseABattleLaunch(string targetBattleScene = null)
     {
         SceneLoader loader = Object.FindFirstObjectByType<SceneLoader>();

@@ -181,6 +181,9 @@ public partial class SceneLoader : MonoBehaviour
         string intel = PreBattleDuelContext.ConsumeIntelText();
         if (!string.IsNullOrWhiteSpace(intel))
             SceneToast.Show(intel, 3.5f);
+
+        if (BattleLaunchContext.IsFreeBattle)
+            FreeBattleBackgroundMusicPlayer.EnsureInScene(scene)?.PlayFreeBattleBgm();
     }
 
 }

@@ -46,6 +46,7 @@ public sealed class BuildbeckBackgroundMusicPlayer : MonoBehaviour
             HallBackgroundMusicPlayer.StopAll();
             StoryProgressBackgroundMusicPlayer.StopAll();
             TutorialBattleBackgroundMusicPlayer.StopAll();
+            FreeBattleBackgroundMusicPlayer.StopAll();
             PlotBackgroundMusicPlayer.StopAllInMainPlotIfLoaded();
             EnsureInScene(scene)?.PlayBuildbeckBgm();
             return;

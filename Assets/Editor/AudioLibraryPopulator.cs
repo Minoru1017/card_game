@@ -43,12 +43,20 @@ public static class AudioLibraryPopulator
         AudioClip birdDuelHitSfx = AssetDatabase.LoadAssetAtPath<AudioClip>(BirdDuelHitSfxBank.SourceAssetPath);
         AudioClip menuClick = AssetDatabase.LoadAssetAtPath<AudioClip>(PlotMenuClickSfx.MenuClickClipAssetPath);
         AudioClip typing = AssetDatabase.LoadAssetAtPath<AudioClip>(PlotDialogueTypewriterSfx.TypingClipAssetPath);
+        AudioClip monsterCardAttack = AssetDatabase.LoadAssetAtPath<AudioClip>(BattleFieldMonsterAttackSfx.AssetPath);
+        AudioClip monsterCardCounterattack = AssetDatabase.LoadAssetAtPath<AudioClip>(BattleFieldMonsterCounterattackSfx.AssetPath);
         library.EditorSetSingletons(bgm, menuClick, typing);
         library.EditorSetHallBgm(hallBgm);
         library.EditorSetBuildbeckBgm(buildbeckBgm);
         library.EditorSetCardStoreBgm(cardStoreBgm);
         library.EditorSetBirdDuelBgm(birdDuelBgm);
         library.EditorSetBirdDuelHitSfxSource(birdDuelHitSfx);
+        library.EditorSetMonsterCardAttackSfx(monsterCardAttack);
+        library.EditorSetMonsterCardCounterattackSfx(monsterCardCounterattack);
+        SyncMonsterCardAttackResourcesCopy();
+        SyncMonsterCardCounterattackResourcesCopy();
+        BattleFieldMonsterAttackSfx.EditorInvalidateCachedClip();
+        BattleFieldMonsterCounterattackSfx.EditorInvalidateCachedClip();
         library.EditorSetBirdDuelCdBgms(new[]
         {
             new AudioLibrary.NamedAudioClip { id = "court_march", clip = courtMarchBgm },
@@ -64,10 +72,59 @@ public static class AudioLibraryPopulator
             $"BGM={(bgm != null)}, HallBGM={(hallBgm != null)}, BuildbeckBGM={(buildbeckBgm != null)}, " +
             $"CardStoreBGM={(cardStoreBgm != null)}, BirdDuelBGM={(birdDuelBgm != null)}, " +
             $"CourtMarchBGM={(courtMarchBgm != null)}, MorningPrayerBGM={(morningPrayerBgm != null)}, BirdDuelHitSfx={(birdDuelHitSfx != null)}, " +
+            $"MonsterCardAttack={(monsterCardAttack != null)}, MonsterCardCounterattack={(monsterCardCounterattack != null)}, " +
             $"MenuClick={(menuClick != null)}, Typing={(typing != null)} → {LibraryAssetPath}");
 
         if (bgm == null || hallBgm == null || buildbeckBgm == null || cardStoreBgm == null || birdDuelBgm == null || menuClick == null || typing == null)
             Debug.LogWarning("AudioLibraryPopulator: 有單一音軌找不到，請確認對應 Resources 路徑常數是否正確。");
+    }
+
+    [MenuItem("Tools/Audio/Sync Monster Card Attack SFX")]
+    public static void SyncMonsterCardAttackSfxOnly()
+    {
+        SyncMonsterCardAttackResourcesCopy();
+        BattleFieldMonsterAttackSfx.EditorInvalidateCachedClip();
+        AssetDatabase.Refresh();
+        Debug.Log("AudioLibraryPopulator: 已同步 Monster Card Attack → Resources/Music。");
+    }
+
+    [MenuItem("Tools/Audio/Sync Monster Card Counterattack SFX")]
+    public static void SyncMonsterCardCounterattackSfxOnly()
+    {
+        SyncMonsterCardCounterattackResourcesCopy();
+        BattleFieldMonsterCounterattackSfx.EditorInvalidateCachedClip();
+        AssetDatabase.Refresh();
+        Debug.Log("AudioLibraryPopulator: 已同步 Monster Card Counterattack → Resources/Music。");
+    }
+
+    private static void SyncMonsterCardCounterattackResourcesCopy()
+    {
+        const string destinationPath = "Assets/Resources/Music/Monster Card Counterattack.mp3";
+        string sourceFullPath = Path.GetFullPath(BattleFieldMonsterCounterattackSfx.AssetPath);
+        string destinationFullPath = Path.GetFullPath(destinationPath);
+        if (!File.Exists(sourceFullPath))
+        {
+            Debug.LogWarning($"AudioLibraryPopulator: 找不到來源音檔 {BattleFieldMonsterCounterattackSfx.AssetPath}");
+            return;
+        }
+
+        Directory.CreateDirectory(Path.GetDirectoryName(destinationFullPath) ?? string.Empty);
+        File.Copy(sourceFullPath, destinationFullPath, overwrite: true);
+    }
+
+    private static void SyncMonsterCardAttackResourcesCopy()
+    {
+        const string destinationPath = "Assets/Resources/Music/Monster Card Attack.mp3";
+        string sourceFullPath = Path.GetFullPath(BattleFieldMonsterAttackSfx.AssetPath);
+        string destinationFullPath = Path.GetFullPath(destinationPath);
+        if (!File.Exists(sourceFullPath))
+        {
+            Debug.LogWarning($"AudioLibraryPopulator: 找不到來源音檔 {BattleFieldMonsterAttackSfx.AssetPath}");
+            return;
+        }
+
+        Directory.CreateDirectory(Path.GetDirectoryName(destinationFullPath) ?? string.Empty);
+        File.Copy(sourceFullPath, destinationFullPath, overwrite: true);
     }
 
     private static AudioLibrary.NamedAudioClip[] CollectNpcVoices()

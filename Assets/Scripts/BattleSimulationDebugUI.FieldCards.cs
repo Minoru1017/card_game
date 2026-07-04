@@ -122,6 +122,27 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         }
     }
 
+    private void RefreshExistingFieldCardDisplayTextOnly()
+    {
+        if (battleManager == null)
+            return;
+
+        RefreshFieldCardDisplayText(playerFieldCardObj, battleManager.GetPlayerFieldCard());
+        RefreshFieldCardDisplayText(playerSpellFieldCardObj, battleManager.GetPlayerFieldSpellCard());
+        RefreshFieldCardDisplayText(enemyFieldCardObj, battleManager.GetEnemyFieldCard());
+        RefreshFieldCardDisplayText(enemySpellFieldCardObj, battleManager.GetEnemyFieldSpellCard());
+    }
+
+    private static void RefreshFieldCardDisplayText(GameObject holder, Card card)
+    {
+        if (holder == null || card == null)
+            return;
+
+        CardDisplay display = holder.GetComponentInChildren<CardDisplay>(true);
+        if (display != null)
+            display.SetCard(card);
+    }
+
     private void RebuildSingleFieldCard(RectTransform area, ref GameObject holder, Card card, bool enemy, bool existedBefore, bool existsNow)
     {
         if (area == null) return;
@@ -132,6 +153,10 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
 
         if (!existsNow)
         {
+            if (holder != null &&
+                (deferFieldRefreshDuringAttack || IsFieldMonsterLethalFxPending(holder)))
+                return;
+
             if (holder != null)
             {
                 StartCoroutine(AnimateDeathAndDestroy(holder));
@@ -650,7 +675,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         float startAlpha = cg.alpha <= 0f ? 1f : cg.alpha;
 
         float t = 0f;
-        const float dur = 0.16f;
+        const float dur = 0.32f;
         while (t < dur && obj != null)
         {
             t += Time.unscaledDeltaTime;
@@ -662,6 +687,23 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
 
         if (obj != null) Destroy(obj);
     }
+
+    private IEnumerator AnimateFieldMonsterDeathAndClear(bool isPlayerSide, GameObject cardObj)
+    {
+        if (cardObj == null) yield break;
+        yield return AnimateDeathAndDestroy(cardObj);
+        if (isPlayerSide)
+        {
+            if (playerFieldCardObj == cardObj) playerFieldCardObj = null;
+            lastPlayerFieldExists = false;
+        }
+        else
+        {
+            if (enemyFieldCardObj == cardObj) enemyFieldCardObj = null;
+            lastEnemyFieldExists = false;
+        }
+    }
+
     private void OnBattleLayoutVisualRefreshRequested()
     {
         lastFieldSignature = int.MinValue;

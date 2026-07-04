@@ -25,11 +25,12 @@ public sealed class StoryProgressWorldMapRuntime : MonoBehaviour
     /// <summary>魔王節點 icon 邊長（@2× 出圖建議 88×88）。</summary>
     private const float BossNodeSize = 44f;
     private const float EdgeThickness = 5f;
-    /// <summary>入門主節點 M-1-1 icon 邊長（@2× 出圖建議 96×96）。</summary>
-    private const float TutorialNodeSize = 48f;
+    /// <summary>入門主節點 M-1-1 icon 邊長（與一般節點相同；@2× 出圖建議 80×80）。</summary>
+    private const float TutorialNodeSize = NodeSize;
     private const string TutorialRootNodeId = "M-1-1";
     private const string SeawallPatrolNodeId = StoryProgressSession.SeawallPatrolNodeId;
     private const string TutorialRootDisplayName = "港灣訓練場";
+    private const string SeawallPatrolDisplayName = "海牆巡邏";
     /// <summary>新玩家預設對焦：節點落在 viewport 寬度此比例處（0.5 = 正中）。</summary>
     private const float NewPlayerMapNodeViewportXFromLeft = 0.28f;
     [Header("World Map Zoom (focus mode: [ / ] only)")]
@@ -560,6 +561,9 @@ public sealed class StoryProgressWorldMapRuntime : MonoBehaviour
     {
         bool isTutorialRootNode = node != null &&
                                   string.Equals(node.nodeId, TutorialRootNodeId, StringComparison.OrdinalIgnoreCase);
+        bool isSelectedSeawallNode = node != null &&
+                                     string.Equals(node.nodeId, SeawallPatrolNodeId, StringComparison.OrdinalIgnoreCase) &&
+                                     string.Equals(selectedStageNodeId, SeawallPatrolNodeId, StringComparison.OrdinalIgnoreCase);
 
         GameObject go = new GameObject(
             "Node_" + node.nodeId,
@@ -606,7 +610,7 @@ public sealed class StoryProgressWorldMapRuntime : MonoBehaviour
         textRt.anchorMin = new Vector2(0.5f, 0f);
         textRt.anchorMax = new Vector2(0.5f, 0f);
         textRt.pivot = new Vector2(0.5f, 1f);
-        textRt.anchoredPosition = new Vector2(0f, node.isTutorial ? -16f : -10f);
+        textRt.anchoredPosition = new Vector2(0f, node.isTutorial ? -10f : -10f);
         textRt.sizeDelta = new Vector2(96f, 30f);
 
         TextMeshProUGUI tmp = textGo.GetComponent<TextMeshProUGUI>();
@@ -623,6 +627,12 @@ public sealed class StoryProgressWorldMapRuntime : MonoBehaviour
             AddTutorialRootStatusBadge(rt);
             AddTutorialRootName(rt);
             AddTutorialRootSubtitle(rt);
+        }
+        else if (isSelectedSeawallNode)
+        {
+            AddSelectedSeawallStatusBadge(rt);
+            AddSelectedSeawallName(rt);
+            AddSelectedSeawallSubtitle(rt);
         }
 
         return rt;
@@ -678,7 +688,7 @@ public sealed class StoryProgressWorldMapRuntime : MonoBehaviour
         nameRt.anchorMin = new Vector2(0.5f, 0f);
         nameRt.anchorMax = new Vector2(0.5f, 0f);
         nameRt.pivot = new Vector2(0.5f, 1f);
-        nameRt.anchoredPosition = new Vector2(0f, -48f);
+        nameRt.anchoredPosition = new Vector2(0f, -44f);
         nameRt.sizeDelta = new Vector2(180f, 34f);
 
         TextMeshProUGUI nameTmp = nameGo.GetComponent<TextMeshProUGUI>();
@@ -701,7 +711,7 @@ public sealed class StoryProgressWorldMapRuntime : MonoBehaviour
         subRt.anchorMin = new Vector2(0.5f, 0f);
         subRt.anchorMax = new Vector2(0.5f, 0f);
         subRt.pivot = new Vector2(0.5f, 1f);
-        subRt.anchoredPosition = new Vector2(0f, -82f);
+        subRt.anchoredPosition = new Vector2(0f, -78f);
         subRt.sizeDelta = new Vector2(200f, 26f);
 
         TextMeshProUGUI subTmp = subGo.GetComponent<TextMeshProUGUI>();
@@ -727,6 +737,115 @@ public sealed class StoryProgressWorldMapRuntime : MonoBehaviour
 
     private static string ResolveTutorialRootStatusText() =>
         StoryProgressLevelCopy.ResolveMapStatusLabelForActiveSlot();
+
+    private void AddSelectedSeawallStatusBadge(RectTransform nodeRt)
+    {
+        if (nodeRt == null) return;
+
+        string statusText = ResolveSeawallPatrolStatusText();
+        Color statusColor = ResolveTutorialRootStatusColor(statusText);
+
+        GameObject badgeGo = new GameObject("StatusBadge", typeof(RectTransform), typeof(Image));
+        badgeGo.transform.SetParent(nodeRt, false);
+        RectTransform badgeRt = badgeGo.GetComponent<RectTransform>();
+        badgeRt.anchorMin = new Vector2(0.5f, 1f);
+        badgeRt.anchorMax = new Vector2(0.5f, 1f);
+        badgeRt.pivot = new Vector2(0.5f, 0f);
+        badgeRt.anchoredPosition = new Vector2(0f, 6f);
+        badgeRt.sizeDelta = new Vector2(92f, 28f);
+
+        Image badgeBg = badgeGo.GetComponent<Image>();
+        badgeBg.sprite = GetWhiteSprite();
+        badgeBg.type = Image.Type.Sliced;
+        badgeBg.color = statusColor;
+        badgeBg.raycastTarget = false;
+
+        GameObject textGo = new GameObject("StatusText", typeof(RectTransform), typeof(TextMeshProUGUI));
+        textGo.transform.SetParent(badgeGo.transform, false);
+        RectTransform textRt = textGo.GetComponent<RectTransform>();
+        textRt.anchorMin = Vector2.zero;
+        textRt.anchorMax = Vector2.one;
+        textRt.offsetMin = Vector2.zero;
+        textRt.offsetMax = Vector2.zero;
+
+        TextMeshProUGUI tmp = textGo.GetComponent<TextMeshProUGUI>();
+        tmp.text = statusText;
+        tmp.fontSize = 16f;
+        tmp.fontStyle = FontStyles.Bold;
+        tmp.alignment = TextAlignmentOptions.Center;
+        tmp.color = Color.white;
+        tmp.raycastTarget = false;
+        SettingsUiFonts.ApplyTo(tmp);
+    }
+
+    private void AddSelectedSeawallName(RectTransform nodeRt)
+    {
+        if (nodeRt == null) return;
+
+        GameObject nameGo = new GameObject("StageName", typeof(RectTransform), typeof(TextMeshProUGUI));
+        nameGo.transform.SetParent(nodeRt, false);
+        RectTransform nameRt = nameGo.GetComponent<RectTransform>();
+        nameRt.anchorMin = new Vector2(0.5f, 0f);
+        nameRt.anchorMax = new Vector2(0.5f, 0f);
+        nameRt.pivot = new Vector2(0.5f, 1f);
+        nameRt.anchoredPosition = new Vector2(0f, -44f);
+        nameRt.sizeDelta = new Vector2(180f, 34f);
+
+        TextMeshProUGUI nameTmp = nameGo.GetComponent<TextMeshProUGUI>();
+        nameTmp.text = SeawallPatrolDisplayName;
+        nameTmp.fontSize = 20f;
+        nameTmp.fontStyle = FontStyles.Bold;
+        nameTmp.alignment = TextAlignmentOptions.Center;
+        nameTmp.color = new Color(0.96f, 0.96f, 0.96f, 1f);
+        nameTmp.raycastTarget = false;
+        SettingsUiFonts.ApplyTo(nameTmp);
+    }
+
+    private void AddSelectedSeawallSubtitle(RectTransform nodeRt)
+    {
+        if (nodeRt == null) return;
+
+        GameObject subGo = new GameObject("StageSubtitle", typeof(RectTransform), typeof(TextMeshProUGUI));
+        subGo.transform.SetParent(nodeRt, false);
+        RectTransform subRt = subGo.GetComponent<RectTransform>();
+        subRt.anchorMin = new Vector2(0.5f, 0f);
+        subRt.anchorMax = new Vector2(0.5f, 0f);
+        subRt.pivot = new Vector2(0.5f, 1f);
+        subRt.anchoredPosition = new Vector2(0f, -78f);
+        subRt.sizeDelta = new Vector2(200f, 26f);
+
+        TextMeshProUGUI subTmp = subGo.GetComponent<TextMeshProUGUI>();
+        subTmp.text = ResolveSeawallPatrolSubtitleText();
+        subTmp.fontSize = 15f;
+        subTmp.fontStyle = FontStyles.Normal;
+        subTmp.alignment = TextAlignmentOptions.Center;
+        subTmp.color = new Color(0.82f, 0.88f, 0.84f, 0.95f);
+        subTmp.raycastTarget = false;
+        SettingsUiFonts.ApplyTo(subTmp);
+    }
+
+    private static string ResolveSeawallPatrolStatusText()
+    {
+        int slot = PlayerData.GetActivePlayerSlotOrDefault();
+        if (M12SeawallPatrolProgressState.IsNodeCleared(slot))
+            return "Clear";
+        if (M12SeawallPatrolProgressState.IsMidPatrolComplete(slot) ||
+            M12SeawallPatrolProgressState.IsPhaseAComplete(slot))
+            return "進行中";
+        return "NEW";
+    }
+
+    private static string ResolveSeawallPatrolSubtitleText()
+    {
+        int slot = PlayerData.GetActivePlayerSlotOrDefault();
+        if (M12SeawallPatrolProgressState.IsNodeCleared(slot))
+            return "可重溫關卡";
+        if (M12SeawallPatrolProgressState.IsMidPatrolComplete(slot))
+            return "階段 B 進行中";
+        if (M12SeawallPatrolProgressState.IsPhaseAComplete(slot))
+            return "沿海散策中";
+        return "御三家段考";
+    }
 
     public static string SelectedStageNodeId => selectedStageNodeId;
 
@@ -916,9 +1035,10 @@ public sealed class StoryProgressWorldMapRuntime : MonoBehaviour
             }
 
             SetSelectedStageNodeId(node.nodeId);
+            preferredFocusNodeId = node.nodeId;
             StoryProgressSceneController.RequestRefreshPresentation();
-            blockM11PointerToggleUntilUnscaledTime = Time.unscaledTime + M11PointerToggleBlockSeconds;
-            TryToggleMapFocusMode();
+            if (mapFocusMode)
+                ExitMapFocusMode();
             return;
         }
         string stateText = state == NodeState.Cleared ? "已通關" : (state == NodeState.Available ? "可挑戰" : "未解鎖");

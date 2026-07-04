@@ -74,6 +74,15 @@ public static class ValuablesVaultDisplay
                 false);
         }
 
+        if (ValuablesVaultCatalog.IsSealedSpellRelicDefinition(definitionId))
+        {
+            return new InfoPanelCopy(
+                ValuablesVaultUiCopy.SealedSpellRelicName,
+                ValuablesVaultUiCopy.SealedSpellRelicBody,
+                slotLine,
+                true);
+        }
+
         if (ValuablesVaultCatalog.TryResolveCdIdFromDiscDefinition(definitionId, out string discCdId))
             return ResolveCdDiscInfoPanel(discCdId, slotLine, definitionId, quantity);
 
@@ -136,6 +145,9 @@ public static class ValuablesVaultDisplay
 
     private static string ResolveBaseName(int definitionId)
     {
+        if (ValuablesVaultCatalog.IsSealedSpellRelicDefinition(definitionId))
+            return ValuablesVaultUiCopy.SealedSpellRelicName;
+
         if (ValuablesVaultCatalog.TryResolveCdIdFromDiscDefinition(definitionId, out string discCdId))
         {
             BirdDuelCdProfile profile = BirdDuelCdCatalog.Get(discCdId);

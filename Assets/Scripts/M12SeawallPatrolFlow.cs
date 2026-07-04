@@ -13,30 +13,32 @@ public static class M12SeawallPatrolFlow
             return;
         }
 
+        // 所有從 Story progress 進關的路徑都先播進關演出（暗場 → 標題／達成目標 → 光圈）。
+        // 已通關的重溫從頭開始走完整流程（劇情 → 段考 A → 散策 → 加練 B），首通獎勵不重發。
         if (M12SeawallPatrolProgressState.IsNodeCleared(slot))
         {
-            SceneLoader.LaunchM12PhaseBBattleDirect();
+            StoryLevelEntryTransition.PlayToIntroPlot(replay: true);
             return;
         }
 
         if (M12SeawallPatrolProgressState.IsMidPatrolComplete(slot))
         {
-            SceneLoader.LaunchM12PhaseBBattleDirect();
+            StoryLevelEntryTransition.PlayToPhaseBBattle();
             return;
         }
 
         if (M12SeawallPatrolProgressState.IsPhaseAComplete(slot))
         {
-            StoryProgressSession.LaunchM12MidPatrolPlotScene();
+            StoryLevelEntryTransition.PlayToMidPatrolPlot();
             return;
         }
 
         if (!TutorialProgressState.IsM12IntroSeen(slot))
         {
-            StoryProgressSession.LaunchM12IntroPlotScene();
+            StoryLevelEntryTransition.PlayToIntroPlot();
             return;
         }
 
-        SceneLoader.LaunchM12PhaseABattleDirect();
+        StoryLevelEntryTransition.PlayToPhaseABattle();
     }
 }

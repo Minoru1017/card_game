@@ -8,6 +8,7 @@ public static class StoryProgressBattleReturn
     {
         StoryProgressSession.NotifyTutorialBattleFinished(won);
         TutorialBattleBackgroundMusicPlayer.StopAll();
+        FreeBattleBackgroundMusicPlayer.StopAll();
         BattleLaunchContext.ClearActiveBattle();
         StoryProgressSession.LoadStoryProgressWithIrisTransition();
     }
@@ -21,6 +22,7 @@ public static class StoryProgressBattleReturn
     public static void CompleteReturnFromHarborTraining(bool firstCombatClear = false)
     {
         TutorialBattleBackgroundMusicPlayer.StopAll();
+        FreeBattleBackgroundMusicPlayer.StopAll();
         BattleLaunchContext.ClearActiveBattle();
         if (firstCombatClear)
             StoryProgressSession.LaunchHarborCombatClearBridgeAfterFirstVictory();

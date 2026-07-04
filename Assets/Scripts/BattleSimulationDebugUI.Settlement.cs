@@ -195,6 +195,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
             endBattlePanel.transform.localScale = Vector3.one;
         }
         if (endBattlePanel != null) endBattlePanel.SetActive(false);
+        BattleUiGrayscaleFx.Release();
     }
 
     private void ReleaseSettlementFreezeResources()
@@ -286,6 +287,9 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
     {
         endBattlePanelShown = true;
         int result = battleManager != null ? battleManager.GetBattleResult() : 0;
+        if (result == 1 && !BattleAutoSimPlugin.IsRunning)
+            yield return WaitForPendingVictoryPresentationFx();
+
         lastHarborVictoryReward = default;
         if (result == 1 && BattleLaunchContext.IsHarborTrainingGroundBattle)
         {

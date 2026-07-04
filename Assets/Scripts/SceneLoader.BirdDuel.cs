@@ -2,12 +2,14 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 using TMPro;
+using System.Collections;
 
 public partial class SceneLoader
 {
     public const string BirdDuelSceneName = "Fighting bird game";
 
     private GameObject birdDuelEntryOverlay;
+    private Coroutine freeBattleRandomEventRevealRoutine;
 
     /// <summary>
     /// 戰前流程：寫入 <see cref="PreBattleDuelContext"/> 並載入鬥鳥場景，
@@ -130,7 +132,7 @@ public partial class SceneLoader
         BattleLaunchContext.SetPendingDifficultyLabelZh(cfg.LabelZh);
     }
 
-    /// <summary>自由對戰：50% 隨機事件觸發鬥鳥暖身賽。</summary>
+    /// <summary>自由對戰：70% 隨機事件觸發鬥鳥暖身賽。</summary>
     private void TryBeginFreeBattleRandomBirdDuelEvent(
         EnemyAiPlayStyle aiStyle,
         BattleDifficultyTier selected)
@@ -158,9 +160,36 @@ public partial class SceneLoader
 
         CloseBirdDuelEntryChoice();
 
+        if (freeBattleRandomEventRevealRoutine != null)
+        {
+            StopCoroutine(freeBattleRandomEventRevealRoutine);
+            freeBattleRandomEventRevealRoutine = null;
+        }
+
         GameObject overlay = BirdDuelOverlayUiBuild.CreateDimOverlay(
             canvas.transform, 5000, "FreeBattleRandomEventOverlay");
-        GameObject panel = BirdDuelOverlayUiBuild.CreateMobilePanel(overlay.transform);
+        GameObject panel = BuildFreeBattleRandomBirdDuelEventPanel(overlay.transform, aiStyle, selected);
+
+        birdDuelEntryOverlay = overlay;
+        overlay.transform.SetAsLastSibling();
+
+        freeBattleRandomEventRevealRoutine = StartCoroutine(
+            CoPlayFreeBattleRandomEventReveal(overlay, panel));
+    }
+
+    private IEnumerator CoPlayFreeBattleRandomEventReveal(GameObject overlay, GameObject panel)
+    {
+        yield return BirdDuelRandomEventRevealFx.CoPlayRevealThenShowPanel(
+            overlay, panel, battlePreviewFontAsset);
+        freeBattleRandomEventRevealRoutine = null;
+    }
+
+    private GameObject BuildFreeBattleRandomBirdDuelEventPanel(
+        Transform overlayRoot,
+        EnemyAiPlayStyle aiStyle,
+        BattleDifficultyTier selected)
+    {
+        GameObject panel = BirdDuelOverlayUiBuild.CreateMobilePanel(overlayRoot);
 
         RectTransform headerRt = BirdDuelOverlayUiBuild.CreateHeaderBand(
             panel.transform, "✦ 隨機事件", battlePreviewFontAsset);
@@ -200,8 +229,8 @@ public partial class SceneLoader
             headerRt, battlePreviewFontAsset);
         backBtn.onClick.AddListener(CloseBirdDuelEntryChoice);
 
-        birdDuelEntryOverlay = overlay;
-        overlay.transform.SetAsLastSibling();
+        panel.SetActive(false);
+        return panel;
     }
 
     // ----------------------------------------------------------------- 進關卡選擇（roguelike 分支）
@@ -313,6 +342,12 @@ public partial class SceneLoader
 
     private void CloseBirdDuelEntryChoice()
     {
+        if (freeBattleRandomEventRevealRoutine != null)
+        {
+            StopCoroutine(freeBattleRandomEventRevealRoutine);
+            freeBattleRandomEventRevealRoutine = null;
+        }
+
         if (birdDuelEntryOverlay != null)
         {
             Destroy(birdDuelEntryOverlay);

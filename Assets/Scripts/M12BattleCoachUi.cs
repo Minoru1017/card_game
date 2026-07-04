@@ -2,7 +2,7 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
-/// <summary>M-1-2 段考教練 UI（讀取 <see cref="M12BattleCoachCatalog"/>）。</summary>
+/// <summary>M-1-2 教練 UI（讀取 <see cref="M12BattleCoachCatalog"/>）；僅階段 B 加練，階段 A 段考不提示。</summary>
 public sealed class M12BattleCoachUi : MonoBehaviour
 {
     private const float ReEvaluateIntervalSeconds = 1.35f;
@@ -21,7 +21,7 @@ public sealed class M12BattleCoachUi : MonoBehaviour
     private bool _eventsBound;
 
     public static bool IsActiveForCurrentBattle =>
-        BattleLaunchContext.IsM12TrioMasteryBattle;
+        BattleLaunchContext.IsM12CoachPracticeBattle;
 
     public void Initialize(
         BattleSimulationManager manager,
@@ -100,9 +100,7 @@ public sealed class M12BattleCoachUi : MonoBehaviour
         if (_manager == null || !_manager.IsPlayerTurn() || _manager.IsBattleOver())
             return;
 
-        bool ok = BattleLaunchContext.IsM12TrioTutorialBattle
-            ? M12BattleCoachCatalog.TryEvaluatePhaseA(_manager, out string key, out string message)
-            : M12BattleCoachCatalog.TryEvaluatePhaseB(_manager, out key, out message);
+        bool ok = M12BattleCoachCatalog.TryEvaluatePhaseB(_manager, out string key, out string message);
 
         if (!ok || string.IsNullOrWhiteSpace(message))
         {
@@ -152,10 +150,10 @@ public sealed class M12BattleCoachUi : MonoBehaviour
         portraitRt.anchorMax = new Vector2(0f, 0.5f);
         portraitRt.pivot = new Vector2(0f, 0.5f);
         portraitRt.anchoredPosition = new Vector2(16f, 0f);
-        portraitRt.sizeDelta = new Vector2(120f, 120f);
+        portraitRt.sizeDelta = new Vector2(150f, 150f);
         _portraitImage = portraitFrame.GetComponent<Image>();
         _portraitImage.color = new Color(0.92f, 0.86f, 0.76f, 1f);
-        Sprite portrait = TutorialPlotScriptFactory.GetLinKePortraitSprite();
+        Sprite portrait = HarborCombatCoachExpressionCatalog.ResolveNeutralOrFallback();
         if (portrait != null)
         {
             _portraitImage.sprite = portrait;
@@ -167,7 +165,7 @@ public sealed class M12BattleCoachUi : MonoBehaviour
         RectTransform textRt = textCol.GetComponent<RectTransform>();
         textRt.anchorMin = new Vector2(0f, 0f);
         textRt.anchorMax = new Vector2(1f, 1f);
-        textRt.offsetMin = new Vector2(148f, 16f);
+        textRt.offsetMin = new Vector2(180f, 16f);
         textRt.offsetMax = new Vector2(-16f, -16f);
 
         GameObject speakerGo = new GameObject("Speaker", typeof(RectTransform), typeof(TextMeshProUGUI));
