@@ -43,6 +43,33 @@ public static class BattleUiColors
     public static readonly Color DeckTop = Hex("#4A6B7C");
     public static readonly Color DeckShadow = WithAlpha(Hex("#2E3542"), 0.92f);
 
+    /// <summary>教練立繪墊底（letterbox／無立繪時）；淡奶油（PANEL_MILK），與暖棕髮色分離。</summary>
+    public static readonly Color CoachPortraitMat = PanelMilk;
+
+    /// <summary>教練立繪外框描邊。</summary>
+    public static readonly Color CoachPortraitFrame = PanelEdge35;
+
+    /// <summary>教練面板底；比 <see cref="CoachPortraitMat"/> 略深一階的奶油色。</summary>
+    public static readonly Color CoachPanelBg = PanelCream96;
+
+    /// <summary>教練外環光暈填色（BorderGlow 底色）；奶油相近色、明度略低於立繪墊底。</summary>
+    public static readonly Color CoachBorderGlowFill = PanelCream;
+
+    /// <summary>教練未讀提示外環脈動（青綠，非咖啡系）。</summary>
+    public static readonly Color CoachUnreadPulseGlow = WithAlpha(AllyLabel, 0.88f);
+
+    /// <summary>教練未讀提示外環脈動暗態。</summary>
+    public static readonly Color CoachUnreadPulseGlowDim = WithAlpha(AllyHp, 0.42f);
+
+    /// <summary>教練展開提示文字面板底（深棕，與立繪分離）。</summary>
+    public static readonly Color CoachHintTextPanelBg = WithAlpha(Hex("#2A2218"), 0.94f);
+
+    /// <summary>教練展開提示文字面板描邊。</summary>
+    public static readonly Color CoachHintTextPanelEdge = WithAlpha(Hex("#8B7355"), 0.45f);
+
+    /// <summary>教練展開提示文字（淺色，對比深色底）。</summary>
+    public static readonly Color CoachHintText = PanelMilk;
+
     public static readonly Color Dim = WithAlpha(Hex("#0A0305"), 0.5f);
     public static readonly Color DimHeavy = WithAlpha(Hex("#0A0305"), 0.66f);
     public static readonly Color ShadowUi = WithAlpha(Color.black, 0.45f);

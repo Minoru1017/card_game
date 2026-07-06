@@ -10,6 +10,10 @@ public sealed class TutorialBattleCoachUi : MonoBehaviour
     private const int HandFullWarningThreshold = 6;
     private const float ReEvaluateIntervalSeconds = 1.25f;
     private const float BorderPulseSpeed = 2.8f;
+    private const float CollapsedPulseScaleMin = 0.84f;
+    private const float CollapsedPulseScaleRange = 0.24f;
+    private const float PortraitOutlineDist = 2f;
+    private const float CollapsedPulseOutlineDistMax = 8f;
 
     private static readonly Vector2 CollapsedPanelSize = new Vector2(208f, 278f);
     /// <summary>與對戰英雄 HUD 左緣對齊，避免瀏海／圓角裁切林可姐面板。</summary>
@@ -28,16 +32,15 @@ public sealed class TutorialBattleCoachUi : MonoBehaviour
     private const float ExpandedPortraitSize = 180f;
     private const float ExpandedEdgePad = 20f;
     private const float ExpandedPortraitTextGap = 16f;
+    private const float ExpandedTextPanelMinWidth = 220f;
+    private const float ExpandedTextPanelMaxWidth = 340f;
+    private const float ExpandedTextPanelPadH = 18f;
+    private const float ExpandedTextPanelPadV = 16f;
     private const float ExpandedNameFontSize = 32f;
     private const float ExpandedBodyFontSize = 28f;
     private const float ExpandedNameRowHeight = 42f;
     private const float ExpandedMinPanelHeight = 220f;
     private const float ExpandedCanvasHeightMargin = 40f;
-
-    private static readonly Color CoachBorderGold = new Color(0.97f, 0.85f, 0.47f, 1f);
-    private static readonly Color CoachBorderGlow = new Color(0.97f, 0.85f, 0.47f, 0.42f);
-    private static readonly Color PortraitPlaceholderFill = new Color(0.92f, 0.86f, 0.76f, 1f);
-    private static readonly Color PortraitFrameColor = new Color(0.38f, 0.28f, 0.24f, 0.9f);
 
     private const string CoachFontProbe =
         "林可姐點擊查看提示這是你的回合試著出一張怪獸或法術攻擊目標結束敵方在行動等他打完再輪到你好點選場上選擇若沒有其他行動可按手牌接近上限七張注意棄牌快用掉超過了先七張以下長按不要的牌拖到左側棄牌區第一回合火球還不能用治療專心出牌下再已有怪獸時只能再打初級或者教學戰完成之後背包看卡牌熟練度沒事英雄生命歸零就輸入門級再來一次吧";
@@ -51,16 +54,22 @@ public sealed class TutorialBattleCoachUi : MonoBehaviour
     private GameObject _backdrop;
     private RectTransform _panelRt;
     private RectTransform _borderGlowRt;
+    private Image _borderGlowImage;
     private RectTransform _portraitFrameRt;
     private RectTransform _portraitRt;
     private RectTransform _nameRt;
     private RectTransform _tapHintRt;
     private RectTransform _bodyRt;
+    private RectTransform _bodyPanelRt;
+    private GameObject _bodyPanelObj;
     private TMP_Text _bodyText;
     private TMP_Text _speakerNameText;
     private TMP_Text _tapHintText;
+    private GameObject _panelChromeObj;
+    private Image _portraitFrameImage;
+    private Outline _portraitFrameOutline;
     private Image _portraitImage;
-    private Outline _panelOutline;
+    private Button _panelButton;
     private string _lastHintMessage = string.Empty;
     private bool _uiBuilt;
     private bool _expanded;
@@ -132,8 +141,10 @@ public sealed class TutorialBattleCoachUi : MonoBehaviour
 
         if (_expanded)
             _typewriter?.Tick(Time.unscaledDeltaTime);
-        else
+        else if (_hasUnreadHint)
             UpdateCollapsedBorderPulse();
+        else
+            ResetBorderGlowPresentation();
 
         if (_manager == null || _manager.IsBattleOver()) return;
         if (_manager.IsOpeningPresentationInProgress()) return;
@@ -205,16 +216,52 @@ public sealed class TutorialBattleCoachUi : MonoBehaviour
 
     private void UpdateCollapsedBorderPulse()
     {
-        if (!_hasUnreadHint || _borderGlowRt == null) return;
+        if (!_hasUnreadHint) return;
 
-        float pulse = 0.72f + 0.28f * (0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * BorderPulseSpeed));
-        _borderGlowRt.localScale = Vector3.one * pulse;
+        float t = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * BorderPulseSpeed);
+        Color pulseColor = Color.Lerp(
+            BattleUiColors.CoachUnreadPulseGlowDim,
+            BattleUiColors.CoachUnreadPulseGlow,
+            t);
+        float pulseScale = CollapsedPulseScaleMin + CollapsedPulseScaleRange * t;
 
-        if (_panelOutline != null)
+        if (_borderGlowImage != null && _borderGlowRt != null && _borderGlowRt.gameObject.activeSelf)
         {
-            float a = 0.65f + 0.35f * (0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * BorderPulseSpeed));
-            _panelOutline.effectColor = new Color(CoachBorderGold.r, CoachBorderGold.g, CoachBorderGold.b, a);
+            _borderGlowImage.color = pulseColor;
+            _borderGlowRt.localScale = Vector3.one * pulseScale;
+            return;
         }
+
+        if (_portraitFrameImage != null)
+            _portraitFrameImage.color = BattleUiColors.CoachPortraitMat;
+        if (_portraitFrameOutline != null)
+        {
+            _portraitFrameOutline.effectColor = Color.Lerp(
+                BattleUiColors.CoachUnreadPulseGlowDim,
+                BattleUiColors.CoachUnreadPulseGlow,
+                t);
+            float outlineDist = Mathf.Lerp(PortraitOutlineDist, CollapsedPulseOutlineDistMax, t);
+            _portraitFrameOutline.effectDistance = new Vector2(outlineDist, -outlineDist);
+        }
+        if (_portraitFrameRt != null)
+            _portraitFrameRt.localScale = Vector3.one * pulseScale;
+    }
+
+    private void ResetBorderGlowPresentation()
+    {
+        if (_borderGlowImage != null)
+            _borderGlowImage.color = BattleUiColors.CoachBorderGlowFill;
+        if (_borderGlowRt != null)
+            _borderGlowRt.localScale = Vector3.one;
+        if (_portraitFrameImage != null)
+            _portraitFrameImage.color = BattleUiColors.CoachPortraitMat;
+        if (_portraitFrameOutline != null)
+        {
+            _portraitFrameOutline.effectColor = BattleUiColors.CoachPortraitFrame;
+            _portraitFrameOutline.effectDistance = new Vector2(PortraitOutlineDist, -PortraitOutlineDist);
+        }
+        if (_portraitFrameRt != null)
+            _portraitFrameRt.localScale = Vector3.one;
     }
 
     private bool ShouldRun()
@@ -486,10 +533,15 @@ public sealed class TutorialBattleCoachUi : MonoBehaviour
 
     private void SetBodyVisible(bool visible)
     {
+        if (_bodyPanelObj != null)
+            _bodyPanelObj.SetActive(visible);
+        if (_bodyRt != null)
+            _bodyRt.gameObject.SetActive(visible);
         if (_bodyText == null) return;
-        _bodyText.gameObject.SetActive(visible);
         if (!visible)
             _bodyText.text = string.Empty;
+        else if (_bodyPanelObj != null)
+            _bodyPanelObj.transform.SetAsLastSibling();
     }
 
     private void ExpandPanel()
@@ -533,8 +585,10 @@ public sealed class TutorialBattleCoachUi : MonoBehaviour
                 ApplyRightCenterPanelAnchor(DiscardExpandedPanelPosition);
             else
                 ApplyLeftCenterPanelAnchor(ExpandedPanelPosition);
-            LayoutExpandedHorizontal(portraitFrameSize, portraitSize);
+            LayoutExpandedSplit(portraitFrameSize, portraitSize, discardPhase);
             LayoutTapHint(false);
+            if (!string.IsNullOrEmpty(_lastHintMessage))
+                SetBodyVisible(true);
             FitExpandedPanelToContent(_lastHintMessage);
         }
         else
@@ -543,24 +597,11 @@ public sealed class TutorialBattleCoachUi : MonoBehaviour
                 ApplyRightCenterPanelAnchor(DiscardCollapsedPanelPosition);
             else
                 ApplyLeftCenterPanelAnchor(CollapsedPanelPosition);
-            _panelRt.sizeDelta = CollapsedPanelSize;
 
-            LayoutPortraitBlock(portraitFrameSize, portraitSize, -12f, portraitOnLeft: false);
-            LayoutNameUnderPortrait(portraitFrameSize, -12f, 34f);
-            LayoutTapHint(true);
-
-            if (_bodyRt != null)
-                _bodyRt.gameObject.SetActive(false);
-
-            if (_speakerNameText != null)
-            {
-                _speakerNameText.fontSize = CollapsedNameFontSize;
-                _speakerNameText.alignment = TextAlignmentOptions.Center;
-            }
+            LayoutCollapsedPortraitOnly(portraitFrameSize, portraitSize);
         }
 
-        if (_borderGlowRt != null)
-            _borderGlowRt.localScale = Vector3.one;
+        ResetBorderGlowPresentation();
     }
 
     private void ApplyLeftCenterPanelAnchor(Vector2 anchoredPosition)
@@ -615,38 +656,86 @@ public sealed class TutorialBattleCoachUi : MonoBehaviour
     private float GetExpandedContentLeftPad(float portraitFrameSize) =>
         ExpandedEdgePad + portraitFrameSize + ExpandedPortraitTextGap;
 
-    private void LayoutExpandedHorizontal(float portraitFrameSize, float portraitSize)
+    private void HideOuterChrome()
     {
-        float contentLeft = GetExpandedContentLeftPad(portraitFrameSize);
-        const float nameBodyGap = 10f;
-
-        LayoutPortraitBlock(portraitFrameSize, portraitSize, -ExpandedEdgePad, portraitOnLeft: true);
-
+        if (_panelChromeObj != null)
+            _panelChromeObj.SetActive(false);
+        if (_borderGlowRt != null)
+            _borderGlowRt.gameObject.SetActive(false);
         if (_nameRt != null)
+            _nameRt.gameObject.SetActive(false);
+        LayoutTapHint(false);
+    }
+
+    private void LayoutCollapsedPortraitOnly(float portraitFrameSize, float portraitSize)
+    {
+        HideOuterChrome();
+
+        if (_panelRt != null)
+            _panelRt.sizeDelta = new Vector2(portraitFrameSize, portraitFrameSize);
+
+        if (_portraitFrameRt != null)
         {
-            // 只能用 offset 設定：之後再改 sizeDelta 會把左邊界歸零，名字會壓到立繪。
-            _nameRt.anchorMin = new Vector2(0f, 1f);
-            _nameRt.anchorMax = new Vector2(1f, 1f);
-            _nameRt.pivot = new Vector2(0.5f, 1f);
-            _nameRt.offsetMin = new Vector2(contentLeft, -(ExpandedEdgePad + ExpandedNameRowHeight));
-            _nameRt.offsetMax = new Vector2(-ExpandedEdgePad, -ExpandedEdgePad);
+            _portraitFrameRt.anchorMin = new Vector2(0.5f, 0.5f);
+            _portraitFrameRt.anchorMax = new Vector2(0.5f, 0.5f);
+            _portraitFrameRt.pivot = new Vector2(0.5f, 0.5f);
+            _portraitFrameRt.sizeDelta = new Vector2(portraitFrameSize, portraitFrameSize);
+            _portraitFrameRt.anchoredPosition = Vector2.zero;
         }
 
-        if (_speakerNameText != null)
+        if (_portraitRt != null)
         {
-            _speakerNameText.fontSize = ExpandedNameFontSize;
-            _speakerNameText.alignment = TextAlignmentOptions.TopLeft;
+            _portraitRt.anchorMin = new Vector2(0.5f, 0.5f);
+            _portraitRt.anchorMax = new Vector2(0.5f, 0.5f);
+            _portraitRt.pivot = new Vector2(0.5f, 0.5f);
+            _portraitRt.sizeDelta = new Vector2(portraitSize, portraitSize);
+            _portraitRt.anchoredPosition = Vector2.zero;
         }
 
-        if (_bodyRt != null)
+        if (_panelButton != null && _portraitFrameImage != null)
         {
-            _bodyRt.gameObject.SetActive(true);
-            _bodyRt.anchorMin = new Vector2(0f, 0f);
-            _bodyRt.anchorMax = new Vector2(1f, 1f);
-            _bodyRt.pivot = new Vector2(0.5f, 0.5f);
-            float bodyTop = ExpandedEdgePad + ExpandedNameRowHeight + nameBodyGap;
-            _bodyRt.offsetMin = new Vector2(contentLeft, ExpandedEdgePad);
-            _bodyRt.offsetMax = new Vector2(-ExpandedEdgePad, -bodyTop);
+            _panelButton.targetGraphic = _portraitFrameImage;
+            _portraitFrameImage.raycastTarget = true;
+        }
+
+        if (_portraitFrameImage != null)
+            _portraitFrameImage.color = BattleUiColors.CoachPortraitMat;
+        if (_portraitFrameOutline != null)
+        {
+            _portraitFrameOutline.effectColor = BattleUiColors.CoachPortraitFrame;
+            _portraitFrameOutline.effectDistance = new Vector2(PortraitOutlineDist, -PortraitOutlineDist);
+        }
+    }
+
+    private void LayoutExpandedSplit(float portraitFrameSize, float portraitSize, bool portraitOnRight)
+    {
+        HideOuterChrome();
+
+        float portraitAnchorX = portraitOnRight ? 1f : 0f;
+        if (_portraitFrameRt != null)
+        {
+            _portraitFrameRt.anchorMin = new Vector2(portraitAnchorX, 0.5f);
+            _portraitFrameRt.anchorMax = new Vector2(portraitAnchorX, 0.5f);
+            _portraitFrameRt.pivot = new Vector2(portraitAnchorX, 0.5f);
+            _portraitFrameRt.sizeDelta = new Vector2(portraitFrameSize, portraitFrameSize);
+            _portraitFrameRt.anchoredPosition = Vector2.zero;
+        }
+
+        if (_portraitRt != null)
+            StretchFull(_portraitRt, 4f);
+
+        if (_panelButton != null && _portraitFrameImage != null)
+        {
+            _panelButton.targetGraphic = _portraitFrameImage;
+            _portraitFrameImage.raycastTarget = true;
+        }
+
+        if (_portraitFrameImage != null)
+            _portraitFrameImage.color = BattleUiColors.CoachPortraitMat;
+        if (_portraitFrameOutline != null)
+        {
+            _portraitFrameOutline.effectColor = BattleUiColors.CoachPortraitFrame;
+            _portraitFrameOutline.effectDistance = new Vector2(PortraitOutlineDist, -PortraitOutlineDist);
         }
 
         if (_bodyText != null)
@@ -654,6 +743,33 @@ public sealed class TutorialBattleCoachUi : MonoBehaviour
             _bodyText.fontSize = ExpandedBodyFontSize;
             _bodyText.lineSpacing = 6f;
             _bodyText.overflowMode = TextOverflowModes.Overflow;
+            _bodyText.color = BattleUiColors.CoachHintText;
+            _bodyText.alignment = TextAlignmentOptions.TopLeft;
+        }
+    }
+
+    private void LayoutExpandedTextPanel(float portraitFrameSize, float panelWidth, float panelHeight, bool portraitOnRight)
+    {
+        if (_bodyPanelRt == null) return;
+
+        float gap = ExpandedPortraitTextGap;
+        float anchorX = portraitOnRight ? 1f : 0f;
+        float panelOffsetX = portraitOnRight
+            ? -(portraitFrameSize + gap)
+            : portraitFrameSize + gap;
+
+        _bodyPanelRt.anchorMin = new Vector2(anchorX, 0.5f);
+        _bodyPanelRt.anchorMax = new Vector2(anchorX, 0.5f);
+        _bodyPanelRt.pivot = new Vector2(anchorX, 0.5f);
+        _bodyPanelRt.sizeDelta = new Vector2(panelWidth, panelHeight);
+        _bodyPanelRt.anchoredPosition = new Vector2(panelOffsetX, 0f);
+
+        if (_bodyRt != null)
+        {
+            _bodyRt.anchorMin = Vector2.zero;
+            _bodyRt.anchorMax = Vector2.one;
+            _bodyRt.offsetMin = new Vector2(ExpandedTextPanelPadH, ExpandedTextPanelPadV);
+            _bodyRt.offsetMax = new Vector2(-ExpandedTextPanelPadH, -ExpandedTextPanelPadV);
         }
     }
 
@@ -661,31 +777,35 @@ public sealed class TutorialBattleCoachUi : MonoBehaviour
     {
         if (!_expanded || _panelRt == null || _bodyText == null) return;
 
+        bool portraitOnRight = IsDiscardPhaseActive();
         float portraitFrameSize = ExpandedPortraitSize + 12f;
-        float contentLeft = GetExpandedContentLeftPad(portraitFrameSize);
-        float bodyWidth = ExpandedPanelWidth - contentLeft - ExpandedEdgePad;
-        const float nameBodyGap = 10f;
+        float innerMaxWidth = ExpandedTextPanelMaxWidth - ExpandedTextPanelPadH * 2f;
 
         string measureText = string.IsNullOrWhiteSpace(message) ? " " : message;
         _bodyText.fontSize = ExpandedBodyFontSize;
-        Vector2 preferred = _bodyText.GetPreferredValues(measureText, bodyWidth, 0f);
-        float bodyHeight = Mathf.Max(52f, preferred.y + 8f);
+        Vector2 preferred = _bodyText.GetPreferredValues(measureText, innerMaxWidth, 0f);
+        float textWidth = Mathf.Clamp(
+            preferred.x + 4f,
+            ExpandedTextPanelMinWidth - ExpandedTextPanelPadH * 2f,
+            innerMaxWidth);
+        float textHeight = Mathf.Max(40f, preferred.y + 4f);
 
-        float contentColumnHeight = ExpandedNameRowHeight + nameBodyGap + bodyHeight + ExpandedEdgePad;
-        float panelHeight = Mathf.Max(
-            ExpandedMinPanelHeight,
-            Mathf.Max(portraitFrameSize + ExpandedEdgePad * 2f, contentColumnHeight + ExpandedEdgePad));
+        float panelWidth = textWidth + ExpandedTextPanelPadH * 2f;
+        float panelHeight = textHeight + ExpandedTextPanelPadV * 2f;
+        float rootWidth = portraitFrameSize + ExpandedPortraitTextGap + panelWidth;
+        float rootHeight = Mathf.Max(portraitFrameSize, panelHeight, ExpandedMinPanelHeight);
 
         RectTransform canvasRt = _canvasRoot as RectTransform;
         if (canvasRt != null)
         {
             float maxHeight = canvasRt.rect.height - ExpandedCanvasHeightMargin * 2f;
             if (maxHeight > ExpandedMinPanelHeight)
-                panelHeight = Mathf.Min(panelHeight, maxHeight);
+                rootHeight = Mathf.Min(rootHeight, maxHeight);
         }
 
-        _panelRt.sizeDelta = new Vector2(ExpandedPanelWidth, panelHeight);
-        ClampPanelWithinCanvas(IsDiscardPhaseActive());
+        _panelRt.sizeDelta = new Vector2(rootWidth, rootHeight);
+        LayoutExpandedTextPanel(portraitFrameSize, panelWidth, panelHeight, portraitOnRight);
+        ClampPanelWithinCanvas(portraitOnRight);
     }
 
     private void ClampPanelWithinCanvas(bool discardPhase = false)
@@ -795,41 +915,48 @@ public sealed class TutorialBattleCoachUi : MonoBehaviour
         _root.transform.SetParent(_canvasRoot, false);
         _panelRt = _root.GetComponent<RectTransform>();
 
-        Image panelBg = _root.AddComponent<Image>();
-        panelBg.color = BattleUiColors.HallWine;
-        panelBg.raycastTarget = true;
-
-        _panelOutline = _root.AddComponent<Outline>();
-        _panelOutline.effectColor = CoachBorderGold;
-        _panelOutline.effectDistance = new Vector2(3f, -3f);
-
-        Shadow panelShadow = _root.AddComponent<Shadow>();
-        panelShadow.effectColor = new Color(0f, 0f, 0f, 0.55f);
-        panelShadow.effectDistance = new Vector2(4f, -4f);
-
         Button panelButton = _root.AddComponent<Button>();
         panelButton.transition = Selectable.Transition.None;
-        panelButton.targetGraphic = panelBg;
         panelButton.onClick.AddListener(OnPanelClicked);
+        _panelButton = panelButton;
 
         GameObject borderGlowObj = new GameObject("BorderGlow", typeof(RectTransform), typeof(Image));
         borderGlowObj.transform.SetParent(_root.transform, false);
-        borderGlowObj.transform.SetAsFirstSibling();
         _borderGlowRt = borderGlowObj.GetComponent<RectTransform>();
         StretchFull(_borderGlowRt, -8f);
         Image borderGlowImg = borderGlowObj.GetComponent<Image>();
         borderGlowImg.sprite = GetWhiteSprite();
         borderGlowImg.type = Image.Type.Sliced;
-        borderGlowImg.color = CoachBorderGlow;
+        borderGlowImg.color = BattleUiColors.CoachBorderGlowFill;
         borderGlowImg.raycastTarget = false;
+        _borderGlowImage = borderGlowImg;
+
+        GameObject panelChromeObj = new GameObject("PanelChrome", typeof(RectTransform), typeof(Image), typeof(Shadow));
+        panelChromeObj.transform.SetParent(_root.transform, false);
+        _panelChromeObj = panelChromeObj;
+        RectTransform panelChromeRt = panelChromeObj.GetComponent<RectTransform>();
+        StretchFull(panelChromeRt, 0f);
+        Image panelBg = panelChromeObj.GetComponent<Image>();
+        panelBg.color = BattleUiColors.CoachPanelBg;
+        panelBg.raycastTarget = true;
+        panelButton.targetGraphic = panelBg;
+
+        Shadow panelShadow = panelChromeObj.GetComponent<Shadow>();
+        panelShadow.effectColor = new Color(0f, 0f, 0f, 0.55f);
+        panelShadow.effectDistance = new Vector2(4f, -4f);
 
         GameObject portraitFrameObj = new GameObject("PortraitFrame", typeof(RectTransform), typeof(Image));
         portraitFrameObj.transform.SetParent(_root.transform, false);
         _portraitFrameRt = portraitFrameObj.GetComponent<RectTransform>();
         Image portraitFrameImg = portraitFrameObj.GetComponent<Image>();
         portraitFrameImg.sprite = GetWhiteSprite();
-        portraitFrameImg.color = PortraitFrameColor;
+        portraitFrameImg.color = BattleUiColors.CoachPortraitMat;
         portraitFrameImg.raycastTarget = false;
+        _portraitFrameImage = portraitFrameImg;
+        Outline portraitFrameOutline = portraitFrameObj.AddComponent<Outline>();
+        portraitFrameOutline.effectColor = BattleUiColors.CoachPortraitFrame;
+        portraitFrameOutline.effectDistance = new Vector2(2f, -2f);
+        _portraitFrameOutline = portraitFrameOutline;
 
         GameObject portraitObj = new GameObject("Portrait", typeof(RectTransform), typeof(Image));
         portraitObj.transform.SetParent(portraitFrameObj.transform, false);
@@ -859,25 +986,40 @@ public sealed class TutorialBattleCoachUi : MonoBehaviour
         _tapHintText = tapTmp;
         if (font != null) tapTmp.font = font;
         tapTmp.fontStyle = FontStyles.Bold;
-        tapTmp.color = CoachBorderGold;
+        tapTmp.color = BattleUiColors.InkSoft;
         tapTmp.text = "點擊查看提示";
         tapTmp.alignment = TextAlignmentOptions.Center;
         tapTmp.raycastTarget = false;
 
+        GameObject bodyPanelObj = new GameObject("HintTextPanel", typeof(RectTransform), typeof(Image), typeof(Shadow));
+        bodyPanelObj.transform.SetParent(_root.transform, false);
+        _bodyPanelObj = bodyPanelObj;
+        _bodyPanelRt = bodyPanelObj.GetComponent<RectTransform>();
+        Image bodyPanelImg = bodyPanelObj.GetComponent<Image>();
+        bodyPanelImg.sprite = GetWhiteSprite();
+        bodyPanelImg.color = BattleUiColors.CoachHintTextPanelBg;
+        bodyPanelImg.raycastTarget = false;
+        Shadow bodyPanelShadow = bodyPanelObj.GetComponent<Shadow>();
+        bodyPanelShadow.effectColor = new Color(0f, 0f, 0f, 0.55f);
+        bodyPanelShadow.effectDistance = new Vector2(3f, -3f);
+        Outline bodyPanelOutline = bodyPanelObj.AddComponent<Outline>();
+        bodyPanelOutline.effectColor = BattleUiColors.CoachHintTextPanelEdge;
+        bodyPanelOutline.effectDistance = new Vector2(1.5f, -1.5f);
+        bodyPanelObj.SetActive(false);
+
         GameObject bodyObj = new GameObject("CoachText", typeof(RectTransform), typeof(TextMeshProUGUI));
-        bodyObj.transform.SetParent(_root.transform, false);
+        bodyObj.transform.SetParent(bodyPanelObj.transform, false);
         _bodyRt = bodyObj.GetComponent<RectTransform>();
         _bodyRt.anchorMin = new Vector2(0f, 0f);
         _bodyRt.anchorMax = new Vector2(1f, 1f);
         _bodyText = bodyObj.GetComponent<TextMeshProUGUI>();
         if (font != null) _bodyText.font = font;
-        _bodyText.color = BattleUiColors.BtnPrimaryText;
+        _bodyText.color = BattleUiColors.CoachHintText;
         _bodyText.alignment = TextAlignmentOptions.TopLeft;
         _bodyText.enableWordWrapping = true;
         _bodyText.overflowMode = TextOverflowModes.Overflow;
         _bodyText.richText = true;
         _bodyText.raycastTarget = false;
-        bodyObj.SetActive(false);
 
         _typewriter = new PlotDialogueTypewriter();
         _uiBuilt = true;
@@ -913,8 +1055,8 @@ public sealed class TutorialBattleCoachUi : MonoBehaviour
         var tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
         tex.wrapMode = TextureWrapMode.Clamp;
         var pixels = new Color32[size * size];
-        Color32 fill = PortraitPlaceholderFill;
-        Color32 frame = PortraitFrameColor;
+        Color32 fill = BattleUiColors.CoachPortraitMat;
+        Color32 frame = BattleUiColors.CoachPortraitFrame;
         int border = 6;
         int innerBorder = 10;
         for (int y = 0; y < size; y++)

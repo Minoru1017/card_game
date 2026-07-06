@@ -143,16 +143,30 @@ public sealed class M12BattleCoachUi : MonoBehaviour
         outline.effectColor = new Color(0.97f, 0.85f, 0.47f, 0.95f);
         outline.effectDistance = new Vector2(2f, -2f);
 
-        GameObject portraitFrame = new GameObject("Portrait", typeof(RectTransform), typeof(Image));
-        portraitFrame.transform.SetParent(_root.transform, false);
-        RectTransform portraitRt = portraitFrame.GetComponent<RectTransform>();
-        portraitRt.anchorMin = new Vector2(0f, 0.5f);
-        portraitRt.anchorMax = new Vector2(0f, 0.5f);
-        portraitRt.pivot = new Vector2(0f, 0.5f);
-        portraitRt.anchoredPosition = new Vector2(16f, 0f);
-        portraitRt.sizeDelta = new Vector2(150f, 150f);
-        _portraitImage = portraitFrame.GetComponent<Image>();
-        _portraitImage.color = new Color(0.92f, 0.86f, 0.76f, 1f);
+        GameObject portraitFrameObj = new GameObject("PortraitFrame", typeof(RectTransform), typeof(Image), typeof(Outline));
+        portraitFrameObj.transform.SetParent(_root.transform, false);
+        RectTransform portraitFrameRt = portraitFrameObj.GetComponent<RectTransform>();
+        portraitFrameRt.anchorMin = new Vector2(0f, 0.5f);
+        portraitFrameRt.anchorMax = new Vector2(0f, 0.5f);
+        portraitFrameRt.pivot = new Vector2(0f, 0.5f);
+        portraitFrameRt.anchoredPosition = new Vector2(16f, 0f);
+        portraitFrameRt.sizeDelta = new Vector2(150f, 150f);
+        Image portraitFrameImg = portraitFrameObj.GetComponent<Image>();
+        portraitFrameImg.color = BattleUiColors.CoachPortraitMat;
+        portraitFrameImg.raycastTarget = false;
+        Outline portraitFrameOutline = portraitFrameObj.GetComponent<Outline>();
+        portraitFrameOutline.effectColor = BattleUiColors.CoachPortraitFrame;
+        portraitFrameOutline.effectDistance = new Vector2(2f, -2f);
+
+        GameObject portraitObj = new GameObject("Portrait", typeof(RectTransform), typeof(Image));
+        portraitObj.transform.SetParent(portraitFrameObj.transform, false);
+        RectTransform portraitRt = portraitObj.GetComponent<RectTransform>();
+        portraitRt.anchorMin = Vector2.zero;
+        portraitRt.anchorMax = Vector2.one;
+        portraitRt.offsetMin = new Vector2(4f, 4f);
+        portraitRt.offsetMax = new Vector2(-4f, -4f);
+        _portraitImage = portraitObj.GetComponent<Image>();
+        _portraitImage.color = Color.white;
         Sprite portrait = HarborCombatCoachExpressionCatalog.ResolveNeutralOrFallback();
         if (portrait != null)
         {

@@ -31,8 +31,8 @@ public static class UiSpriteLibraryPopulator
             Debug.Log($"UiSpriteLibraryPopulator: 已建立新資產 {LibraryAssetPath}");
         }
 
-        // 第一個表情（Neutral）定案用 Linkk_Smile；其餘表情仍等 Resources/UI/LinKeCoach 美術。
-        Sprite neutral = LoadSpriteFromAssetPath(CoachNeutralAssetPath);
+        // 第一個表情（Neutral）定案用 Linkk_Smile.jpeg.png；其餘表情仍等 Resources/UI/LinKeCoach 美術。
+        Sprite neutral = LoadCoachNeutralSpriteFromAsset();
         if (neutral == null)
             neutral = LoadSprite(CoachPrefix + "neutral");
         Sprite alert = LoadSprite(CoachPrefix + "alert");
@@ -42,6 +42,9 @@ public static class UiSpriteLibraryPopulator
 
         Sprite returnButton = LoadReturnSprite(ReturnPath);
         library.EditorSetReturnButton(returnButton);
+
+        Sprite battlePauseButton = LoadBattlePauseButtonSpriteFromAsset();
+        library.EditorSetBattlePauseButton(battlePauseButton);
 
         Sprite basePlate = LoadBasePlateSprite();
         library.EditorSetResponsiveBasePlate(basePlate);
@@ -73,6 +76,11 @@ public static class UiSpriteLibraryPopulator
         Sprite youWillDieSprite = LoadYouWillDieSpriteFromAsset();
         library.EditorSetCombatStatus(youWillDieSprite);
 
+        Sprite intro11Instruction = LoadIntro11InstructionSpriteFromAsset();
+        Sprite intro11PracticalApplication = LoadIntro11PracticalApplicationSpriteFromAsset();
+        Sprite storyProgressClear = LoadStoryProgressClearSpriteFromAsset();
+        library.EditorSetStoryProgressNodeIcons(intro11Instruction, intro11PracticalApplication, storyProgressClear);
+
         EditorUtility.SetDirty(library);
         AssetDatabase.SaveAssets();
         AssetDatabase.Refresh();
@@ -80,13 +88,16 @@ public static class UiSpriteLibraryPopulator
         Debug.Log(
             $"UiSpriteLibraryPopulator: coach(neutral={neutral != null}, alert={alert != null}, " +
             $"serious={serious != null}, encourage={encourage != null}), return={returnButton != null}, " +
+            $"battlePause={battlePauseButton != null}, " +
             $"basePlate={basePlate != null}, " +
             $"harborBay={harborBay != null}, previewPanel={previewPanel != null}, classroom={classroom != null}, classroomHorror={classroomHorror != null}, " +
             $"difficulty(intro={dIntro != null}, easy={dEasy != null}, normal={dNormal != null}, " +
             $"hard={dHard != null}, boss={dBoss != null}), " +
             $"rarity(N={rN != null}, R={rR != null}, SR={rSr != null}, SSR={rSsr != null}, UR={rUr != null}), " +
             $"cdHarborPractice={cdHarborPractice != null}, cdCourtMarch={cdCourtMarch != null}, " +
-            $"youWillDie={youWillDieSprite != null} " +
+            $"youWillDie={youWillDieSprite != null}, intro11Instruction={intro11Instruction != null}, " +
+            $"intro11PracticalApplication={intro11PracticalApplication != null}, " +
+            $"storyProgressClear={storyProgressClear != null} " +
             $"→ {LibraryAssetPath}");
     }
 
@@ -163,8 +174,96 @@ public static class UiSpriteLibraryPopulator
     private const string BasePlateAssetPath = "Assets/UI/base plate.png";
     private const string ClassroomAssetPath = "Assets/UI/Level background/Classroom_FE.png";
     private const string ClassroomHorrorAssetPath = "Assets/UI/Level background/Classroom_FR.png";
-    private const string CoachNeutralAssetPath = "Assets/UI/NPC/Linkk_Smile.jpeg";
+    private const string CoachNeutralAssetPath = "Assets/UI/NPC/Linkk_Smile.jpeg.png";
     private const string YouWillDieAssetPath = "Assets/UI/Combat status/You will die.png";
+    private const string Intro11InstructionAssetPath = "Assets/UI/1-1 Instruction.png";
+    private const string Intro11PracticalApplicationAssetPath = "Assets/UI/1-1 Practical Application.png";
+    private const string StoryProgressClearAssetPath = "Assets/UI/Clear.png";
+    private const string BattlePauseButtonAssetPath = "Assets/UI/pause-button.png";
+
+    private static Sprite LoadIntro11InstructionSpriteFromAsset()
+    {
+        Object[] assets = AssetDatabase.LoadAllAssetsAtPath(Intro11InstructionAssetPath);
+        if (assets == null)
+            return null;
+
+        Sprite preferred = null;
+        Sprite fallback = null;
+        for (int i = 0; i < assets.Length; i++)
+        {
+            if (assets[i] is not Sprite sprite)
+                continue;
+            fallback ??= sprite;
+            if (string.Equals(sprite.name, "1-1 Instruction_0", System.StringComparison.Ordinal) ||
+                string.Equals(sprite.name, "1-1 Instruction", System.StringComparison.Ordinal))
+                preferred = sprite;
+        }
+
+        return preferred != null ? preferred : fallback;
+    }
+
+    private static Sprite LoadIntro11PracticalApplicationSpriteFromAsset()
+    {
+        Object[] assets = AssetDatabase.LoadAllAssetsAtPath(Intro11PracticalApplicationAssetPath);
+        if (assets == null)
+            return null;
+
+        Sprite preferred = null;
+        Sprite fallback = null;
+        for (int i = 0; i < assets.Length; i++)
+        {
+            if (assets[i] is not Sprite sprite)
+                continue;
+            fallback ??= sprite;
+            if (string.Equals(sprite.name, "1-1 Practical Application_0", System.StringComparison.Ordinal) ||
+                string.Equals(sprite.name, "1-1 Practical Application", System.StringComparison.Ordinal))
+                preferred = sprite;
+        }
+
+        return preferred != null ? preferred : fallback;
+    }
+
+    private static Sprite LoadStoryProgressClearSpriteFromAsset()
+    {
+        Object[] assets = AssetDatabase.LoadAllAssetsAtPath(StoryProgressClearAssetPath);
+        if (assets == null)
+            return null;
+
+        Sprite preferred = null;
+        Sprite fallback = null;
+        for (int i = 0; i < assets.Length; i++)
+        {
+            if (assets[i] is not Sprite sprite)
+                continue;
+            fallback ??= sprite;
+            if (string.Equals(sprite.name, "Clear_0", System.StringComparison.Ordinal) ||
+                string.Equals(sprite.name, "Clear", System.StringComparison.Ordinal))
+                preferred = sprite;
+        }
+
+        return preferred != null ? preferred : fallback;
+    }
+
+    private static Sprite LoadBattlePauseButtonSpriteFromAsset()
+    {
+        Object[] assets = AssetDatabase.LoadAllAssetsAtPath(BattlePauseButtonAssetPath);
+        if (assets == null)
+            return null;
+
+        Sprite preferred = null;
+        Sprite fallback = null;
+        for (int i = 0; i < assets.Length; i++)
+        {
+            if (assets[i] is not Sprite sprite)
+                continue;
+            fallback ??= sprite;
+            if (string.Equals(sprite.name, "pause-button_0", System.StringComparison.Ordinal) ||
+                string.Equals(sprite.name, "pause-button", System.StringComparison.Ordinal))
+                preferred = sprite;
+        }
+
+        return preferred != null ? preferred : fallback;
+    }
 
     private static Sprite LoadYouWillDieSpriteFromAsset()
     {
@@ -182,6 +281,27 @@ public static class UiSpriteLibraryPopulator
             if (string.Equals(sprite.name, "You will die_0", System.StringComparison.Ordinal))
                 preferred = sprite;
         }
+        return preferred != null ? preferred : fallback;
+    }
+
+    private static Sprite LoadCoachNeutralSpriteFromAsset()
+    {
+        Object[] assets = AssetDatabase.LoadAllAssetsAtPath(CoachNeutralAssetPath);
+        if (assets == null)
+            return null;
+
+        Sprite preferred = null;
+        Sprite fallback = null;
+        for (int i = 0; i < assets.Length; i++)
+        {
+            if (assets[i] is not Sprite sprite)
+                continue;
+            fallback ??= sprite;
+            if (string.Equals(sprite.name, "Linkk_Smile.jpeg_0", System.StringComparison.Ordinal) ||
+                string.Equals(sprite.name, "Linkk_Smile.jpeg", System.StringComparison.Ordinal))
+                preferred = sprite;
+        }
+
         return preferred != null ? preferred : fallback;
     }
 

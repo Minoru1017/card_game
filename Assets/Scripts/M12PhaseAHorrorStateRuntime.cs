@@ -3,15 +3,15 @@ using UnityEngine.SceneManagement;
 
 /// <summary>
 /// M-1-2 階段 A 段考：第二種對戰氛圍「恐怖狀態」。
-/// 第 7 回合起進入；本局開局隨機決定持續 3～5 回合，或直到對戰結束；重玩重新擲骰。
+/// 第 7 回合起進入；本局開局隨機決定持續 3～5 回合（不超過 5 回合）；重玩重新擲骰。
 /// </summary>
 public static class M12PhaseAHorrorStateRuntime
 {
     public const int HorrorStartRound = 7;
     public const int MinDurationRounds = 3;
+    public const int MaxDurationRounds = 5;
 
     private static bool rollsInitialized;
-    private static bool untilBattleEnd;
     private static int horrorLastRoundInclusive = int.MinValue;
     private static bool lastAppliedHorror;
     private static bool roundSixTransitionSfxPlayed;
@@ -24,25 +24,13 @@ public static class M12PhaseAHorrorStateRuntime
         if (!BattleLaunchContext.IsM12TrioTutorialBattle)
         {
             rollsInitialized = false;
-            untilBattleEnd = false;
             horrorLastRoundInclusive = int.MinValue;
             return;
         }
 
-        int maxRounds = M12PhaseABattleRules.MaxRoundsInclusive;
-        int maxDuration = maxRounds - HorrorStartRound + 1;
-        int durationChoices = maxDuration - MinDurationRounds + 1;
-        int roll = Random.Range(0, durationChoices + 1);
-        if (roll >= durationChoices)
-        {
-            untilBattleEnd = true;
-            horrorLastRoundInclusive = maxRounds;
-        }
-        else
-        {
-            untilBattleEnd = false;
-            horrorLastRoundInclusive = HorrorStartRound + MinDurationRounds - 1 + roll;
-        }
+        int durationSpan = MaxDurationRounds - MinDurationRounds + 1;
+        int roll = Random.Range(0, durationSpan);
+        horrorLastRoundInclusive = HorrorStartRound + MinDurationRounds - 1 + roll;
 
         rollsInitialized = true;
     }
@@ -53,8 +41,6 @@ public static class M12PhaseAHorrorStateRuntime
             return false;
         if (currentRound < HorrorStartRound)
             return false;
-        if (untilBattleEnd)
-            return true;
         return currentRound <= horrorLastRoundInclusive;
     }
 

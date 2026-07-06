@@ -466,7 +466,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         TickYourTurnBannerIdlePrompts();
 
         // 需在 handArea/statusText 建立前也能用；實際可否結束由 CanPlayerAct。Submit 後備給主鍵 Enter（專案 InputManager 的 return 軸），且排除 Space 以免與第二條 Submit（space 替代鍵）重複觸發。
-        if (!isGamePaused)
+        if (!isGamePaused && battleManager.CanPlayerActNow())
         {
             bool spaceDown = Input.GetKeyDown(KeyCode.Space);
             bool enterDown =
@@ -489,7 +489,8 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
 
         if (quickEndTurnButton != null)
         {
-            quickEndTurnButton.interactable = !isGamePaused && battleManager.IsPlayerTurn();
+            quickEndTurnButton.interactable =
+                !isGamePaused && battleManager.IsPlayerTurn() && battleManager.CanPlayerActNow();
         }
 
         if (Time.unscaledTime < nextRefreshTime) return;
@@ -1563,6 +1564,8 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
     {
         isGamePaused = paused;
         Time.timeScale = isGamePaused ? 0f : 1f;
+        TutorialBattleBackgroundMusicPlayer.SetBattlePauseMuted(isGamePaused);
+        FreeBattleBackgroundMusicPlayer.SetBattlePauseMuted(isGamePaused);
         if (pausePanel != null)
         {
             pausePanel.gameObject.SetActive(isGamePaused);

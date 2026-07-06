@@ -541,10 +541,13 @@ public partial class BattleSimulationManager : MonoBehaviour
         firstWeatherPreferGale = weather == BirdDuelOpeningWeather.Gale;
     }
 
-    /// <summary>「先聲奪人」等加成解除我方首回合禁攻；敵方與火球不受影響。</summary>
+    /// <summary>「先聲奪人」等加成解除我方首回合禁攻；開場我方先手時仍可在第 1 回合結束時先攻（與 <see cref="DoesPlayerStrikeFirstThisRound"/> 一致）。</summary>
     private bool IsPlayerOpeningAttackBlocked()
     {
-        return IsOpeningRoundAttackBlocked() && !bonusUnlockPlayerOpeningAttack;
+        if (!IsOpeningRoundAttackBlocked()) return false;
+        if (bonusUnlockPlayerOpeningAttack) return false;
+        if (openingPlayerFirst) return false;
+        return true;
     }
 
     /// <summary>「看破」加成：開戰揭示敵方手牌前幾張的名稱。</summary>
@@ -1891,7 +1894,7 @@ public partial class BattleSimulationManager : MonoBehaviour
 
     public void PlayerAttack()
     {
-        if (!CanPlayerAct()) return;
+        if (!CanExecutePlayerAttack()) return;
         if (IsPlayerOpeningAttackBlocked())
         {
             BattleVerbose("Opening round: attacks are not allowed; play cards only.");
@@ -1997,12 +2000,12 @@ public partial class BattleSimulationManager : MonoBehaviour
         playerEndedTurnThisRound = true;
         pendingPlayerDirectAttackUnlock = (enemyField == null);
         BattleVerbose("Player turn ended");
+        turnSequenceInProgress = true;
         StartCoroutine(RunPlayerEndTurnAttackThenEnemyTurn());
     }
 
     private IEnumerator RunPlayerEndTurnAttackThenEnemyTurn()
     {
-        turnSequenceInProgress = true;
         if (!BattleAutoSimPlugin.IsRunning && attackDelayAfterEndTurn > 0f)
             yield return new WaitForSeconds(attackDelayAfterEndTurn);
         if (!battleOver && !playerHasAttackedThisTurn)
@@ -3117,6 +3120,21 @@ public partial class BattleSimulationManager : MonoBehaviour
     private bool CanPlayerAct()
     {
         if (battleOver) return false;
+        if (turnSequenceInProgress) return false;
+        if (IsEnemyDiscardPopupLockActive()) return false;
+        if (playerConsecration.awaitingPlayerBindChoice) return false;
+        if (openingPresentationInProgress) return false;
+        if (weatherForecastInProgress) return false;
+        if (activeSpellCastPresentationCount > 0) return false;
+        if (!playerTurn)
+            return false;
+        return true;
+    }
+
+    /// <summary>結束回合後自動攻擊用；不含 <see cref="turnSequenceInProgress"/> 鎖（該鎖在按下結束回合時即開啟）。</summary>
+    private bool CanExecutePlayerAttack()
+    {
+        if (battleOver) return false;
         if (IsEnemyDiscardPopupLockActive()) return false;
         if (playerConsecration.awaitingPlayerBindChoice) return false;
         if (openingPresentationInProgress) return false;
@@ -3227,6 +3245,7 @@ public partial class BattleSimulationManager : MonoBehaviour
             if (enemyField != null && sp.SpellOrdinal != 1) return true;
             if (sp.SpellOrdinal == 1 && enemyField == null) return true;
             if (sp.SpellOrdinal == 2 && !CanEnemyCastLinGazeNow()) return true;
+            if (sp.SpellOrdinal == 2 && UsesDefensiveEnemyAi && playerField != null) return true;
             return false;
         }
         return true;
@@ -3255,7 +3274,12 @@ public partial class BattleSimulationManager : MonoBehaviour
             int spellValue;
             if (sp.SpellOrdinal == 1) spellValue = enemyField != null ? 90 : 8;
             else if (sp.SpellOrdinal == 0) spellValue = enemyField != null ? 55 : 75;
-            else if (sp.SpellOrdinal == 2) spellValue = CanEnemyCastLinGazeNow() ? 62 : 10;
+            else if (sp.SpellOrdinal == 2)
+            {
+                spellValue = CanEnemyCastLinGazeNow() ? 62 : 10;
+                if (UsesDefensiveEnemyAi && playerField != null)
+                    spellValue = int.MinValue / 4;
+            }
             else spellValue = 20;
             if (sp.SpellOrdinal == 0 && IsOpeningRoundFireballBlocked()) spellValue = int.MinValue / 4;
             int withSkills = ApplyEnemyReligiousLineSkillPlayBonus(spellValue + rarityBonus, card);
@@ -3652,6 +3676,8 @@ public partial class BattleSimulationManager : MonoBehaviour
                 return enemyField.currentHp < Mathf.CeilToInt(enemyField.maxHp * hurtRatio);
             case 2:
                 if (!CanEnemyCastLinGazeNow()) return false;
+                // 防禦 AI：玩家場上有怪時改走換怪對線，不以凝視封鎖反擊。
+                if (playerField != null) return false;
                 if (playerHp <= Mathf.CeilToInt(startHealth * (strict ? 0.48f : 0.45f))) return true;
                 if (playerField == null && playerHp > Mathf.CeilToInt(startHealth * (strict ? 0.52f : 0.55f)))
                     return false;
@@ -4660,7 +4686,8 @@ public partial class BattleSimulationManager : MonoBehaviour
             if (!lesserHealExempt)
                 return;
         }
-        if (selected is SpellCard spellPre && spellPre.SpellOrdinal == 2 && !CanEnemyCastLinGazeNow())
+        if (selected is SpellCard spellPre && spellPre.SpellOrdinal == 2 &&
+            (!CanEnemyCastLinGazeNow() || (UsesDefensiveEnemyAi && playerField != null)))
             return;
         if (selected is SpellCard spellHeal && spellHeal.SpellOrdinal == 1 && enemyField == null)
             return;

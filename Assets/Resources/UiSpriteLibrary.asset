@@ -12,11 +12,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9b5191a319710214f8fbbdc6aad49b87, type: 3}
   m_Name: UiSpriteLibrary
   m_EditorClassIdentifier: 
-  coachNeutral: {fileID: 3324816355386855942, guid: 63f3fd0e5dff2b745bacc52a3fed794a, type: 3}
+  coachNeutral: {fileID: -5490224122682639012, guid: 3059fcf761dd99d4ba7a425a95b2181d, type: 3}
   coachAlert: {fileID: 0}
   coachSerious: {fileID: 0}
   coachEncourage: {fileID: 0}
   returnButton: {fileID: -995779289211046693, guid: cdfc494c6c52f6e4ea68f7181aaf981d, type: 3}
+  battlePauseButton: {fileID: 1625043983665115602, guid: 7fb711de1c099274a94a12cc072584ae, type: 3}
   responsiveBasePlate: {fileID: -6612584489759726694, guid: a8234a5a361a2a94f9aee1ed630a60f4, type: 3}
   harborBayBackground: {fileID: 7635544513007904724, guid: 98d475c23bdfa884692c1197a89fa39e, type: 3}
   classroomBackground: {fileID: 1689218350021173170, guid: 27e3ddd06e7a74048878e89a6c1de28b, type: 3}
@@ -35,3 +36,6 @@ MonoBehaviour:
   birdDuelCdHarborPractice: {fileID: -1851693404726464028, guid: 32bd7c9bdeb891b4384b7e82c6f02fe5, type: 3}
   birdDuelCdCourtMarch: {fileID: -6514247234673237188, guid: fce96921701850d4d9c2e08f2a3695aa, type: 3}
   youWillDieIcon: {fileID: 5338835404586228864, guid: a86312353cb2327449e930e1c5263982, type: 3}
+  intro11InstructionIcon: {fileID: -7169135478775776028, guid: 79f33ad7c78f2fb4db5d2bb92649fe67, type: 3}
+  intro11PracticalApplicationIcon: {fileID: -3085570952343543891, guid: a17d7acd6d2a3a14081ceb17ada5fc75, type: 3}
+  storyProgressClearIcon: {fileID: -2879146970348422962, guid: b5ad2c7c5a5e85e4995a34fcc23c1d4e, type: 3}

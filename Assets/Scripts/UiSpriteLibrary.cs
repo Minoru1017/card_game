@@ -21,6 +21,8 @@ public sealed class UiSpriteLibrary : ScriptableObject
 
     [Header("通用 UI")]
     [SerializeField] private Sprite returnButton;
+    [Tooltip("對戰暫停鍵 — Assets/UI/pause-button.png（sprite: pause-button_0）")]
+    [SerializeField] private Sprite battlePauseButton;
     [SerializeField] private Sprite responsiveBasePlate;
 
     [Header("對戰場景")]
@@ -53,7 +55,17 @@ public sealed class UiSpriteLibrary : ScriptableObject
     [Tooltip("You will die 致死預警 — Assets/UI/Combat status/You will die.png（sprite: You will die_0，完整圖示）")]
     [SerializeField] private Sprite youWillDieIcon;
 
+    [Header("Story progress 地圖節點")]
+    [Tooltip("1-1 教學關通關前 M-1-1 節點圖示 — Assets/UI/1-1 Instruction.png")]
+    [SerializeField] private Sprite intro11InstructionIcon;
+    [Tooltip("1-1 教學畢業後 M-1-1 實戰區節點圖示 — Assets/UI/1-1 Practical Application.png")]
+    [SerializeField] private Sprite intro11PracticalApplicationIcon;
+    [Tooltip("1-1／1-2 完全通關節點圖示 — Assets/UI/Clear.png")]
+    [SerializeField] private Sprite storyProgressClearIcon;
+
     public Sprite ReturnButton => returnButton;
+    /// <summary>對戰暫停鍵圖示。</summary>
+    public Sprite BattlePauseButton => battlePauseButton;
     /// <summary>響應式左右底板（361×1080）；右側以水平翻轉共用同一張。</summary>
     public Sprite ResponsiveBasePlate => responsiveBasePlate;
     public Sprite HarborBayBackground => harborBayBackground;
@@ -64,6 +76,15 @@ public sealed class UiSpriteLibrary : ScriptableObject
     public Sprite BattlePreviewPanel => battlePreviewPanel;
     /// <summary>「You will die」致死預警全屏圖示；白色線稿，需搭配暗色底顯示。</summary>
     public Sprite YouWillDieIcon => youWillDieIcon;
+
+    /// <summary>1-1 教學關通關前，Story progress 地圖 M-1-1 節點圖示。</summary>
+    public Sprite Intro11InstructionIcon => intro11InstructionIcon;
+
+    /// <summary>1-1 教學畢業後（實戰區），Story progress 地圖 M-1-1 節點圖示。</summary>
+    public Sprite Intro11PracticalApplicationIcon => intro11PracticalApplicationIcon;
+
+    /// <summary>1-1／1-2 完全通關時，Story progress 地圖節點圖示。</summary>
+    public Sprite StoryProgressClearIcon => storyProgressClearIcon;
 
     public Sprite GetCoachExpression(HarborCoachExpression expression)
     {
@@ -155,6 +176,12 @@ public sealed class UiSpriteLibrary : ScriptableObject
     }
 
     /// <summary>供 Editor 填表工具使用，請勿在執行期呼叫。</summary>
+    public void EditorSetBattlePauseButton(Sprite sprite)
+    {
+        battlePauseButton = sprite;
+    }
+
+    /// <summary>供 Editor 填表工具使用，請勿在執行期呼叫。</summary>
     public void EditorSetResponsiveBasePlate(Sprite sprite)
     {
         responsiveBasePlate = sprite;
@@ -200,6 +227,17 @@ public sealed class UiSpriteLibrary : ScriptableObject
     public void EditorSetCombatStatus(Sprite youWillDie)
     {
         youWillDieIcon = youWillDie;
+    }
+
+    /// <summary>供 Editor 填表工具使用，請勿在執行期呼叫。</summary>
+    public void EditorSetStoryProgressNodeIcons(
+        Sprite intro11Instruction,
+        Sprite intro11PracticalApplication = null,
+        Sprite storyProgressClear = null)
+    {
+        intro11InstructionIcon = intro11Instruction;
+        intro11PracticalApplicationIcon = intro11PracticalApplication;
+        storyProgressClearIcon = storyProgressClear;
     }
 #endif
 }

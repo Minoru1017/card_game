@@ -13,6 +13,9 @@ public enum HarborCoachExpression
 
 public static class HarborCombatCoachExpressionCatalog
 {
+    private const string CoachNeutralResourcesPath = "UI/LinKeCoach/Linkk_Smile.jpeg";
+    private const string CoachNeutralSliceName = "Linkk_Smile.jpeg_0";
+
     private static readonly Dictionary<HarborCoachExpression, Sprite> CachedSprites =
         new Dictionary<HarborCoachExpression, Sprite>();
 
@@ -74,6 +77,9 @@ public static class HarborCombatCoachExpressionCatalog
         if (library != null)
             loaded = library.GetCoachExpression(expression);
 
+        if (loaded == null && expression == HarborCoachExpression.Neutral)
+            loaded = ResolveCoachNeutralSlice(Resources.LoadAll<Sprite>(CoachNeutralResourcesPath));
+
         if (loaded == null)
             Debug.LogWarning(
                 $"HarborCombatCoachExpressionCatalog: 教練表情 '{expression}' 不在 UiSpriteLibrary，" +
@@ -81,5 +87,25 @@ public static class HarborCombatCoachExpressionCatalog
 
         CachedSprites[expression] = loaded;
         return loaded;
+    }
+
+    private static Sprite ResolveCoachNeutralSlice(Sprite[] slices)
+    {
+        if (slices == null || slices.Length == 0)
+            return null;
+
+        Sprite fallback = null;
+        for (int i = 0; i < slices.Length; i++)
+        {
+            Sprite slice = slices[i];
+            if (slice == null)
+                continue;
+            fallback ??= slice;
+            if (string.Equals(slice.name, CoachNeutralSliceName, System.StringComparison.Ordinal) ||
+                string.Equals(slice.name, "Linkk_Smile.jpeg", System.StringComparison.Ordinal))
+                return slice;
+        }
+
+        return fallback;
     }
 }

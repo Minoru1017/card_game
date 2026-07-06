@@ -11,27 +11,11 @@ public partial class BattleSimulationDebugUI
     private TextMeshProUGUI pauseDifficultyCaptionText;
     private TextMeshProUGUI pauseDifficultyValueText;
 
+    private const float PauseToggleHeight = 72f;
+
     private void CreatePauseUI(Transform parent)
     {
-        Button pauseToggleBtn = CreateButton(parent, "PauseToggleButton", "暫停", new Vector2(0f, -240f), TogglePause, true);
-        if (pauseToggleBtn != null)
-        {
-            pauseToggleBtn.onClick.RemoveAllListeners();
-            pauseToggleBtn.onClick.AddListener(() => SetPaused(true));
-        }
-
-        RectTransform pauseToggleRt = pauseToggleBtn != null ? pauseToggleBtn.GetComponent<RectTransform>() : null;
-        if (pauseToggleRt != null)
-        {
-            pauseToggleRt.anchorMin = new Vector2(1f, 1f);
-            pauseToggleRt.anchorMax = new Vector2(1f, 1f);
-            pauseToggleRt.pivot = new Vector2(1f, 1f);
-            pauseToggleRt.anchoredPosition = new Vector2(-24f, -24f);
-            pauseToggleRt.sizeDelta = new Vector2(112f, 48f);
-            Text toggleLabel = pauseToggleBtn.GetComponentInChildren<Text>();
-            if (toggleLabel != null) toggleLabel.fontSize = 26;
-            BattleUiColors.ApplyButtonStyle(pauseToggleBtn, pauseToggleBtn.gameObject.name);
-        }
+        CreatePauseToggleButton(parent);
 
         GameObject pausePanelObj = new GameObject("PausePanel", typeof(RectTransform), typeof(Image));
         pausePanelObj.transform.SetParent(parent, false);
@@ -156,6 +140,49 @@ public partial class BattleSimulationDebugUI
             BattleUiColors.ApplyButtonStyle(giveUpBtn, giveUpBtn.gameObject.name);
 
         pausePanelObj.SetActive(false);
+    }
+
+    private void CreatePauseToggleButton(Transform parent)
+    {
+        GameObject buttonObj = new GameObject("PauseToggleButton", typeof(RectTransform), typeof(Image), typeof(Button));
+        buttonObj.transform.SetParent(parent, false);
+
+        RectTransform rect = buttonObj.GetComponent<RectTransform>();
+        rect.anchorMin = new Vector2(1f, 1f);
+        rect.anchorMax = new Vector2(1f, 1f);
+        rect.pivot = new Vector2(1f, 1f);
+        rect.anchoredPosition = new Vector2(-48f, -24f);
+
+        Sprite pauseSprite = BattleUiSprites.GetPauseButtonSprite();
+        Image image = buttonObj.GetComponent<Image>();
+        image.raycastTarget = true;
+        image.type = Image.Type.Simple;
+        image.preserveAspect = true;
+        if (pauseSprite != null)
+        {
+            image.sprite = pauseSprite;
+            image.color = Color.white;
+            float aspect = pauseSprite.rect.width / Mathf.Max(1f, pauseSprite.rect.height);
+            rect.sizeDelta = new Vector2(PauseToggleHeight * aspect, PauseToggleHeight);
+        }
+        else
+        {
+            image.color = BattleUiColors.BtnSecondary;
+            rect.sizeDelta = new Vector2(PauseToggleHeight, PauseToggleHeight);
+        }
+
+        Button button = buttonObj.GetComponent<Button>();
+        button.targetGraphic = image;
+        button.transition = Selectable.Transition.ColorTint;
+        ColorBlock colors = button.colors;
+        colors.normalColor = Color.white;
+        colors.highlightedColor = new Color(0.92f, 0.92f, 0.92f, 1f);
+        colors.pressedColor = new Color(0.78f, 0.78f, 0.78f, 1f);
+        colors.selectedColor = colors.highlightedColor;
+        colors.disabledColor = new Color(1f, 1f, 1f, 0.45f);
+        colors.colorMultiplier = 1f;
+        button.colors = colors;
+        button.onClick.AddListener(() => SetPaused(true));
     }
 
     private void RefreshPausePanelPresentation()

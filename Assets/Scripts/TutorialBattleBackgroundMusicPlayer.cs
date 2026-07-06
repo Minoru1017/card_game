@@ -246,6 +246,23 @@ public class TutorialBattleBackgroundMusicPlayer : MonoBehaviour
             audioSource.volume = GameAudioUserSettings.ScaleBgm(ResolvePlaybackVolume());
     }
 
+    /// <summary>對戰暫停選單：靜音／恢復 BGM（不停止播放進度）。</summary>
+    public void SetPauseMuted(bool muted)
+    {
+        EnsureBgmSource();
+        if (audioSource != null)
+            audioSource.mute = muted;
+    }
+
+    public static void SetBattlePauseMuted(bool muted)
+    {
+        Scene scene = SceneManager.GetActiveScene();
+        if (!scene.IsValid())
+            return;
+
+        FindInScene(scene)?.SetPauseMuted(muted);
+    }
+
     private float ResolvePlaybackVolume()
     {
         if (IsM12BattleContext() || IsM12BattleClip(activeClip))

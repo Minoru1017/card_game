@@ -41,6 +41,7 @@ public class StoryProgressBackgroundMusicPlayer : MonoBehaviour
     {
         if (IsStoryProgressScene(scene.name))
         {
+            HallBackgroundMusicPlayer.StopAll();
             TutorialBattleBackgroundMusicPlayer.StopAll();
             FreeBattleBackgroundMusicPlayer.StopAll();
             EnsureInScene(scene)?.PlayStoryProgressBgm();

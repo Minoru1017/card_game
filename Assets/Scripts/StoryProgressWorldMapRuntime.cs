@@ -582,9 +582,27 @@ public sealed class StoryProgressWorldMapRuntime : MonoBehaviour
         rt.anchoredPosition = NodeToAnchored(node);
 
         Image image = go.GetComponent<Image>();
-        image.sprite = GetWhiteSprite();
-        image.type = Image.Type.Sliced;
-        image.color = isTutorialRootNode ? new Color(1f, 1f, 1f, 0.98f) : ResolveNodeColor(state, node);
+        bool useCustomNodeIcon = false;
+        Sprite customIcon = ResolveStoryMapNodeIcon(node, state);
+        if (customIcon != null)
+        {
+            useCustomNodeIcon = true;
+            image.sprite = customIcon;
+            image.type = Image.Type.Simple;
+            image.preserveAspect = true;
+            image.color = Color.white;
+            float aspect = customIcon.rect.width / Mathf.Max(1f, customIcon.rect.height);
+            float height = ResolveCustomNodeIconHeight(node);
+            rt.sizeDelta = new Vector2(height * aspect, height);
+        }
+
+        if (!useCustomNodeIcon)
+        {
+            image.sprite = GetWhiteSprite();
+            image.type = Image.Type.Sliced;
+            image.preserveAspect = false;
+            image.color = isTutorialRootNode ? new Color(1f, 1f, 1f, 0.98f) : ResolveNodeColor(state, node);
+        }
 
         Outline outline = go.GetComponent<Outline>();
         outline.effectColor = new Color(0f, 0f, 0f, 0.65f);
@@ -636,6 +654,58 @@ public sealed class StoryProgressWorldMapRuntime : MonoBehaviour
         }
 
         return rt;
+    }
+
+    private static bool ShouldUseIntro11InstructionIcon()
+    {
+        int slot = PlayerData.GetActivePlayerSlotOrDefault();
+        return !TutorialProgressState.IsAcademyIntroGraduated(slot);
+    }
+
+    private static bool ShouldUseIntro11PracticalApplicationIcon()
+    {
+        int slot = PlayerData.GetActivePlayerSlotOrDefault();
+        return TutorialProgressState.IsAcademyIntroGraduated(slot);
+    }
+
+    private static Sprite ResolveTutorialRootNodeIcon()
+    {
+        if (ShouldUseIntro11InstructionIcon())
+            return StoryProgressUiSprites.GetIntro11InstructionIcon();
+        if (ShouldUseIntro11PracticalApplicationIcon())
+            return StoryProgressUiSprites.GetIntro11PracticalApplicationIcon();
+        return null;
+    }
+
+    private static Sprite ResolveStoryMapNodeIcon(StoryProgressNodeEntry node, NodeState state)
+    {
+        if (node == null)
+            return null;
+
+        bool isTutorialRootNode =
+            string.Equals(node.nodeId, TutorialRootNodeId, StringComparison.OrdinalIgnoreCase);
+        bool isSeawallNode =
+            string.Equals(node.nodeId, SeawallPatrolNodeId, StringComparison.OrdinalIgnoreCase);
+        if (!isTutorialRootNode && !isSeawallNode)
+            return null;
+
+        if (state == NodeState.Cleared)
+            return StoryProgressUiSprites.GetClearNodeIcon();
+
+        if (isTutorialRootNode)
+            return ResolveTutorialRootNodeIcon();
+
+        return null;
+    }
+
+    private static float ResolveCustomNodeIconHeight(StoryProgressNodeEntry node)
+    {
+        if (node != null &&
+            (string.Equals(node.nodeId, TutorialRootNodeId, StringComparison.OrdinalIgnoreCase) ||
+             string.Equals(node.nodeId, SeawallPatrolNodeId, StringComparison.OrdinalIgnoreCase)))
+            return TutorialNodeSize * 1.35f;
+
+        return ResolveNodeIconSize(node);
     }
 
     private void AddTutorialRootStatusBadge(RectTransform nodeRt)

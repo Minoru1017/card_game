@@ -1,10 +1,10 @@
 fileFormatVersion: 2
-guid: 63f3fd0e5dff2b745bacc52a3fed794a
+guid: c3f8a9126e4b5d2a1f0e9d8c7b6a5948
 TextureImporter:
   internalIDToNameTable:
   - first:
-      213: 3324816355386855942
-    second: Linkk_Smile_0
+      213: -3085570952343543891
+    second: 1-1 Practical Application_0
   externalObjects: {}
   serializedVersion: 12
   mipmaps:
@@ -122,13 +122,13 @@ TextureImporter:
     serializedVersion: 2
     sprites:
     - serializedVersion: 2
-      name: Linkk_Smile_0
+      name: 1-1 Practical Application_0
       rect:
         serializedVersion: 2
-        x: 0
-        y: 0
-        width: 364
-        height: 495
+        x: 18
+        y: 28
+        width: 475
+        height: 471
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -136,8 +136,8 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 6021e3e0cde142e20800000000000000
-      internalID: 3324816355386855942
+      spriteID: daf9c402199dd25d0800000000000000
+      internalID: -3085570952343543891
       vertices: []
       indices: 
       edges: []
@@ -152,7 +152,8 @@ TextureImporter:
     edges: []
     weights: []
     secondaryTextures: []
-    nameFileIdTable: {}
+    nameFileIdTable:
+      1-1 Practical Application_0: -3085570952343543891
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 

@@ -7,8 +7,9 @@ using UnityEditor;
 #endif
 
 /// <summary>
-/// Hall scene BGM player（idokay - What Floor）。
-/// Adds itself to the hall Main Camera at runtime and plays the clip registered in AudioLibrary.
+/// Hall BGM player（idokay - What Floor）。
+/// 使用 DontDestroyOnLoad 宿主跨場景延續播放；從 hall 進入的子場景（Buildbeck、Deck Pack 等）共用，
+/// Story progress 與 CardStore 除外。
 /// </summary>
 public sealed class HallBackgroundMusicPlayer : MonoBehaviour
 {
@@ -23,6 +24,7 @@ public sealed class HallBackgroundMusicPlayer : MonoBehaviour
     private AudioSource audioSource;
     private Coroutine playRoutine;
     private bool shouldKeepPlaying;
+    private static HallBackgroundMusicPlayer persistentInstance;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void RegisterHallBgmSceneGuard()
@@ -39,13 +41,19 @@ public sealed class HallBackgroundMusicPlayer : MonoBehaviour
 
     private static void OnSceneLoaded(Scene scene, LoadSceneMode mode)
     {
-        if (IsHallScene(scene.name))
+        if (ShouldContinueHallBgm(scene.name))
         {
-            StoryProgressBackgroundMusicPlayer.StopAll();
-            TutorialBattleBackgroundMusicPlayer.StopAll();
-            FreeBattleBackgroundMusicPlayer.StopAll();
-            PlotBackgroundMusicPlayer.StopAllInMainPlotIfLoaded();
-            EnsureInScene(scene)?.PlayHallBgm();
+            if (IsHallScene(scene.name))
+            {
+                StoryProgressBackgroundMusicPlayer.StopAll();
+                CardStoreBackgroundMusicPlayer.StopAll();
+                BuildbeckBackgroundMusicPlayer.StopAll();
+                TutorialBattleBackgroundMusicPlayer.StopAll();
+                FreeBattleBackgroundMusicPlayer.StopAll();
+                PlotBackgroundMusicPlayer.StopAllInMainPlotIfLoaded();
+            }
+
+            EnsurePersistentHost()?.PlayHallBgm();
             return;
         }
 
@@ -54,12 +62,52 @@ public sealed class HallBackgroundMusicPlayer : MonoBehaviour
 
     private static void OnSceneUnloaded(Scene scene)
     {
-        if (IsHallScene(scene.name))
-            StopAll();
+        if (!IsHallScene(scene.name))
+            return;
+
+        Scene active = SceneManager.GetActiveScene();
+        if (active.IsValid() && ShouldContinueHallBgm(active.name))
+            return;
+
+        StopAll();
+    }
+
+    /// <summary>從 hall 進入的子場景延續 hall BGM；Story progress、CardStore 除外。</summary>
+    public static bool ShouldContinueHallBgm(string sceneName)
+    {
+        if (string.IsNullOrEmpty(sceneName))
+            return false;
+        if (IsHallScene(sceneName))
+            return true;
+        if (sceneName == "Buildbeck")
+            return true;
+        if (sceneName == DeckPackSceneController.SceneName)
+            return true;
+        if (sceneName == "Persistent")
+            return true;
+        if (sceneName == "Settings")
+            return true;
+        if (sceneName == FreeBattleBattleCopy.SceneName)
+            return true;
+        return false;
+    }
+
+    private static HallBackgroundMusicPlayer EnsurePersistentHost()
+    {
+        if (persistentInstance != null)
+            return persistentInstance;
+
+        var host = new GameObject("[HallBgmHost]");
+        Object.DontDestroyOnLoad(host);
+        persistentInstance = host.AddComponent<HallBackgroundMusicPlayer>();
+        return persistentInstance;
     }
 
     public static void StopAll()
     {
+        if (persistentInstance != null)
+            persistentInstance.StopHallBgm();
+
         for (int i = 0; i < SceneManager.sceneCount; i++)
         {
             Scene scene = SceneManager.GetSceneAt(i);
@@ -112,10 +160,16 @@ public sealed class HallBackgroundMusicPlayer : MonoBehaviour
 
     public void PlayHallBgm()
     {
-        if (!IsOnHallScene())
-            return;
-
         shouldKeepPlaying = true;
+        EnsureBgmSource();
+        ResolveClipIfMissing();
+
+        if (audioSource != null && audioSource.isPlaying && audioSource.clip == hallBgmClip)
+        {
+            ApplyUserBgmVolume();
+            return;
+        }
+
         if (playRoutine != null)
             StopCoroutine(playRoutine);
         playRoutine = StartCoroutine(CoPlayWhenReady());
@@ -140,7 +194,12 @@ public sealed class HallBackgroundMusicPlayer : MonoBehaviour
         ResolveClipIfMissing();
     }
 
-    private void OnDestroy() => StopHallBgm();
+    private void OnDestroy()
+    {
+        StopHallBgm();
+        if (persistentInstance == this)
+            persistentInstance = null;
+    }
 
     private IEnumerator CoPlayWhenReady()
     {
@@ -157,10 +216,18 @@ public sealed class HallBackgroundMusicPlayer : MonoBehaviour
         }
 
         EnsureClipLoaded(clip);
+        bool resumeSameClip = audioSource.clip == clip && audioSource.time > 0f;
         audioSource.clip = clip;
         audioSource.volume = GameAudioUserSettings.ScaleBgm(volume);
         audioSource.loop = true;
-        audioSource.time = 0f;
+        if (!resumeSameClip)
+            audioSource.time = 0f;
+
+        if (audioSource.isPlaying && audioSource.clip == clip)
+        {
+            playRoutine = null;
+            yield break;
+        }
 
         bool started = false;
         for (int i = 0; i < 60; i++)
@@ -252,9 +319,6 @@ public sealed class HallBackgroundMusicPlayer : MonoBehaviour
             hallBgmClip = AssetDatabase.LoadAssetAtPath<AudioClip>(WhatFloorAssetPath);
 #endif
     }
-
-    private bool IsOnHallScene() =>
-        gameObject.scene.IsValid() && IsHallScene(gameObject.scene.name);
 
     private static Camera FindMainCameraInScene(Scene scene)
     {

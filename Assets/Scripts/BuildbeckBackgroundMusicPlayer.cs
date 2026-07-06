@@ -7,8 +7,8 @@ using UnityEditor;
 #endif
 
 /// <summary>
-/// Buildbeck scene BGM player（Dor-c - Ethereal Dreams - Instrumental version）。
-/// Adds itself to the Buildbeck Main Camera at runtime and plays the clip registered in AudioLibrary.
+/// Buildbeck 場景已不再播放專用 BGM；延續 hall BGM（見 <see cref="HallBackgroundMusicPlayer"/>）。
+/// 保留類別供舊場景元件與音量設定相容，但不再自動開播 Ethereal Dreams。
 /// </summary>
 public sealed class BuildbeckBackgroundMusicPlayer : MonoBehaviour
 {
@@ -41,17 +41,6 @@ public sealed class BuildbeckBackgroundMusicPlayer : MonoBehaviour
 
     private static void OnSceneLoaded(Scene scene, LoadSceneMode mode)
     {
-        if (IsBuildbeckScene(scene.name))
-        {
-            HallBackgroundMusicPlayer.StopAll();
-            StoryProgressBackgroundMusicPlayer.StopAll();
-            TutorialBattleBackgroundMusicPlayer.StopAll();
-            FreeBattleBackgroundMusicPlayer.StopAll();
-            PlotBackgroundMusicPlayer.StopAllInMainPlotIfLoaded();
-            EnsureInScene(scene)?.PlayBuildbeckBgm();
-            return;
-        }
-
         StopAll();
     }
 
