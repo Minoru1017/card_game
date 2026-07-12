@@ -1,0 +1,360 @@
+<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="utf-8">
+<title>遊戲介紹</title><style>
+@page { size: A4 landscape; margin: 11mm 13mm; }
+* { box-sizing: border-box; }
+body {
+  font-family: "Microsoft JhengHei","Microsoft YaHei","Segoe UI","PingFang TC",sans-serif;
+  font-size: 13px; line-height: 1.62; color: #24292f; margin: 0; padding: 0 2px;
+}
+h1,h2,h3 { line-height: 1.25; margin: .85em 0 .4em; font-weight: 700; page-break-after: avoid; }
+h1 { font-size: 1.7em; border-bottom: 2px solid #d0d7de; padding-bottom: .22em; }
+h2 { font-size: 1.2em; color: #3a434d; border-bottom: 1px solid #e2e8ef; padding-bottom: .15em; margin-top: .65em; }
+p { margin: .4em 0; }
+blockquote { margin: .5em 0; padding: .22em .85em; color: #475059;
+  border-left: .28em solid #c8d1da; background: #f6f8fa; font-size: .92em; }
+table { border-collapse: collapse; width: 100%; margin: .55em 0; font-size: .86em; page-break-inside: avoid; }
+th,td { border: 1px solid #d0d7de; padding: 4px 8px; text-align: left; vertical-align: top; }
+th { background: #f6f8fa; font-weight: 700; }
+tr:nth-child(even) td { background: #fafbfc; }
+strong { color: #1f2328; }
+.cover { height: 165mm; display: flex; flex-direction: column; justify-content: center;
+  align-items: center; text-align: center; page-break-after: always; }
+.cover-kicker { letter-spacing: .26em; font-size: .8em; color: #6e7781; margin-bottom: 12px; }
+.cover-title { font-size: 3em; border: none; margin: 0; }
+.cover-sub { font-size: 1.22em; color: #424a53; margin-top: 8px; max-width: 90%; }
+.cover-meta { margin-top: 24px; color: #6e7781; font-size: .92em; }
+.page-break { page-break-before: always; }
+.source-note { font-size: .76em; color: #8a929b; margin-top: .5em; }
+.lead { background: linear-gradient(135deg,#eef4ff,#f3f0ff); border: 1px solid #d6e0f5;
+  border-radius: 11px; padding: 14px 20px; margin: 2px 0 6px; font-size: 1.05em;
+  line-height: 1.72; text-align: center; page-break-inside: avoid; }
+.fantasy-box { border: 1px solid #c8d8f0; border-radius: 10px; background: #f8fbff;
+  padding: 10px 14px; margin: 8px 0; page-break-inside: avoid; }
+.fantasy-h { font-weight: 800; color: #4a7fd4; font-size: .95em; margin-bottom: 4px; }
+.fantasy-body { font-size: .92em; line-height: 1.65; }
+.fantasy-tag { display: inline-block; margin-top: 6px; font-size: .82em; color: #6e7781;
+  background: #eef2f7; padding: 2px 8px; border-radius: 4px; }
+.pillars { display: flex; flex-wrap: nowrap; gap: 8px; margin: 8px 0; }
+.pillar { flex: 1 1 25%; border: 1px solid #dce3ea; border-radius: 9px;
+  padding: 8px 10px; background: #fbfcfe; page-break-inside: avoid; }
+.pillar-n { font-size: 1.15em; font-weight: 800; color: #5b8def; }
+.pillar-t { font-size: .98em; font-weight: 700; margin: 1px 0 3px; }
+.pillar-d { font-size: .8em; color: #3a434d; line-height: 1.5; }
+.loop { display: flex; flex-wrap: nowrap; align-items: stretch; justify-content: center;
+  gap: 3px; margin: 8px 0 3px; page-break-inside: avoid; }
+.loop-step { flex: 1 1 auto; border: 1px solid #cdd7e2; border-radius: 9px;
+  padding: 8px 6px; text-align: center; background: #f4f8ff; min-width: 0; }
+.loop-step-highlight { background: #e8f4ff; border-color: #9ec5f5; }
+.loop-step-reward { background: #fff4e6; border-color: #f0d3a8; }
+.loop-roadmap .loop-step { background: #eefaf1; border-color: #bfe4c9; }
+.loop-h { font-weight: 700; font-size: .88em; }
+.loop-s { font-size: .74em; color: #5a636d; margin-top: 2px; }
+.arrow { align-self: center; font-size: 1.2em; color: #9aa4af; flex: 0 0 auto; }
+.arrow-back { color: #e2a23b; }
+.loop-caption { text-align: center; font-size: .8em; color: #6e7781; margin-bottom: 3px; }
+.timeline { display: flex; flex-wrap: wrap; gap: 5px; margin: 6px 0; }
+.tl { flex: 1 1 calc(50% - 5px); border: 1px solid #e2e8ef; border-radius: 7px;
+  padding: 6px 9px; background: #fbfcfe; font-size: .84em; page-break-inside: avoid; }
+.tl-n { display: inline-block; width: 18px; height: 18px; line-height: 18px; text-align: center;
+  background: #5b8def; color: #fff; border-radius: 50%; font-size: .75em; margin-right: 3px; font-weight: 700; }
+.usp { display: flex; flex-direction: row; gap: 7px; margin: 8px 0; }
+.usp-item { flex: 1 1 33%; border: 1px solid #dce3ea; border-left: 4px solid #5b8def;
+  border-radius: 7px; padding: 7px 9px; background: #fbfcfe; font-size: .84em; page-break-inside: avoid; }
+.usp-h { font-weight: 800; color: #5b8def; margin-bottom: 2px; }
+.evidence-grid { display: flex; gap: 10px; margin: 8px 0; align-items: stretch; }
+.shot { flex: 1 1 33%; border: 1px solid #b8c4d0; border-radius: 9px; overflow: hidden;
+  background: #fff; page-break-inside: avoid; display: flex; flex-direction: column; }
+.shot-img { width: 100%; height: auto; max-height: 130px; object-fit: contain; object-position: center top;
+  background: #1a1a1a; display: block; border-bottom: 1px solid #e2e8ef; }
+.shot-ph { height: 72px; display: flex; align-items: center; justify-content: center;
+  font-size: .95em; color: #6e7781; background: #e8ecf0; border-bottom: 1px dashed #b8c4d0; }
+.shot-cap { padding: 6px 8px; font-size: .78em; line-height: 1.45; color: #3a434d; flex: 1; }
+.player-callout { border: 1px solid #bfe4c9; border-radius: 10px; background: #f0faf3;
+  padding: 10px 14px; margin: 8px 0; font-size: .92em; page-break-inside: avoid; }
+.player-callout-h { font-weight: 800; color: #2d7a4a; margin-bottom: 4px; }
+.player-steps { margin: 4px 0 0; padding-left: 1.2em; }
+.player-steps li { margin: 3px 0; }
+</style></head><body><h1 id="_1">港灣訓練場 — 遊戲介紹</h1>
+<blockquote>
+<p><strong>類型</strong>：Unity 回合制卡牌對戰 · 單機冒險 · Android 橫向<br />
+<strong>定位</strong>：畢業專題 playable demo — 主線 1-1／1-2、港灣訓練、組牌、鬥鳥暖身、批次平衡工具<br />
+<strong>撰寫思路</strong>：參考 <a href="https://www.bilibili.com/video/BV1kvTz6TER5/">UE5 作品集與履歷：HR 只看了 5 秒</a> — 不只展示「做了什麼」，而是說清楚 <strong>解決了什麼問題、怎麼做、結果如何</strong>。</p>
+</blockquote>
+<hr />
+<h2 id="_2">一句話</h2>
+<p>這不是「照教程複刻的卡牌 UI」，而是一套 <strong>用 C# 把「新手能玩懂」與「數值可驗證」同時做出來</strong> 的 Unity 專題：<br />
+玩家在學院被帶打第一場，畢業後到港灣自己練；開發端則用批次模擬與 Editor 工具，把平衡與產能問題變成可量測、可重跑的工作流。</p>
+<hr />
+<h2 id="30">這是一款什麼遊戲？（30 秒版）</h2>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>玩法</strong></td>
+<td>雙方英雄 20 HP，起手 5 張，場上怪獸對砍＋火球／治療／凝視等法術</td>
+</tr>
+<tr>
+<td><strong>成長</strong></td>
+<td>同一張怪物牌越打越熟，戰技分 A→B→C 階解鎖</td>
+</tr>
+<tr>
+<td><strong>關卡</strong></td>
+<td>1-1 學院入門 → 港灣實戰（簡單／普通／困難）→ 1-2 段考雙階段</td>
+</tr>
+<tr>
+<td><strong>平台</strong></td>
+<td>Android APK（橫向 1920×1080 基準）＋ Unity Editor 開發試玩</td>
+</tr>
+<tr>
+<td><strong>一局</strong></td>
+<td>約 5～15 分鐘</td>
+</tr>
+</tbody>
+</table>
+<p><strong>世界觀一句</strong>：你是學院新生，林可姐在舊校舍對戰館帶你學規則；畢業後大地圖的港灣訓練場，才是你要自己闖的實戰區。</p>
+<hr />
+<h2 id="_3">這份專案解決了什麼問題？</h2>
+<p>以下依「<strong>問題 → 方案 → 結果 → 證據</strong>」整理，對應作品集／口試最常被問的：<strong>你為什麼這樣設計？有沒有數據或工具支撐？</strong></p>
+<hr />
+<h3 id="1">1. 卡牌遊戲規則堆疊太快，新手第一局就放棄</h3>
+<p><strong>問題</strong><br />
+回合制卡牌常同時丟出：手牌上限、場上單位、法術條件、天氣、敵 AI、牌組構築。若第一場就全開，玩家記不住規則，只記得「怎麼突然就輸了」。</p>
+<p><strong>方案</strong><br />
+- <strong>分階開放</strong>：1-1 入門教學戰關閉整場天氣（<code>IsWeatherSystemEnabledForBattle()</code>），只練出牌、攻擊、結束回合。<br />
+- <strong>劇情承載教學</strong>：Main Plot 帶進對戰館，教學戰接在劇情後，不強迫跳過敘事。<br />
+- <strong>教練 UI</strong>：入門／港灣分開的 coach 模組，在關鍵時刻給戰術提示，而非事後查 wiki。<br />
+- <strong>敵方意圖可讀</strong>：HUD 與教練提示讓「對手下一步想幹嘛」可見，降低資訊不對稱带来的挫折。</p>
+<p><strong>結果</strong><br />
+- 入門流程目標 <strong>5～8 分鐘</strong> 完成第一場可理解對戰（企劃定案 <code>LEVEL_DESIGN_GDD.md</code>）。<br />
+- 玩家先建立「我看得懂盤面」的信心，再進港灣三檔難度與天氣系統。</p>
+<p><strong>證據</strong><br />
+- 關卡流程：<code>LEVEL_DESIGN_GDD.md</code> §二（學院入門 vs 港灣實戰兩階段不可混）<br />
+- 程式：<code>BattleSimulationManager</code>、<code>TutorialHandPlayAdvisor</code>、<code>HarborCombatCoachUi</code><br />
+- 畫面：<code>Docs/pitch_pillar01_battle_hud.png</code></p>
+<hr />
+<h3 id="2">2. 「突然就輸了」— 資訊揭露與難度必須分檔設計</h3>
+<p><strong>問題</strong><br />
+若敵方強度與資訊量一次拉滿，玩家無法學習「為什麼這回合該擋／該攻」；難度若只靠感覺調 HP，口試時也無法回答「普通檔首通率多少」。</p>
+<p><strong>方案</strong><br />
+- <strong>五檔離散難度</strong>（入門～魔王）：牌組強度、法術比例、資訊揭露率、AI 風格（Greedy／Scheming）分開映射（<code>DifficultyDesignProfile</code> + <code>SceneLoader.BuildDifficultyConfig()</code>）。<br />
+- <strong>港灣專用子規則</strong>：簡單檔第 10 回合限時必勝、敵傷害倍率分檔等，與入門教學數值解耦。<br />
+- <strong>致死預警演出</strong>：敵方致死火球／攻擊前可播「You will die」提示（批次模擬時自動略過，不拖慢工具）。</p>
+<p><strong>結果</strong><br />
+- 企劃 KPI：港灣<strong>簡單</strong>首通約 <strong>70%</strong>、平均約 <strong>10 回合</strong>內結束；<strong>普通</strong>首通目標約 <strong>60%</strong>（見 <code>HarborTrainingEasyBattleRules</code>、模擬報告）。<br />
+- 口試可明確說：本專案<strong>不做</strong>即時動態難度（DDA），而是<strong>戰前選檔 + 可重現的敵牌組</strong>。</p>
+<p><strong>證據</strong><br />
+- 設計說明：<code>DIFFICULTY_AND_AI_DESIGN.md</code><br />
+- 敵 AI 決策樹：<code>ENEMY_AI_DECISION_TREE.md</code><br />
+- 港灣 1-1 vs 訓練場對照：<code>HARBOR_1-1_VS_TRAINING_GROUND_DIFFICULTY.md</code></p>
+<hr />
+<h3 id="3">3. 數值平衡不能靠「我覺得好像可以了」— 需要批次模擬</h3>
+<p><strong>問題</strong><br />
+卡牌對戰狀態空間大，改一個敵傷害倍率或抽牌節奏，真人試 3 局看不出趨勢；若沒工具，畢業展示只能說「我調過 Inspector」。</p>
+<p><strong>方案</strong><br />
+- <strong><code>BattleAutoSimPlugin</code> + 批次 Bootstrap</strong>：Editor／命令列一鍵跑 N 局，統計勝／負／平。<br />
+- <strong>港灣普通勝率模擬</strong>：<code>HarborNormalWinRateSimBootstrap</code>，200 局、固定種子、報告寫入 <code>Assets/SimResults/</code>。<br />
+- <strong>M-1-2 段考 A 模擬</strong>：除勝率外，另統計 <strong>段考通過率</strong>（勝利 + 御三家戰技皆觸發），對齊關卡通關條件而非只看 W/L。<br />
+- <strong>第 12 回合上限、敵傷 ×0.85</strong>：避免恐怖狀態傷害凍結 + 鏡像牌組造成批次「假死結」。</p>
+<p><strong>結果（可引用數字）</strong>  </p>
+<table>
+<thead>
+<tr>
+<th>校準項目</th>
+<th>調整前</th>
+<th>調整後</th>
+<th>備註</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>港灣普通（入門 30 張牌組）自動 AI 勝率</td>
+<td><strong>0%</strong>（舊敵池含 SSR）</td>
+<td><strong>~15.5%</strong>（200 局）</td>
+<td>自動 AI 低於真人；企劃區間 0.62～0.70 敵傷倍率</td>
+</tr>
+<tr>
+<td>M-1-2 段考 A（50 局 quick sim）</td>
+<td>批次曾中途卡住</td>
+<td><strong>50/50 局跑完</strong>，平均 <strong>4.3 回合</strong></td>
+<td>段考通過率 0% → 提示自動出牌 AI 與「觸發三戰技」目標 gap</td>
+</tr>
+</tbody>
+</table>
+<p><strong>證據</strong><br />
+- <code>Assets/SimResults/harbor_normal_tutorial_deck_winrate.md</code><br />
+- <code>Assets/SimResults/m12_phase_a_exam_winrate.md</code><br />
+- 選單：<code>Tools/Harbor/Win Rate Sim…</code>、<code>Tools/M-1-2/Win Rate Sim…</code><br />
+- MCP／自動化：<code>DevAutomation.StartM12PhaseAWinRateSim()</code></p>
+<hr />
+<h3 id="4">4. 卡面美術與資源引用容易「有圖但遊戲裡看不到」</h3>
+<p><strong>問題</strong><br />
+組牌格要 <strong>DeckThumb</strong>、商店／詳情要 <strong>CardArt</strong>，混用或漏綁會導致白圖；BGM、教練表情、UI 圖分散各資料夾，pull 新資源後常忘記刷新 Library。</p>
+<p><strong>方案</strong><br />
+- <strong>美術分工定案</strong>：<code>Assets/UI/DeckThumb/</code> vs <code>Assets/UI/CardArt/</code>，企劃與程式同一套語意（<code>GAMEPLAY_AND_RULES.md</code> §3.1）。<br />
+- <strong>Editor 管線</strong>：<code>CardArtworkAutoBinder</code> Rescan → <code>CardArtLibraryPopulator</code>；<code>UnityLibraryRefreshBatch</code> 一鍵刷新 Audio／Font／Sprite／CardArt。<br />
+- <strong>ScriptableObject Library</strong>：Runtime 從 <code>Resources/*Library.asset</code> 取引用，避免場景硬拖漏連。</p>
+<p><strong>結果</strong><br />
+- 新增卡面 PNG 後有固定 SOP（Rescan → Refresh Library），減少「Editor 有圖、手機 APK 沒圖」。<br />
+- Agent／CI 可跑 PowerShell + batchmode（<code>unity-library-refresh</code> skill）。</p>
+<p><strong>證據</strong><br />
+- <code>Assets/Editor/CardArtworkAutoBinder.cs</code>、<code>UnityLibraryRefreshBatch.cs</code><br />
+- <code>Docs/CURSOR_SKILLS_MANUAL.md</code> §unity-library-refresh</p>
+<hr />
+<h3 id="5-ui">5. 多場景、多槽存檔、全域 UI — 程式容易變成「改一處壞十處」</h3>
+<p><strong>問題</strong><br />
+大廳、組牌、對戰、設定、大地圖各自演化，<code>GlobalNavRuntime</code> 曾膨脹到千行級；牌組名稱污染、存檔槽錯寫等 bug 難追。</p>
+<p><strong>方案</strong><br />
+- <strong>場景流程與存檔單一真相</strong>：<code>PlayerData</code> + <code>StoryProgressNodeDatabase.json</code> + <code>TutorialProgressState</code> 旗標分層。<br />
+- <strong>Partial class 重構</strong>：<code>GlobalNavRuntime</code> 拆成 Navigation／Vault／UiBuild 等檔，掃描從 Bad → Fair（<code>CODE_QUALITY_SCAN_REPORT.md</code>）。<br />
+- <strong>Editor 測試與存檔工具</strong>：Player Save 備份還原、牌組名稱污染修復選單、Bug scenario 場景。<br />
+- <strong>Play Mode 自動化 API</strong>：<code>DevAutomation.cs</code> + Unity MCP <code>execute_code</code>，長流程用協程而非單帧狂點。</p>
+<p><strong>結果</strong><br />
+- 回歸主線（1-1 入門 → 港灣首通 → 1-2 段考）可用腳本重跑，不必每次手動點 20 分鐘。<br />
+- 新功能（M-1-2 恐怖狀態、段考結算）可掛在同一 <code>BattleSimulationManager</code> partial 擴充，不另開一套戰鬥核心。</p>
+<p><strong>證據</strong><br />
+- <code>ARCHITECTURE_OVERVIEW.md</code><br />
+- <code>Assets/Scripts/DevAutomation.cs</code>、<code>Docs/MCP_USAGE_EXAMPLES.md</code><br />
+- <code>Docs/DECK_SLOT_NAME_BUG_CHECKLIST.md</code></p>
+<hr />
+<h3 id="6">6. 同一張牌資訊過載 — 用「熟練度分階」代替一次塞滿規則</h3>
+<p><strong>問題</strong><br />
+怪物戰技文案長，若一開始全顯示，卡面與新手認知負荷過高；若完全不顯示，又失去成長感。</p>
+<p><strong>方案</strong><br />
+- <strong>A / B / C 三階揭露</strong>：A 只有攻血 → B 一行摘要 → C 完整規則（<code>CARD_PROFICIENCY_GDD.md</code>）。<br />
+- <strong>御三家（國王／王后／民兵）預設 C</strong>，作為「解鎖後長什麼樣」的對照樣本。<br />
+- 結算浮層播放熟練度條，讓成長<strong>可見</strong>。</p>
+<p><strong>結果</strong><br />
+- 第一場只需會出牌；中後期同一張牌「長出新招」形成長線動機，與港灣重複練習 loop 呼應。</p>
+<p><strong>證據</strong><br />
+- <code>CARD_PROFICIENCY_GDD.md</code>、<code>卡牌技能階段式揭露.md</code><br />
+- 畫面：<code>Docs/pitch_pillar02_proficiency.png</code></p>
+<hr />
+<h3 id="7-android-editor">7. Android 實機與 Editor 行為不一致</h3>
+<p><strong>問題</strong><br />
+建置路徑含中文會失敗；Game 視窗比例與手機 Safe Area 不同，按鈕被裁切或影片層擋點擊；商店開包在真機常卡住。</p>
+<p><strong>方案</strong><br />
+- <strong>專案路徑 ASCII 定案</strong>：<code>E:\School\Grade_5_2\card-game</code>（README 明訂，避開 <code>2024畢業專題</code> 舊路徑）。<br />
+- <strong>Canvas 1920×1080 基準</strong> + 各場景 <code>CanvasScaler</code> 策略；商店／開包關閉全屏 RawImage raycast、以播放進度作為完成備援。<br />
+- <strong>Settings 顯示比例 JSON</strong>：<code>BattleCardTuningPresets.json</code> + PlayerPrefs，讓不同螢幕可驗證同一套參數對照表。</p>
+<p><strong>結果</strong><br />
+- APK 可穩定從 <code>login</code> → <code>hall</code> → 主線試玩；設定頁可切「預設一／對照組」驗證 UI 調校是否生效。</p>
+<p><strong>證據</strong><br />
+- <code>README.md</code> Android 小節、<code>BattleCardTuningPresetLibrary</code><br />
+- <code>DevAutomation.ApplyBattleCardTuningPreset1ToOpenScene()</code>（MCP 可呼叫，避免錯誤 MenuItem 子路徑）</p>
+<hr />
+<h2 id="_4">玩家實際會走的一條路</h2>
+<div class="codehilite" style="background: #f8f8f8"><pre style="line-height: 125%;"><span></span><code>登入選槽 → 遊戲進度（Story progress）→ 1-1 劇情 → 入門教學戰
+    → 結算（金幣・熟練度）→ Buildbeck 組牌 → 港灣訓練場（選難度）
+    → 解鎖 1-2 → 段考 A（御三家）→ 段考 B（教練實戰）→ 持續擴充中
+</code></pre></div>
+
+<p><strong>30 秒快速開始</strong><br />
+1. 安裝 APK，<strong>橫向</strong>握持。<br />
+2. 登入 → 新建或選存檔 → <strong>遊戲進度</strong>。<br />
+3. 點 <strong>1-1 港灣訓練場</strong> → <strong>進入關卡</strong> → 跟劇情進入教學戰。<br />
+4. 畢業後再挑戰港灣實戰；牌組在 <strong>Buildbeck</strong> 編輯。</p>
+<hr />
+<h2 id="demo">和「只放成品 Demo」的差別（呼應影片觀點）</h2>
+<table>
+<thead>
+<tr>
+<th>常見作品集問題</th>
+<th>本專案怎麼回應</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>教程複刻，看不出自己的決策</td>
+<td>港灣／段考／熟練度／教練皆為<strong>企劃定案 + 程式對照表</strong>，非 generic TCG template</td>
+</tr>
+<tr>
+<td>只有 Blueprint／Inspector 拉控件</td>
+<td>核心對戰、AI 評分、批次模擬、存檔皆 <strong>C#</strong>；Editor 工具補產能</td>
+</tr>
+<tr>
+<td>只放過程影片，沒有結果</td>
+<td>模擬報告有 <strong>勝率數字</strong>；關卡有 <strong>KPI 與通關旗標</strong></td>
+</tr>
+<tr>
+<td>只有成品，沒有「問題」</td>
+<td>上文七項皆可獨立成口試／履歷 bullet：<strong>Problem → Approach → Metric</strong></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="_5">技術棧與延伸閱讀</h2>
+<table>
+<thead>
+<tr>
+<th>項目</th>
+<th>內容</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>引擎</td>
+<td>Unity <strong>2023.1.22f1</strong></td>
+</tr>
+<tr>
+<td>語言</td>
+<td><strong>C#</strong>（Editor + Runtime）</td>
+</tr>
+<tr>
+<td>平台</td>
+<td>Android APK；Editor Play Mode 開發</td>
+</tr>
+<tr>
+<td>自動化</td>
+<td>Unity MCP、<code>DevAutomation</code>、批次 Win Rate Sim</td>
+</tr>
+<tr>
+<td>企劃索引</td>
+<td><code>PLANNING_DOCS_INDEX.md</code></td>
+</tr>
+<tr>
+<td>對戰規則</td>
+<td><code>GAMEPLAY_AND_RULES.md</code></td>
+</tr>
+<tr>
+<td>難度與 AI</td>
+<td><code>DIFFICULTY_AND_AI_DESIGN.md</code></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="_6">畫面一覽</h2>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><img alt="對戰 HUD" src="file:///E:/School/Grade_5_2/card-game/Docs/pitch_pillar01_battle_hud.png" /></td>
+<td><strong>對戰中</strong>：教練提示、回合與敵我資訊</td>
+</tr>
+<tr>
+<td><img alt="熟練度" src="file:///E:/School/Grade_5_2/card-game/Docs/pitch_pillar02_proficiency.png" /></td>
+<td><strong>結算</strong>：怪物熟練度成長可見</td>
+</tr>
+<tr>
+<td><img alt="大地圖" src="file:///E:/School/Grade_5_2/card-game/Docs/pitch_pillar03_story_map.png" /></td>
+<td><strong>遊戲進度</strong>：1-1 → 1-2 節點解鎖</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<div class="source-note">
+
+**版本**：v2.0 · 2026-07-09  
+**試玩版**：Android 橫向單機；部分章節持續開發中，以遊戲內實際按鈕為準。  
+**舊版玩家向純指南**：若需簡化版給試玩玩家，可從本文件「玩家實際會走的一條路」與「30 秒快速開始」節錄單頁。
+
+</div></body></html>

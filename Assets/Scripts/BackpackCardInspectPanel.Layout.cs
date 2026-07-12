@@ -362,7 +362,9 @@ public partial class BackpackCardInspectPanel : MonoBehaviour
 
     private static string BuildTypeRarityLine(Card card)
     {
-        string type = card is SpellCard ? "法術牌" : (card is MonsterCard ? "怪物牌" : "卡牌");
+        if (card is MonsterCard monster)
+            return $"怪物牌 · {CombatRoleUtility.GetDisplayName(monster.combatRole)}  {card.rarity}";
+        string type = card is SpellCard ? "法術牌" : "卡牌";
         return $"{type}  {card.rarity}";
     }
 

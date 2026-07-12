@@ -61,6 +61,10 @@ public partial class BattleSimulationManager : MonoBehaviour
         public int attackerDamage;
         public bool counterTriggered;
         public int counterDamage;
+        /// <summary>主攻戰位三角（Neutral = 不播克制 FX）。</summary>
+        public CombatRoleMatchup attackerHitMatchup;
+        /// <summary>反擊戰位三角。</summary>
+        public CombatRoleMatchup counterHitMatchup;
     }
 
     public event System.Action<Card> EnemyCardPlayed;
@@ -276,6 +280,12 @@ public partial class BattleSimulationManager : MonoBehaviour
             return;
         }
 
+        if (BattleLaunchContext.IsM13WeatherTutorialBattle || BattleLaunchContext.IsM13RivalDuelBattle)
+        {
+            SceneLoader.ApplyM13RuntimeConfigToManager(this);
+            return;
+        }
+
         if (BattleLaunchContext.IsM12TrioTutorialBattle)
         {
             SceneLoader.ApplyM12RuntimeConfigToManager(this);
@@ -359,6 +369,8 @@ public partial class BattleSimulationManager : MonoBehaviour
     private int bonusEnemyOpeningExtraDraw;
     private bool bonusEnemyOpeningDrawConsumed;
     private bool bonusPlayerHeroShieldRemaining;
+    private bool m12PhaseAHeroCharmShieldActive;
+    private bool m13HotBloodReversalConsumed;
     private int bonusPlayerRarityDrawMaxRound;
     private string pendingBirdDuelBonusAnnouncement;
     private string pendingBirdDuelInsightReveal;
@@ -605,6 +617,28 @@ public partial class BattleSimulationManager : MonoBehaviour
             RefillWeatherRandomCycleBag(overridden);
             return overridden;
         }
+        if (BattleLaunchContext.IsM13RivalDuelBattle &&
+            M13RivalDuelWeatherRuntime.TryPickScriptedForecast(
+                currentRound,
+                out M13RivalDuelWeatherRuntime.ScriptedWeather scripted))
+        {
+            BattleWeatherType mapped = BattleWeatherType.None;
+            switch (scripted)
+            {
+                case M13RivalDuelWeatherRuntime.ScriptedWeather.Gale:
+                    mapped = BattleWeatherType.Gale;
+                    break;
+                case M13RivalDuelWeatherRuntime.ScriptedWeather.Fog:
+                    mapped = BattleWeatherType.Fog;
+                    break;
+            }
+
+            if (mapped != BattleWeatherType.None)
+            {
+                RefillWeatherRandomCycleBag(mapped);
+                return mapped;
+            }
+        }
         return DrawNextWeatherRandomNoRepeat();
     }
 
@@ -708,6 +742,15 @@ public partial class BattleSimulationManager : MonoBehaviour
         if (!IsWeatherSystemEnabledForBattle())
         {
             ResetWeatherStateToInactive();
+            PrepareWeatherEffectFlagsForCurrentRound();
+            return false;
+        }
+
+        // M-1-3 冷爐：前 3 回合無天氣預報（第 4 回合起才迎測）。
+        if (BattleLaunchContext.IsM13WeatherTutorialBattle && currentRound < 4)
+        {
+            currentWeather = BattleWeatherType.None;
+            forecastPreviewWeatherForUi = BattleWeatherType.None;
             PrepareWeatherEffectFlagsForCurrentRound();
             return false;
         }
@@ -847,6 +890,8 @@ public partial class BattleSimulationManager : MonoBehaviour
             M12TrioMasteryBattleTracker.ResetForNewBattle();
         if (BattleLaunchContext.IsM12TrioTutorialBattle)
             M12PhaseAHorrorStateRuntime.ResetForNewBattle();
+        if (BattleLaunchContext.IsM13RivalDuelBattle)
+            M13RivalDuelBattleTracker.ResetForNewBattle();
     }
 
     private bool IsPlayerBishopSkillActive() => IsPlayerMonsterSkillBattleActive(MonsterSkillIds.Bishop);
@@ -926,6 +971,8 @@ public partial class BattleSimulationManager : MonoBehaviour
                 BishopConsecrationVisualKind.BoundToField,
                 isPlayer,
                 holyTherapyLinkOnNun: state.holyTherapyLinkOnNun));
+        if (isPlayer && state.holyTherapyLinkOnNun && BattleLaunchContext.IsM13RivalDuelBattle)
+            M13RivalDuelBattleTracker.NotifyConsecrationBoundToNun();
     }
 
     private bool CanReplaceFieldMonsterForConsecration(bool isPlayer)
@@ -1345,6 +1392,7 @@ public partial class BattleSimulationManager : MonoBehaviour
         public int attack;
         public int currentHp;
         public int maxHp;
+        public CombatRole combatRole;
 
         public BattleMonster(MonsterCard source)
         {
@@ -1354,6 +1402,7 @@ public partial class BattleSimulationManager : MonoBehaviour
             attack = source.attack;
             maxHp = source.healthPointMax;
             currentHp = source.healthPointMax;
+            combatRole = source.combatRole;
         }
     }
 
@@ -1566,6 +1615,10 @@ public partial class BattleSimulationManager : MonoBehaviour
             TutorialDeckApplicator.EnsureIntroTutorialDeckReady(playerData);
         else if (BattleLaunchContext.IsM12TrioTutorialBattle)
             M12PhaseDeckApplicator.ApplyPhaseADeck(playerData);
+        else if (BattleLaunchContext.IsM13WeatherTutorialBattle)
+            M13PhaseDeckApplicator.ApplyPhaseADeck(playerData);
+        else if (BattleLaunchContext.IsM13RivalDuelBattle)
+            M13PhaseDeckApplicator.ApplyPhaseBDeck(playerData);
         else if (BattleLaunchContext.IsM12CoachPracticeBattle)
             M12PhaseDeckApplicator.ApplyPhaseBDeck(playerData);
 
@@ -1644,6 +1697,19 @@ public partial class BattleSimulationManager : MonoBehaviour
         forecastPreviewWeatherForUi = BattleWeatherType.None;
         weatherRandomCycleBag.Clear();
         weatherRandomCycleCursor = 0;
+        firstWeatherPreferFireRain = false;
+        firstWeatherPreferHolyLight = false;
+        firstWeatherPreferFog = false;
+        firstWeatherPreferGale = false;
+        if (BattleLaunchContext.IsM13WeatherTutorialBattle)
+        {
+            firstWeatherPreferFireRain = M13WeatherLaunchRuntime.PreferFireRain;
+            firstWeatherPreferHolyLight = M13WeatherLaunchRuntime.PreferHolyLight;
+            firstWeatherPreferFog = M13WeatherLaunchRuntime.PreferFog;
+            if (!firstWeatherPreferFireRain && !firstWeatherPreferHolyLight && !firstWeatherPreferFog)
+                firstWeatherPreferFog = true;
+            M13WeatherLaunchRuntime.Clear();
+        }
 
         // 鬥鳥戰前加成快照（單場有效）：Begin 時已聚合，此處取用並清空，避免重複 StartBattle 或跨場景遺失。
         PreBattleBonusContext.TryConsumeForBattle(out BirdDuelBonusEffects birdDuelBonus, out string bonusAnnouncement);
@@ -1652,7 +1718,10 @@ public partial class BattleSimulationManager : MonoBehaviour
         bonusPlayerExtraDrawPerTurn = Mathf.Max(0, birdDuelBonus.PlayerExtraDrawPerTurn);
         bonusEnemyOpeningExtraDraw = Mathf.Max(0, birdDuelBonus.EnemyExtraOpeningDraw);
         bonusEnemyOpeningDrawConsumed = false;
-        bonusPlayerHeroShieldRemaining = birdDuelBonus.PlayerHeroShieldActive;
+        m13HotBloodReversalConsumed = false;
+        m12PhaseAHeroCharmShieldActive = BattleLaunchContext.IsM12TrioTutorialBattle;
+        bonusPlayerHeroShieldRemaining =
+            birdDuelBonus.PlayerHeroShieldActive || m12PhaseAHeroCharmShieldActive;
         bonusPlayerRarityDrawMaxRound = Mathf.Max(0, birdDuelBonus.PlayerRarityDrawMaxRound);
         ApplyBonusOpeningWeather(birdDuelBonus.OpeningWeather);
 
@@ -1675,6 +1744,8 @@ public partial class BattleSimulationManager : MonoBehaviour
             enemyHp = IntroTutorialBattleRules.EnemyStartHealth;
         else if (BattleLaunchContext.IsM12TrioTutorialBattle)
             enemyHp = M12PhaseABattleRules.EnemyStartHealth;
+        else if (BattleLaunchContext.IsM13WeatherTutorialBattle)
+            enemyHp = M13PhaseABattleRules.EnemyStartHealth;
         else if (HarborTrainingDifficultyRuntime.TryGetEnemyStartHealth(out int harborEnemyHp))
             enemyHp = harborEnemyHp;
         else
@@ -1694,7 +1765,17 @@ public partial class BattleSimulationManager : MonoBehaviour
         // openingRollVersion 延後至加成播報結束（或無播報時於開場 coroutine 觸發），避免骰子與播報同時出現。
         BattleVerbose("Battle start dice: Player=" + playerDice + " Enemy=" + enemyDice + " | first=" + (playerTurn ? "Player" : "Enemy"));
 
-        int playerOpeningHandCount = Mathf.Clamp(5 + Mathf.Max(0, birdDuelBonus.OpeningExtraDraw), 0, maxHandSize);
+        int m13OpeningExtraDraw = 0;
+        if (BattleLaunchContext.IsM13RivalDuelBattle)
+        {
+            int activeSlot = PlayerData.GetActivePlayerSlotOrDefault();
+            m13OpeningExtraDraw = M13PhaseBBattleRules.GetOpeningExtraDraw(activeSlot);
+        }
+
+        int playerOpeningHandCount = Mathf.Clamp(
+            5 + Mathf.Max(0, birdDuelBonus.OpeningExtraDraw) + m13OpeningExtraDraw,
+            0,
+            maxHandSize);
         const int enemyOpeningHandCount = 5;
         int openingDealCount = Mathf.Max(playerOpeningHandCount, enemyOpeningHandCount);
         for (int i = 0; i < openingDealCount; i++)
@@ -1926,16 +2007,21 @@ public partial class BattleSimulationManager : MonoBehaviour
         {
             string defenderName = enemyField.cardName;
             string attackerName = playerField.cardName;
-            int playerAtkDmg = ModifyDamageToEnemyMonster(playerField.attack);
+            CombatRoleMatchup attackerHitMatchup = ResolveMonsterHitMatchup(true);
+            int playerAtkDmg = ModifyDamageToEnemyMonster(
+                ScaleOutgoingMonsterDamageVsEnemyField(playerField.attack));
             ApplyDamageToEnemyFieldMonster(playerAtkDmg);
             LogBattleHistory("我方場地上 怪物牌 " + attackerName + " 對敵方造成" + playerAtkDmg + " 點傷害");
             bool counterTriggered = false;
             int counterDamage = 0;
+            CombatRoleMatchup counterHitMatchup = CombatRoleMatchup.Neutral;
             if (enemyField != null && playerField != null && playerField.currentHp > 0 && !enemyCounterUsedThisRound)
             {
                 string counterAttackerName = enemyField.cardName;
                 string counterDefenderName = playerField.cardName;
-                counterDamage = ModifyDamageToPlayerMonster(enemyField.attack);
+                counterHitMatchup = ResolveMonsterHitMatchup(false);
+                counterDamage = ModifyDamageToPlayerMonster(
+                    ScaleOutgoingMonsterDamageVsPlayerField(enemyField.attack));
                 ApplyDamageToPlayerFieldMonster(counterDamage);
                 enemyCounterUsedThisRound = true;
                 counterTriggered = true;
@@ -1947,7 +2033,9 @@ public partial class BattleSimulationManager : MonoBehaviour
                 hasMonsterTarget = true,
                 attackerDamage = playerAtkDmg,
                 counterTriggered = counterTriggered,
-                counterDamage = counterDamage
+                counterDamage = counterDamage,
+                attackerHitMatchup = attackerHitMatchup,
+                counterHitMatchup = counterHitMatchup
             });
         }
         else
@@ -1963,7 +2051,8 @@ public partial class BattleSimulationManager : MonoBehaviour
                 BattleVerbose("Player direct attack blocked by enemy Sanctum Knight Holy Sanctuary.");
                 return;
             }
-            int directDmg = ModifyDirectDamageToEnemyHero(playerField.attack);
+            int directDmg = ModifyDirectDamageToEnemyHero(
+                ScaleOutgoingDirectDamageToEnemyHero(playerField.attack));
             ApplyDamageToEnemyHero(directDmg);
             LogBattleHistory("我方場地上 怪物牌 " + playerField.cardName + " 對敵方英雄造成" + directDmg + " 點傷害");
             AttackPerformed?.Invoke(new AttackVisualData
@@ -1973,7 +2062,9 @@ public partial class BattleSimulationManager : MonoBehaviour
                 targetsHero = true,
                 attackerDamage = directDmg,
                 counterTriggered = false,
-                counterDamage = 0
+                counterDamage = 0,
+                attackerHitMatchup = CombatRoleMatchup.Neutral,
+                counterHitMatchup = CombatRoleMatchup.Neutral
             });
         }
 
@@ -2026,6 +2117,8 @@ public partial class BattleSimulationManager : MonoBehaviour
         }
 
         playerTurn = false;
+        if (BattleLaunchContext.IsM13RivalDuelBattle)
+            M13RivalDuelBattleTracker.NotifyPlayerTurnEnded();
         playerDirectAttackBlockedByEnemySanctumThisPlayerTurn = false;
         yield return StartCoroutine(RunEnemyTurn());
     }
@@ -2184,17 +2277,22 @@ public partial class BattleSimulationManager : MonoBehaviour
         {
             int attackerDamage = enemyField.attack;
             string attackerName = enemyField.cardName;
+            CombatRoleMatchup attackerHitMatchup = ResolveMonsterHitMatchup(false);
             int enemyAtkDmg = ScaleContextualEnemyDamage(
-                ModifyDamageToPlayerMonster(enemyField.attack));
+                ModifyDamageToPlayerMonster(
+                    ScaleOutgoingMonsterDamageVsPlayerField(enemyField.attack)));
             ApplyDamageToPlayerFieldMonster(enemyAtkDmg);
             LogBattleHistory("敵方場地上 怪物牌 " + attackerName + " 對我方造成" + enemyAtkDmg + " 點傷害");
             bool counterTriggered = false;
             int counterDamage = 0;
+            CombatRoleMatchup counterHitMatchup = CombatRoleMatchup.Neutral;
             if (playerField != null && enemyField != null && enemyField.currentHp > 0 && !playerCounterUsedThisRound)
             {
                 string counterAttackerName = playerField.cardName;
                 string counterDefenderName = enemyField.cardName;
-                counterDamage = ModifyDamageToEnemyMonster(playerField.attack);
+                counterHitMatchup = ResolveMonsterHitMatchup(true);
+                counterDamage = ModifyDamageToEnemyMonster(
+                    ScaleOutgoingMonsterDamageVsEnemyField(playerField.attack));
                 ApplyDamageToEnemyFieldMonster(counterDamage);
                 playerCounterUsedThisRound = true;
                 counterTriggered = true;
@@ -2206,7 +2304,9 @@ public partial class BattleSimulationManager : MonoBehaviour
                 hasMonsterTarget = true,
                 attackerDamage = enemyAtkDmg,
                 counterTriggered = counterTriggered,
-                counterDamage = counterDamage
+                counterDamage = counterDamage,
+                attackerHitMatchup = attackerHitMatchup,
+                counterHitMatchup = counterHitMatchup
             });
         }
         else
@@ -2224,7 +2324,8 @@ public partial class BattleSimulationManager : MonoBehaviour
                 return;
             }
             int directDmg = ScaleContextualEnemyDamage(
-                ModifyDirectDamageToPlayerHero(enemyField.attack));
+                ModifyDirectDamageToPlayerHero(
+                    ScaleOutgoingDirectDamageToPlayerHero(enemyField.attack)));
             int dealt = DealDamageToPlayerHero(directDmg, "敵方場地怪獸直擊");
             LogBattleHistory("敵方場地上 怪物牌 " + enemyField.cardName + " 對我方英雄造成" + dealt + " 點傷害");
             AttackPerformed?.Invoke(new AttackVisualData
@@ -2234,7 +2335,9 @@ public partial class BattleSimulationManager : MonoBehaviour
                 targetsHero = true,
                 attackerDamage = directDmg,
                 counterTriggered = false,
-                counterDamage = 0
+                counterDamage = 0,
+                attackerHitMatchup = CombatRoleMatchup.Neutral,
+                counterHitMatchup = CombatRoleMatchup.Neutral
             });
         }
     }
@@ -2257,7 +2360,8 @@ public partial class BattleSimulationManager : MonoBehaviour
 
         // 與實際攻擊相同順序：先直擊減免，再情境倍率。
         return ScaleContextualEnemyDamage(
-            PredictDirectDamageModifierToPlayerHero(enemyField.attack)) >= playerHp;
+            PredictDirectDamageModifierToPlayerHero(
+                ScaleOutgoingDirectDamageToPlayerHero(enemyField.attack))) >= playerHp;
     }
 
     /// <summary>
@@ -2329,6 +2433,9 @@ public partial class BattleSimulationManager : MonoBehaviour
         }
 
         TryHarborEasyRoundCapVictoryAtRoundAdvance();
+        if (battleOver) return;
+
+        TryM12PhaseARoundCapVictoryAtRoundAdvance();
         if (battleOver) return;
 
         TickPlayerLinGazeEndOfRound();
@@ -2557,6 +2664,8 @@ public partial class BattleSimulationManager : MonoBehaviour
             toast += " 修女·聖療共鳴：英雄 +" + heroBonus + " HP。";
         ShowBattleToast(toast, heroBonus > 0 ? 3.2f : 2.8f);
         pendingPlayerLesserHealVisual = new LesserHealVisualRequest(true, healAmount, heroBonus, holyTherapyBonus);
+        if (BattleLaunchContext.IsM13RivalDuelBattle && playerField.id == MonsterSkillIds.Nun)
+            M13RivalDuelBattleTracker.NotifyLesserHealOnConsecratedNun();
         return true;
     }
 
@@ -2679,7 +2788,7 @@ public partial class BattleSimulationManager : MonoBehaviour
         LogBattleHistory("敵方咒術區 法術牌 " + spell.cardName + " 對我方造成" + dealt + "點傷害");
     }
 
-    /// <summary>對我方英雄結算傷害；聖盾禱告可抵銷整場首次有效傷害。</summary>
+    /// <summary>對我方英雄結算傷害；聖盾禱告／段考 A 平安符可抵銷整場首次有效傷害。</summary>
     private int DealDamageToPlayerHero(int damage, string sourceLabel)
     {
         int dmg = Mathf.Max(0, damage);
@@ -2687,9 +2796,12 @@ public partial class BattleSimulationManager : MonoBehaviour
 
         if (bonusPlayerHeroShieldRemaining)
         {
+            bool usedPeaceCharm = m12PhaseAHeroCharmShieldActive;
+            m12PhaseAHeroCharmShieldActive = false;
             bonusPlayerHeroShieldRemaining = false;
-            ShowBattleToast("聖盾禱告：本次對英雄的傷害已抵銷。", 2.8f);
-            LogBattleHistory("聖盾禱告：抵銷對我方英雄的傷害（" + sourceLabel + "，原 " + dmg + " 點）");
+            string shieldLabel = usedPeaceCharm ? "平安符" : "聖盾禱告";
+            ShowBattleToast(shieldLabel + "：本次對英雄的傷害已抵銷。", 2.8f);
+            LogBattleHistory(shieldLabel + "：抵銷對我方英雄的傷害（" + sourceLabel + "，原 " + dmg + " 點）");
             PlayerHeroShieldConsumed?.Invoke();
             return 0;
         }
@@ -3567,6 +3679,18 @@ public partial class BattleSimulationManager : MonoBehaviour
                 1,
                 Mathf.RoundToInt(rawDamage * IntroTutorialBattleRules.EnemyDamageMultiplier));
         }
+        else if (BattleLaunchContext.IsM13WeatherTutorialBattle)
+        {
+            scaled = Mathf.Max(
+                1,
+                Mathf.RoundToInt(rawDamage * M13PhaseABattleRules.EnemyDamageMultiplier));
+        }
+        else if (BattleLaunchContext.IsM12TrioTutorialBattle)
+        {
+            scaled = Mathf.Max(
+                1,
+                Mathf.RoundToInt(rawDamage * M12PhaseABattleRules.EnemyDamageMultiplier));
+        }
         else if (HarborTrainingDifficultyRuntime.IsHarborBattleActive)
         {
             scaled = HarborTrainingDifficultyRuntime.ScaleEnemyDamage(rawDamage);
@@ -3936,6 +4060,9 @@ public partial class BattleSimulationManager : MonoBehaviour
         TryHarborEasyRoundCapVictoryAtBattleCheck();
         if (battleOver) return;
 
+        TryM12PhaseARoundCapVictoryAtBattleCheck();
+        if (battleOver) return;
+
         // 平手：①雙方英雄 HP≥1 且皆無牌可打 ②雙方英雄於同一次結算中皆 HP≤0
         if (playerHp >= 1 && enemyHp >= 1 && PlayerHasNoCardsToPlay() && EnemyHasNoCardsToPlay())
         {
@@ -4289,6 +4416,15 @@ public partial class BattleSimulationManager : MonoBehaviour
     {
         openingPresentationSeconds = Mathf.Clamp(seconds, 0f, 15f);
     }
+
+    /// <summary>批次模擬防卡死：略過開場演出鎖，讓 pump 能推進對局。</summary>
+    public void ForceFinishOpeningPresentationForBatchSim()
+    {
+        if (!BattleAutoSimPlugin.IsRunning)
+            return;
+        openingPresentationInProgress = false;
+    }
+
     public int GetCurrentRound() { return currentRound; }
 
     /// <summary>
@@ -4314,10 +4450,12 @@ public partial class BattleSimulationManager : MonoBehaviour
         Mathf.Max(0, ModifyDamageToPlayerMonster(rawDamage));
 
     public int EstimateHarborCoachDirectDamageToPlayerHeroFromRaw(int rawDamage) =>
-        Mathf.Max(0, ModifyDirectDamageToPlayerHero(rawDamage));
+        Mathf.Max(0, ModifyDirectDamageToPlayerHero(
+            ScaleOutgoingDirectDamageToPlayerHero(rawDamage)));
 
     public int EstimateHarborCoachScaledEnemyAttackToPlayerHero(int attack) =>
-        Mathf.Max(0, ScaleContextualEnemyDamage(ModifyDirectDamageToPlayerHero(attack)));
+        Mathf.Max(0, ScaleContextualEnemyDamage(
+            ModifyDirectDamageToPlayerHero(ScaleOutgoingDirectDamageToPlayerHero(attack))));
 
     #endregion
 
@@ -4495,7 +4633,12 @@ public partial class BattleSimulationManager : MonoBehaviour
         model = default;
         if (card == null) return false;
         if (card is MonsterCard monster)
-            return MonsterSkillRegistry.TryGetBattleHandLongPressModel(monster.id, out model);
+        {
+            if (!MonsterSkillRegistry.TryGetBattleHandLongPressModel(monster.id, out model))
+                return false;
+            model.attributeTags = HandLongPressTooltipAttributes.BuildForCard(card);
+            return true;
+        }
         if (card is SpellCard spell)
         {
             string body = GetSpellEffectTextForPresentation(spell);
@@ -4507,7 +4650,8 @@ public partial class BattleSimulationManager : MonoBehaviour
             {
                 heading = "效果說明",
                 subtitleRich = MonsterSkillRegistry.FormatSkillNameRich(name),
-                bodyRich = body.Trim()
+                bodyRich = body.Trim(),
+                attributeTags = HandLongPressTooltipAttributes.BuildForCard(card)
             };
             return true;
         }
@@ -4535,6 +4679,7 @@ public partial class BattleSimulationManager : MonoBehaviour
             display.healthPoint = field.currentHp;
             display.cardNameEnglish = m.cardNameEnglish;
             display.rarity = m.rarity;
+            display.combatRole = m.combatRole;
             display.SetArtwork(m.artworkResourcePath, m.artworkSprite);
             display.SetDeckThumb(m.deckThumbResourcePath, m.deckThumbSprite);
             return display;
@@ -4548,7 +4693,10 @@ public partial class BattleSimulationManager : MonoBehaviour
             fallback.rarity = source.rarity;
             fallback.SetArtwork(source.artworkResourcePath, source.artworkSprite);
             if (source is MonsterCard mm)
+            {
+                fallback.combatRole = mm.combatRole;
                 fallback.SetDeckThumb(mm.deckThumbResourcePath, mm.deckThumbSprite);
+            }
         }
         return fallback;
     }

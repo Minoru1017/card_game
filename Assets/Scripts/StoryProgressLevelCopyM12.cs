@@ -22,7 +22,7 @@ public static class StoryProgressLevelCopyM12
         {
             return FormatSectionTag("關卡說明") + "\n" +
                    "<line-height=128%>" +
-                   "散策已完成 下一步" + FormatEmphasis("教會三張搭配") + " 實戰加練 須勝利" +
+                   "散策已完成 下一步" + FormatEmphasis("戰位克制") + " 實戰加練 須勝利" +
                    "</line-height>";
         }
 
@@ -31,13 +31,14 @@ public static class StoryProgressLevelCopyM12
             return FormatSectionTag("關卡說明") + "\n" +
                    "<line-height=128%>" +
                    FormatEmphasis("御三家應用") + " 已通過 沿海牆散策後進入階段 B" +
+                   " 學" + FormatEmphasis("戰位克制") +
                    "</line-height>";
         }
 
         return FormatSectionTag("關卡說明") + "\n" +
                "<line-height=128%>" +
                "關卡分兩階段 先" + FormatEmphasis("御三家戰技") + " 段考 再" +
-               FormatEmphasis("修女／主教／城堡") + " 應用加練 鎖定牌組不可換" +
+               FormatEmphasis("戰位克制") + " 加練 鎖定牌組不可換" +
                "</line-height>\n\n" +
                FormatSectionTag("關卡流程") + "\n" +
                "<line-height=128%>" +

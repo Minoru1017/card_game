@@ -8,6 +8,40 @@ public enum CardRarity
     UR = 4
 }
 
+/// <summary>卡牌戰位（<c>CardList.csv</c> <c>combat_role</c> 欄；顯示名見 <see cref="CombatRoleUtility"/>）。</summary>
+public enum CombatRole
+{
+    Strike = 0,
+    Tank = 1,
+    Support = 2,
+    Finisher = 3
+}
+
+/// <summary>戰位 CSV 解析與 UI 顯示名（先鋒／守陣／策應／定式）。</summary>
+public static class CombatRoleUtility
+{
+    public static bool TryParse(string token, out CombatRole role)
+    {
+        role = CombatRole.Strike;
+        if (string.IsNullOrWhiteSpace(token)) return false;
+        string u = token.Trim();
+        if (u.Equals("Strike", System.StringComparison.OrdinalIgnoreCase)) { role = CombatRole.Strike; return true; }
+        if (u.Equals("Tank", System.StringComparison.OrdinalIgnoreCase)) { role = CombatRole.Tank; return true; }
+        if (u.Equals("Support", System.StringComparison.OrdinalIgnoreCase)) { role = CombatRole.Support; return true; }
+        if (u.Equals("Finisher", System.StringComparison.OrdinalIgnoreCase)) { role = CombatRole.Finisher; return true; }
+        return false;
+    }
+
+    public static string GetDisplayName(CombatRole role) => role switch
+    {
+        CombatRole.Strike => "先鋒",
+        CombatRole.Tank => "守陣",
+        CombatRole.Support => "策應",
+        CombatRole.Finisher => "定式",
+        _ => "先鋒"
+    };
+}
+
 /// <summary>稀有度排序與 AI 加權（數值越大越優先保留／打出）。</summary>
 public static class CardRarityUtility
 {
@@ -69,6 +103,8 @@ public class MonsterCard : Card
     public int attack;
     public int healthPoint; //???e????q
     public int healthPointMax;
+    /// <summary>戰位；CSV 未填時默認 <see cref="CombatRole.Strike"/>。</summary>
+    public CombatRole combatRole = CombatRole.Strike;
 
     //?i?H?s?W????B???
     public MonsterCard(int _id, string _cardName, int _attack, int _healthPointMax) : base(_id, _cardName)

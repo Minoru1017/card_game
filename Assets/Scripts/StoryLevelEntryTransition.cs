@@ -129,12 +129,12 @@ public static class StoryLevelEntryTransition
     private static string BuildFullObjectivesText() =>
         "<color=" + ObjectiveHeaderHex + "><b>達成目標</b></color>\n" +
         "階段 A 御三家應用 - 勝利 且 本局三戰技各觸發 1 次\n" +
-        "階段 B 教會三張搭配 - 勝利 且 A+B 戰技合計達標";
+        "階段 B 戰位克制教學 - 勝利 且 A+B 戰技合計達標";
 
     private static string BuildMidPatrolObjectivesText() =>
         "<color=" + ObjectiveHeaderHex + "><b>達成目標</b></color>\n" +
         "海牆散策 - 巡視海牆 拾回封印殘卷\n" +
-        "階段 B 教會三張搭配 - 勝利 且 A+B 戰技合計達標";
+        "階段 B 戰位克制教學 - 勝利 且 A+B 戰技合計達標";
 
     private static string BuildPhaseAObjectivesText() =>
         "<color=" + ObjectiveHeaderHex + "><b>達成目標</b></color>\n" +
@@ -142,12 +142,88 @@ public static class StoryLevelEntryTransition
 
     private static string BuildPhaseBObjectivesText() =>
         "<color=" + ObjectiveHeaderHex + "><b>達成目標</b></color>\n" +
-        "階段 B 教會三張搭配 - 勝利 且 A+B 戰技合計達標";
+        "階段 B 戰位克制教學 - 勝利 且 A+B 戰技合計達標";
 
     private static string BuildReplayObjectivesText() =>
         "<color=" + ObjectiveHeaderHex + "><b>重溫關卡</b></color>\n" +
         "從頭重走 劇情 - 段考 A - 海牆散策 - 加練 B\n" +
         "首通獎勵不重發";
+
+    /// <summary>已通關重溫或首次：標題卡 → 邊燈夜話開場劇情。</summary>
+    public static void PlayToM13OpeningPlot(bool replay = false)
+    {
+        if (IsPlaying)
+            return;
+
+        EnsureHost().Begin(
+            StoryProgressLevelCopyM13.LevelTitle,
+            replay ? BuildM13ReplayObjectivesText() : BuildM13OpeningObjectivesText(),
+            StoryProgressSession.LaunchM13OpeningPlotScene,
+            StoryProgressSession.MainPlotSceneName);
+    }
+
+    /// <summary>開場已看過：標題卡 → 玫瑰試煉劇情。</summary>
+    public static void PlayToM13RoseTrialPlot()
+    {
+        if (IsPlaying)
+            return;
+
+        EnsureHost().Begin(
+            StoryProgressLevelCopyM13.LevelTitle,
+            BuildM13RoseTrialObjectivesText(),
+            StoryProgressSession.LaunchM13RoseTrialPlotScene,
+            StoryProgressSession.MainPlotSceneName);
+    }
+
+    /// <summary>岔路散策後：標題卡 → 冷爐迎測 Phase A。</summary>
+    public static void PlayToM13PhaseABattle()
+    {
+        if (IsPlaying)
+            return;
+
+        EnsureHost().Begin(
+            StoryProgressLevelCopyM13.LevelTitle,
+            BuildM13PhaseAObjectivesText(),
+            () => SceneLoader.LaunchM13PhaseABattleDirect(),
+            SceneLoader.PeekM13BattleSceneName());
+    }
+
+    /// <summary>玫瑰試煉後：標題卡 → 分波對決 Phase B。</summary>
+    public static void PlayToM13PhaseBBattle()
+    {
+        if (IsPlaying)
+            return;
+
+        EnsureHost().Begin(
+            StoryProgressLevelCopyM13.LevelTitle,
+            BuildM13PhaseBObjectivesText(),
+            () => SceneLoader.LaunchM13PhaseBBattleDirect(),
+            SceneLoader.PeekM13BattleSceneName());
+    }
+
+    private static string BuildM13PhaseBObjectivesText() =>
+        "<color=" + ObjectiveHeaderHex + "><b>達成目標</b></color>\n" +
+        "分波對決 - 對決阿潮\n" +
+        "須勝利 · 單回合直擊 ≥8 · 祝聖→修女→初級治療";
+
+    private static string BuildM13PhaseAObjectivesText() =>
+        "<color=" + ObjectiveHeaderHex + "><b>達成目標</b></color>\n" +
+        "冷爐迎測 - 前 3 回合無天氣 第 4 回合起預報\n" +
+        "須勝利（任務欄細項待實裝）";
+
+    private static string BuildM13OpeningObjectivesText() =>
+        "<color=" + ObjectiveHeaderHex + "><b>達成目標</b></color>\n" +
+        "邊燈夜話 - 向燈守·賽爾立誓\n" +
+        "分波鬥鳥 · 冷爐迎測 · 玫瑰試煉 · 對決阿潮 戰鬥段陸續接入";
+
+    private static string BuildM13RoseTrialObjectivesText() =>
+        "<color=" + ObjectiveHeaderHex + "><b>達成目標</b></color>\n" +
+        "玫瑰試煉 - 面對阿潮的當場證明\n" +
+        "選項影響分波對決氛圍 不影響通關";
+
+    private static string BuildM13ReplayObjectivesText() =>
+        "<color=" + ObjectiveHeaderHex + "><b>重溫關卡</b></color>\n" +
+        "從邊燈夜話重走 首通獎勵不重發";
 
     private static Host EnsureHost()
     {

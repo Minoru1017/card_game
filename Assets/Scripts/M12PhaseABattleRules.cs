@@ -5,6 +5,7 @@ public static class M12PhaseABattleRules
 {
     public const int MaxRoundsInclusive = 12;
     public const int EnemyStartHealth = 15;
+    public const float EnemyDamageMultiplier = 0.85f;
     public const int EnemyDrawPerTurn = 1;
 
     /// <summary>第 6 回合前（currentRound &lt; 6）敵方 AI 以生存、保場為優先，避免過早被擊敗。</summary>

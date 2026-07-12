@@ -133,8 +133,8 @@ public class MainPlotSceneController : MonoBehaviour
         if (!plotBegun && steps != null && steps.Count > 0)
             BeginPlot();
 
-        if (plotBegun && ShouldPlayTutorialPlotBgm())
-            TryPlayTutorialPlotBgm();
+        if (plotBegun && ShouldPlayPlotBgm())
+            TryPlayPlotBgm();
     }
 
     private void Update()
@@ -175,13 +175,25 @@ public class MainPlotSceneController : MonoBehaviour
         ShowStep(Mathf.Clamp(startStepIndex, 0, steps.Count - 1));
     }
 
-    /// <summary>僅 1-1 從遊戲進度進入的教學劇情播放專屬 BGM。</summary>
-    private bool ShouldPlayTutorialPlotBgm() =>
-        IsOpeningTutorialPlotSession() && StoryProgressSession.TutorialPlotBgmRequested;
+    /// <summary>1-1 教學、M-1-2 或 M-1-3 劇情播放專屬 BGM。</summary>
+    private bool ShouldPlayPlotBgm() =>
+        (IsOpeningTutorialPlotSession() && StoryProgressSession.TutorialPlotBgmRequested) ||
+        (IsM12PlotSession() && StoryProgressSession.M12PlotBgmRequested) ||
+        (IsM13PlotSession() && StoryProgressSession.M13PlotBgmRequested);
 
-    private void TryPlayTutorialPlotBgm()
+    private bool IsM12PlotSession() =>
+        StoryProgressSession.IsM12IntroPlotActive ||
+        StoryProgressSession.IsM12MidPatrolPlotActive ||
+        StoryProgressSession.IsM12VictoryEpilogueActive;
+
+    private bool IsM13PlotSession() =>
+        StoryProgressSession.IsM13OpeningPlotActive ||
+        StoryProgressSession.IsM13RoseTrialPlotActive ||
+        StoryProgressSession.IsM13EpiloguePlotActive;
+
+    private void TryPlayPlotBgm()
     {
-        if (!ShouldPlayTutorialPlotBgm()) return;
+        if (!ShouldPlayPlotBgm()) return;
 
         PlotBackgroundMusicPlayer bgm = PlotBackgroundMusicPlayer.FindInMainPlotScene();
         if (bgm == null)
@@ -191,14 +203,14 @@ public class MainPlotSceneController : MonoBehaviour
         }
 
         plotBgm = bgm;
-        plotBgm.PlayTutorialPlotBgm();
+        plotBgm.PlayPlotBgm();
     }
 
-    private void StopTutorialPlotBgm() => StoryProgressSession.EndTutorialPlotBgmSession();
+    private void StopPlotBgm() => StoryProgressSession.EndPlotBgmSession();
 
     private void OnDestroy()
     {
-        StopTutorialPlotBgm();
+        StopPlotBgm();
         PlotUiOverlayCleanup.DestroyStrayPlotTapUi();
     }
 
@@ -726,6 +738,10 @@ public class MainPlotSceneController : MonoBehaviour
     {
         if (currentStepIndex < 0 || currentStepIndex >= steps.Count) return;
 
+        if (StoryProgressSession.IsM13OpeningPlotActive ||
+            StoryProgressSession.IsM13RoseTrialPlotActive)
+            StoryProgressSession.NotifyM13PlotChoice(currentStepIndex, choiceIndex);
+
         PlotStep step = steps[currentStepIndex];
         int nextIndex = -1;
         switch (choiceIndex)
@@ -759,7 +775,7 @@ public class MainPlotSceneController : MonoBehaviour
     private void FinishPlotAndReturn(bool skippedPlot = false)
     {
         plotNpcVoice?.Stop();
-        StopTutorialPlotBgm();
+        StopPlotBgm();
         PlotUiOverlayCleanup.DestroyStrayPlotTapUi();
 
         if (StoryProgressSession.IsTutorialPlotEpilogueActive)
@@ -799,6 +815,38 @@ public class MainPlotSceneController : MonoBehaviour
                 StoryProgressSession.LaunchM12PhaseABattleAfterPlot(fastCloseAnimation: skippedPlot);
                 return;
             }
+        }
+
+        if (StoryProgressSession.IsM13EpiloguePlotActive)
+        {
+            StoryProgressSession.EndM13EpiloguePlotSession();
+            StoryProgressSession.LoadStoryProgressWithIrisTransition();
+            return;
+        }
+
+        if (StoryProgressSession.IsM13RoseTrialPlotActive)
+        {
+            StoryProgressSession.EndM13RoseTrialPlotSession();
+            if (StoryProgressSession.TryConsumeLaunchM13PhaseBBattleAfterPlot())
+            {
+                StoryProgressSession.LaunchM13PhaseBBattleAfterPlot(fastCloseAnimation: skippedPlot);
+                return;
+            }
+
+            if (Application.CanStreamedLevelBeLoaded(StoryProgressSession.StoryProgressSceneName))
+            {
+                SceneManager.LoadScene(StoryProgressSession.StoryProgressSceneName);
+                return;
+            }
+        }
+
+        if (StoryProgressSession.IsM13OpeningPlotActive)
+        {
+            StoryProgressSession.EndM13OpeningPlotSession();
+            HideAllChoiceButtons();
+            ApplyTapToContinueUi(false);
+            M13RiverForkFlow.ShowBirdDuelEntry();
+            return;
         }
 
         if (launchedFromStoryProgress)
@@ -1066,7 +1114,7 @@ public class MainPlotSceneController : MonoBehaviour
         SetButtonRaycastTargets(button, true);
 
         textTmp = PlotUiTextUtil.EnsureButtonLabel(button, textTmp, dialogueTextTmp);
-        PlotUiTextUtil.ApplyButtonLabel(textTmp, label, dialogueTextTmp);
+        PlotUiTextUtil.ApplyRichButtonLabel(textTmp, label, dialogueTextTmp);
         button.transform.SetAsLastSibling();
     }
 

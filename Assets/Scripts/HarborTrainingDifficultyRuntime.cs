@@ -5,7 +5,8 @@ public static class HarborTrainingDifficultyRuntime
 {
     public static bool IsHarborBattleActive =>
         BattleLaunchContext.IsHarborTrainingGroundBattle ||
-        BattleLaunchContext.IsM12CoachPracticeBattle;
+        BattleLaunchContext.IsM12CoachPracticeBattle ||
+        BattleLaunchContext.IsM13RivalDuelBattle;
 
     public static BattleDifficultyTier ResolveActiveTier()
     {
@@ -33,6 +34,13 @@ public static class HarborTrainingDifficultyRuntime
     public static bool TryGetEnemyStartHealth(out int health)
     {
         health = 0;
+        if (BattleLaunchContext.IsM13RivalDuelBattle)
+        {
+            int slot = PlayerData.GetActivePlayerSlotOrDefault();
+            health = M13PhaseBBattleRules.ResolveEnemyStartHealth(slot);
+            return true;
+        }
+
         if (!IsHarborBattleActive)
             return false;
 
@@ -60,6 +68,8 @@ public static class HarborTrainingDifficultyRuntime
 
     public static int GetEnemyDrawPerTurn(int currentRound)
     {
+        if (BattleLaunchContext.IsM13RivalDuelBattle)
+            return M13PhaseBBattleRules.GetEnemyDrawPerTurn(currentRound);
         if (HarborTrainingEasyBattleRules.IsActiveEasyBattle())
             return HarborTrainingEasyBattleRules.GetEnemyDrawPerTurn(currentRound);
         if (HarborTrainingNormalBattleRules.IsActiveNormalBattle())
@@ -71,6 +81,11 @@ public static class HarborTrainingDifficultyRuntime
 
     public static int ScaleEnemyDamage(int rawDamage)
     {
+        if (BattleLaunchContext.IsM13RivalDuelBattle)
+        {
+            int slot = PlayerData.GetActivePlayerSlotOrDefault();
+            return M13PhaseBBattleRules.ScaleEnemyDamage(rawDamage, slot);
+        }
         if (HarborTrainingEasyBattleRules.IsActiveEasyBattle())
             return HarborTrainingEasyBattleRules.ScaleEnemyDamage(rawDamage);
         if (HarborTrainingNormalBattleRules.IsActiveNormalBattle())
@@ -82,6 +97,8 @@ public static class HarborTrainingDifficultyRuntime
 
     public static int GetFastAttackMonsterPriorityBonus(int currentRound)
     {
+        if (BattleLaunchContext.IsM13RivalDuelBattle)
+            return M13PhaseBBattleRules.GetFastAttackMonsterPriorityBonus(currentRound);
         if (HarborTrainingEasyBattleRules.IsActiveEasyBattle())
             return HarborTrainingEasyBattleRules.GetFastAttackMonsterPriorityBonus(currentRound);
         if (HarborTrainingNormalBattleRules.IsActiveNormalBattle())
@@ -93,6 +110,10 @@ public static class HarborTrainingDifficultyRuntime
 
     public static int GetFastAttackSpellTweak(int currentRound, int spellOrdinal, int defaultTweak)
     {
+        if (BattleLaunchContext.IsM13RivalDuelBattle &&
+            currentRound <= HarborTrainingNormalBattleRules.SoftPressureRoundsInclusive)
+            return spellOrdinal == 1 ? -16 : -34;
+
         if (HarborTrainingEasyBattleRules.IsActiveEasyBattle() &&
             currentRound <= HarborTrainingEasyBattleRules.SoftPressureRoundsInclusive)
             return spellOrdinal == 1 ? -18 : -36;

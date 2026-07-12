@@ -183,6 +183,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         if (display != null)
         {
             display.SetCard(card);
+            display.SetCombatRoleBadgeVisible(CombatRoleBattleRules.ShouldShowRoleOnFieldMonster());
             if (isSpell && display.effectText != null)
             {
                 display.effectText.gameObject.SetActive(false);

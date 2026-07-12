@@ -17,6 +17,16 @@ public static class TutorialPlotScriptFactory
 
     public const string LinKeSpeaker = "林可姐";
     public const string MentorSpeaker = "導師";
+    public const string NarratorSpeaker = "旁白";
+    public const string SelSpeaker = "燈守·賽爾";
+    public const string AChaoSpeaker = "阿潮";
+    public const string PlayerSpeaker = "你";
+
+    /// <summary>M-1-3 開場誓約選項步驟索引（0-based）。</summary>
+    public const int M13OpeningOathChoiceStepIndex = 7;
+
+    /// <summary>M-1-3 玫瑰試煉選項步驟索引（0-based）。</summary>
+    public const int M13RoseTrialChoiceStepIndex = 7;
     /// <summary>與 CardList spell 002、<c>Assets/UI/CardArt/林可的凝視</c> 同源。</summary>
     private const int LinKeGazeSpellId = 2;
     private const string LinKeGazeCardArtResourcePath = "CardArt/林可的凝視";
@@ -177,10 +187,10 @@ public static class TutorialPlotScriptFactory
         return steps;
     }
 
-    /// <summary>M-1-2 開場：段考說明 → 階段 A。</summary>
+    /// <summary>M-1-2 開場：段考說明 → 平安符 → 階段 A。</summary>
     public static List<MainPlotSceneController.PlotStep> BuildM12IntroPlotSteps()
     {
-        var steps = new List<MainPlotSceneController.PlotStep>(5);
+        var steps = new List<MainPlotSceneController.PlotStep>(6);
         TapStep(steps, LinKeSpeaker,
             "海堤上的風比館內硬 這一段叫" + StoryTextStyle.Em("海牆巡邏") + " 先考御三家戰技 再練教會三張",
             1);
@@ -188,23 +198,44 @@ public static class TutorialPlotScriptFactory
             "牌組我幫你鎖好了 只要" + StoryTextStyle.Hi("國王") + " " + StoryTextStyle.Hi("王后") + " " +
             StoryTextStyle.Hi("民兵") + " 三項戰技本局各觸發一次 再加勝利",
             2);
+        TapStep(steps, LinKeSpeaker,
+            "臨上場前 我把這枚" + StoryTextStyle.Em("平安符") + "貼在你英雄名旁 " +
+            StoryTextStyle.Hi("英雄護盾") + " 能" + StoryTextStyle.Hi("擋一次對英雄的傷害") + " 用了就沒了 別浪費",
+            3);
         TapStepEndPlot(steps, LinKeSpeaker,
-            "準備好了就進" + StoryTextStyle.Em("階段 A") + " 這一場我不出聲 看你自己打");
+            "準備好了就進" + StoryTextStyle.Em("段考 A") + " 這一場我不出聲 看你自己打");
         return steps;
     }
 
     /// <summary>中段開場短劇情（§3.3.1）→ 海牆散策熱區場景（M12SeawallStrollOverlay）→ 階段 B。</summary>
     public static List<MainPlotSceneController.PlotStep> BuildM12MidPatrolPlotSteps()
     {
-        var steps = new List<MainPlotSceneController.PlotStep>(3);
+        var steps = new List<MainPlotSceneController.PlotStep>(10);
+        TapStep(steps, LinKeSpeaker,
+            "段考剛結束 你怎麼" + StoryTextStyle.Em("臉色蒼白") + " 是考試壓力太大 還是教室裡出了什麼事",
+            1);
+        ChoiceStep(steps, PlayerSpeaker,
+            "——",
+            "壓力是有點 剛才手還在抖", 2,
+            "教室裡好像不太對勁", 3,
+            "沒事 只是海風吹的", 4);
+        TapStep(steps, LinKeSpeaker,
+            "贏都贏了 別把自己逼太狠 先" + StoryTextStyle.Hi("深呼吸") + " 兩口",
+            5);
+        TapStep(steps, LinKeSpeaker,
+            "……先別在這說 跟我出去走一段 " + StoryTextStyle.Em("海牆") + " 上透口氣",
+            5);
+        TapStep(steps, LinKeSpeaker,
+            "海風能把你吹成這副樣子 行 不想說就不逼你",
+            5);
         TapStep(steps, LinKeSpeaker,
             "段考 A 過關 " + StoryTextStyle.Em("御三家戰技") + " 三項都觸發了 別急著馬上開第二場",
-            1);
+            6);
         TapStep(steps, LinKeSpeaker,
             "先沿" + StoryTextStyle.Em("海牆") + " 走一段 這才叫巡邏 順便讓腦袋喘口氣",
-            2);
+            7);
         TapStepEndPlot(steps, LinKeSpeaker,
-            "看到什麼想看的就點一點 巡過一處 我們就去" + StoryTextStyle.Em("教會三張搭配") + " 加練");
+            "看到什麼想看的就點一點 巡過一處 我們就去" + StoryTextStyle.Em("戰位克制") + " 加練");
         return steps;
     }
 
@@ -216,8 +247,144 @@ public static class TutorialPlotScriptFactory
             StoryTextStyle.Em("修女") + " " + StoryTextStyle.Em("主教") + " " + StoryTextStyle.Em("城堡") +
             " 各一張入收藏了 熟練度到 B 戰技會照規則生效",
             1);
+        TapStep(steps, LinKeSpeaker,
+            "下游" + StoryTextStyle.Em("河岔分波") + " 的" + StoryTextStyle.Em("邊燈") + " 也亮了 準備好再去",
+            2);
         TapStepEndPlot(steps, LinKeSpeaker,
             "海牆巡邏通關 按下回到遊戲進度");
+        return steps;
+    }
+
+    /// <summary>M-1-3 開場：邊燈夜話 → 誓約三選一（改寫帕拉塞爾蘇斯之玫瑰）。</summary>
+    public static List<MainPlotSceneController.PlotStep> BuildM13OpeningPlotSteps()
+    {
+        var steps = new List<MainPlotSceneController.PlotStep>(16);
+        TapStep(steps, NarratorSpeaker,
+            "夜幕垂在河岔 邊燈廳前的爐火晃著 火光似乎敵不過這股冷潮",
+            1);
+        TapStep(steps, SelSpeaker,
+            "神啊 求您賜我一位願意" + StoryTextStyle.Em("走這條路") + "的弟子",
+            2);
+        TapStep(steps, NarratorSpeaker,
+            "燈守欲起身點鐵燈 椅子一離身就變冷 他終究沒動",
+            3);
+        TapStep(steps, LinKeSpeaker,
+            "……賽爾師父 學院把" + StoryTextStyle.Em("迎潮實測") + "排在這裡 不是為了再收一位學徒",
+            4);
+        TapStep(steps, LinKeSpeaker,
+            "這位是今次實測生 段考過了 教會三張也用過了",
+            5);
+        TapStep(steps, SelSpeaker,
+            "我得西方的面孔 也得東方的面孔 你的面孔我記不起來 你是誰 你希望我做什麼",
+            6);
+        TapStep(steps, LinKeSpeaker,
+            "他問的是" + StoryTextStyle.Em("誓約") + " 不是名子 把你為什麼來說清楚",
+            7);
+        ChoiceStep(steps, PlayerSpeaker,
+            "——",
+            "我來學" + StoryTextStyle.Em("迎潮") + " 讓牌桌會變天", 8,
+            "我來證明段考不是運氣", 9,
+            "我只是跟著地圖來的", 10);
+        TapStep(steps, SelSpeaker,
+            "好 變天不是懲罰 是路的一部分",
+            11);
+        TapStep(steps, SelSpeaker,
+            "證明給" + StoryTextStyle.Em("對手") + "看 別向燈求把戲",
+            11);
+        TapStep(steps, SelSpeaker,
+            "那更要小心 漫無目的的人最愛要奇蹟",
+            11);
+        TapStep(steps, SelSpeaker,
+            "這條路就是" + StoryTextStyle.Em("分波") + " 起點也是分波 你若只追終點 就還沒開始",
+            12);
+        TapStep(steps, SelSpeaker,
+            "廳裡那盆" + StoryTextStyle.Em("迎潮玫瑰") + " 是舊日學院留下的 別用手去試 用" + StoryTextStyle.Hi("牌") + "去試",
+            13);
+        TapStepEndPlot(steps, LinKeSpeaker,
+            "先做" + StoryTextStyle.Em("分波鬥鳥") + " 讓節奏與水流對齊 不想玩可以直接迎測 戰鬥段陸續接入");
+        return steps;
+    }
+
+    /// <summary>階段 A 後：玫瑰試煉（阿潮要當場證明）。</summary>
+    public static List<MainPlotSceneController.PlotStep> BuildM13RoseTrialPlotSteps()
+    {
+        var steps = new List<MainPlotSceneController.PlotStep>(20);
+        TapStep(steps, NarratorSpeaker,
+            "門外分波聲急了一陣 有人踏進來 同樣滿臉疲憊",
+            1);
+        TapStep(steps, AChaoSpeaker,
+            "我聽說你在這裡 段考過了 教會三張也會了 那" + StoryTextStyle.Em("現在") + "給我看啊",
+            2);
+        TapStep(steps, AChaoSpeaker,
+            "傳說賽爾師父能令玫瑰成灰 再令灰成玫瑰 我只要一個" + StoryTextStyle.Em("證明"),
+            3);
+        TapStep(steps, SelSpeaker,
+            "你太天真了 我不需要你的輕信 我需要的是" + StoryTextStyle.Em("信仰"),
+            4);
+        TapStep(steps, AChaoSpeaker,
+            "正因我不輕信 我才要親眼看 玫瑰的毀滅與重生",
+            5);
+        TapStep(steps, SelSpeaker,
+            "若我照做 你只會說那是把戲 爐子是冷的 蒸餾器上覆蓋灰塵 這段路我用的是" + StoryTextStyle.Em("別的工具"),
+            6);
+        TapStep(steps, LinKeSpeaker,
+            "（對你）" + StoryTextStyle.Em("別讓他替你做選擇"),
+            7);
+        ChoiceStep(steps, PlayerSpeaker,
+            "——",
+            "阻下阿潮", 8,
+            "沉默旁觀", 12,
+            "我也想看奇蹟", 12);
+        TapStep(steps, PlayerSpeaker,
+            "要證明去牌桌上 別動那盆花",
+            9);
+        TapStep(steps, AChaoSpeaker,
+            "……行 那就在牌桌上見",
+            10);
+        TapStep(steps, SelSpeaker,
+            "玫瑰是永恆的 只有" + StoryTextStyle.Em("外貌") + "會變 像" + StoryTextStyle.Hi("天氣") + " 像" + StoryTextStyle.Hi("牌局"),
+            18);
+        TapStep(steps, NarratorSpeaker,
+            "玫瑰的顏色在炭火裡一瞬間沒了 只剩細灰",
+            13);
+        TapStep(steps, AChaoSpeaker,
+            "看 什麼也沒有",
+            14);
+        TapStep(steps, SelSpeaker,
+            "這些曾是玫瑰的灰 " + StoryTextStyle.Em("在這裡") + " 不會再開花",
+            15);
+        TapStep(steps, AChaoSpeaker,
+            "……騙子",
+            16);
+        TapStep(steps, LinKeSpeaker,
+            "他錯了 但你若也只信眼睛 下一場會打得很難",
+            17);
+        TapStepEndPlot(steps, SelSpeaker,
+            "去牌桌上吧 若你仍願走這條路 " + StoryTextStyle.Em("不用向我證明") + " 分波對決在等你");
+        return steps;
+    }
+
+    /// <summary>B 段勝利後終幕：灰與一字「迎潮」。</summary>
+    public static List<MainPlotSceneController.PlotStep> BuildM13EpiloguePlotSteps()
+    {
+        var steps = new List<MainPlotSceneController.PlotStep>(8);
+        TapStep(steps, NarratorSpeaker,
+            "阿潮離去時沒有回頭 分波聲又慢了下來",
+            1);
+        TapStep(steps, SelSpeaker,
+            "你以為他看見的是空 其實他看見的是" + StoryTextStyle.Em("自己的急"),
+            2);
+        TapStep(steps, SelSpeaker,
+            "巴塞爾的醫生說我是騙子 或許他們對 或許我也騙自己 但我知道這是一條路",
+            3);
+        TapStep(steps, NarratorSpeaker,
+            "燈守將掌中細灰傾入另一掌 低聲一個字 " + StoryTextStyle.Em("迎潮"),
+            4);
+        TapStep(steps, NarratorSpeaker,
+            "灰燼裡再無玫瑰 但貴重品庫裡那道" + StoryTextStyle.Em("封印") + " 似乎亮了一下",
+            5);
+        TapStepEndPlot(steps, LinKeSpeaker,
+            "別問剛才那是不是魔法 問你" + StoryTextStyle.Hi("下一張牌") + "要怎麼出 按下回到遊戲進度");
         return steps;
     }
 

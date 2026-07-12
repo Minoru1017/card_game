@@ -208,8 +208,8 @@
       "region": "southwest_port",
       "isTutorial": false,
       "isBoss": false,
-      "x": 0.14,
-      "y": 0.27,
+      "x": 0.10,
+      "y": 0.36,
       "unlockRequiresAllOf": [
         "M-1-2"
       ],
@@ -225,7 +225,7 @@
       "isTutorial": false,
       "isBoss": false,
       "x": 0.10,
-      "y": 0.35,
+      "y": 0.44,
       "unlockRequiresAllOf": [
         "S-A-1"
       ],
@@ -240,8 +240,8 @@
       "region": "west_coast",
       "isTutorial": false,
       "isBoss": false,
-      "x": 0.16,
-      "y": 0.45,
+      "x": 0.115,
+      "y": 0.52,
       "unlockRequiresAllOf": [
         "S-A-2"
       ],
@@ -256,8 +256,8 @@
       "region": "west_shrine",
       "isTutorial": false,
       "isBoss": false,
-      "x": 0.24,
-      "y": 0.52,
+      "x": 0.10,
+      "y": 0.58,
       "unlockRequiresAllOf": [
         "S-A-3"
       ],

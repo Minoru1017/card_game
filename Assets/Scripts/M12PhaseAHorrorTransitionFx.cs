@@ -15,6 +15,12 @@ public static class M12PhaseAHorrorTransitionFx
 
     public static IEnumerator CoPlayWhiteFlash(Action onPeak = null)
     {
+        if (BattleAutoSimPlugin.IsRunning)
+        {
+            onPeak?.Invoke();
+            yield break;
+        }
+
         var root = new GameObject("M12HorrorWhiteFlashOverlay", typeof(RectTransform), typeof(CanvasGroup));
         var canvas = root.AddComponent<Canvas>();
         canvas.renderMode = RenderMode.ScreenSpaceOverlay;

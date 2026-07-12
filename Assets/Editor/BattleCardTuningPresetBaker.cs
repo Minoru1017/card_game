@@ -47,6 +47,9 @@ public static class BattleCardTuningPresetBaker
         Debug.Log($"BattleCardTuningPresetBaker: 已寫入「{BattleCardTuningPresetLibrary.ControlGroupDisplayName}」（全滑桿上限）→ {JsonAssetPath}");
     }
 
+    [MenuItem("Tools/Battle/Apply Card Tuning Preset 1 to Open Scene")]
+    public static void ApplyPreset1FlatMenu() => ApplyPreset1ToOpenScene();
+
     [MenuItem("Tools/Battle/Card Tuning/Apply Preset 1 (預設一) to Open Scene")]
     public static void ApplyPreset1ToOpenScene()
     {

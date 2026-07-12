@@ -47,3 +47,19 @@ MonoBehaviour:
     normalBeatsPerStep: 3
     decisiveMinTriplets: 5
     decisiveMaxTriplets: 20
+  - cdId: river_fork_wave
+    bpm: 100
+    firstDownbeatOffset: 0.2
+    gridMode: 0
+    decisivePerfectWindowMul: 0.82
+    decisiveGoodWindowMul: 0.85
+    decisiveTelegraphLeadMul: 0.7
+    bgmLoopStartSeconds: 0
+    bgmLoopLengthSeconds: 45.374695
+    basePerfectWindowMul: 1
+    baseGoodWindowMul: 1
+    baseTelegraphLeadMul: 1
+    closeToWinScoreMargin: 99
+    normalBeatsPerStep: 4
+    decisiveMinTriplets: 6
+    decisiveMaxTriplets: 24

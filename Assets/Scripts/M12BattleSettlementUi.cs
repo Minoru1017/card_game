@@ -7,7 +7,10 @@ using UnityEngine.UI;
 public sealed class M12BattleSettlementUi : MonoBehaviour
 {
     private const float PanelWidth = 640f;
-    private const float PanelHeight = 380f;
+    private const float PanelHeight = 480f;
+    private const float TitleBandHeight = 88f;
+    private const float FooterBandHeight = 112f;
+    private const float BodyHorizontalPad = 36f;
 
     private BattleSimulationManager _manager;
     private Transform _canvasRoot;
@@ -69,10 +72,35 @@ public sealed class M12BattleSettlementUi : MonoBehaviour
             yield break;
         }
 
+        if (ShouldRecordPhaseADefeat(result, out int slot))
+        {
+            M12SeawallPatrolProgressState.RecordPhaseADefeatAttempt(slot, out bool firstMemoUnlock);
+            if (firstMemoUnlock)
+            {
+                bool memoDismissed = false;
+                M12PhaseAExamMemoOverlay.Show(firstUnlockReveal: true, () => memoDismissed = true);
+                while (!memoDismissed)
+                    yield return null;
+            }
+        }
+
         ApplyContent(result);
         _overlayRoot.SetActive(true);
         _overlayRoot.transform.SetAsLastSibling();
         _showRoutine = null;
+    }
+
+    private static bool ShouldRecordPhaseADefeat(int result, out int slot)
+    {
+        slot = PlayerData.GetActivePlayerSlotOrDefault();
+        if (!BattleLaunchContext.IsM12TrioTutorialBattle)
+            return false;
+
+        bool won = result == 1;
+        if (won && M12TrioMasteryBattleTracker.QueryAllTrioSkillsTriggered())
+            return false;
+
+        return true;
     }
 
     private static void HideCoach()
@@ -86,6 +114,9 @@ public sealed class M12BattleSettlementUi : MonoBehaviour
     private void ApplyContent(int result)
     {
         ClearButtons();
+        ResetBodyPresentation();
+        if (_bodyText != null)
+            ApplyBodyRectLayout(_bodyText.rectTransform);
         bool won = result == 1;
         int slot = PlayerData.GetActivePlayerSlotOrDefault();
         bool phaseA = BattleLaunchContext.IsM12TrioTutorialBattle;
@@ -103,17 +134,14 @@ public sealed class M12BattleSettlementUi : MonoBehaviour
             if (won)
             {
                 _titleText.text = "勝利 · 戰技未達標";
-                _bodyText.text = M12TrioMasteryBattleTracker.BuildMissingSkillHint() +
-                                 "\n\n請重打階段 A";
-                CreateFooterButton("再試一次", true, OnClickRetry);
-                CreateFooterButton("返回地圖", false, OnClickReturnStory);
+                ApplyPhaseAIncompleteBody(won: true);
+                AddPhaseAIncompleteFooterButtons(slot);
                 return;
             }
 
             _titleText.text = "階段 A 落敗";
-            _bodyText.text = "再試一次或先回地圖";
-            CreateFooterButton("再試一次", true, OnClickRetry);
-            CreateFooterButton("返回地圖", false, OnClickReturnStory);
+            ApplyPhaseAIncompleteBody(won: false);
+            AddPhaseAIncompleteFooterButtons(slot);
             return;
         }
 
@@ -144,6 +172,42 @@ public sealed class M12BattleSettlementUi : MonoBehaviour
         _bodyText.text = "再試一次或先回地圖";
         CreateFooterButton("再試一次", true, OnClickRetry);
         CreateFooterButton("返回地圖", false, OnClickReturnStory);
+    }
+
+    private void ResetBodyPresentation()
+    {
+        if (_bodyText == null)
+            return;
+
+        _bodyText.richText = false;
+        _bodyText.alignment = TextAlignmentOptions.Center;
+        _bodyText.fontSize = 24f;
+        _bodyText.lineSpacing = 2f;
+    }
+
+    private void ApplyPhaseAIncompleteBody(bool won)
+    {
+        if (_bodyText == null)
+            return;
+
+        _bodyText.richText = true;
+        _bodyText.alignment = TextAlignmentOptions.TopLeft;
+        _bodyText.fontSize = 23f;
+        _bodyText.lineSpacing = 4f;
+        _bodyText.text = M12TrioMasteryBattleTracker.BuildPhaseAIncompleteSettlementBody(won);
+    }
+
+    private void AddPhaseAIncompleteFooterButtons(int slot)
+    {
+        if (M12SeawallPatrolProgressState.IsPhaseAExamMemoUnlocked(slot))
+            CreateFooterButton("段考备忘", false, OnClickShowExamMemo);
+        CreateFooterButton("再試一次", true, OnClickRetry);
+        CreateFooterButton("返回地圖", false, OnClickReturnStory);
+    }
+
+    private void OnClickShowExamMemo()
+    {
+        M12PhaseAExamMemoOverlay.Show(firstUnlockReveal: false, onDismiss: null);
     }
 
     private void OnClickPhaseAContinue()
@@ -216,15 +280,15 @@ public sealed class M12BattleSettlementUi : MonoBehaviour
         GameObject bodyGo = new GameObject("Body", typeof(RectTransform), typeof(TextMeshProUGUI));
         bodyGo.transform.SetParent(_panelRoot.transform, false);
         RectTransform bodyRt = bodyGo.GetComponent<RectTransform>();
-        bodyRt.anchorMin = new Vector2(0f, 0.28f);
-        bodyRt.anchorMax = new Vector2(1f, 0.82f);
-        bodyRt.offsetMin = new Vector2(36f, 0f);
-        bodyRt.offsetMax = new Vector2(-36f, 0f);
+        ApplyBodyRectLayout(bodyRt);
+        bodyGo.AddComponent<RectMask2D>();
         _bodyText = bodyGo.GetComponent<TextMeshProUGUI>();
-        _bodyText.fontSize = 26f;
-        _bodyText.alignment = TextAlignmentOptions.Center;
+        _bodyText.fontSize = 24f;
+        _bodyText.lineSpacing = 2f;
+        _bodyText.alignment = TextAlignmentOptions.Top;
         _bodyText.color = new Color(0.94f, 0.92f, 0.86f, 1f);
         _bodyText.enableWordWrapping = true;
+        _bodyText.overflowMode = TextOverflowModes.Overflow;
         ApplyFont(_bodyText);
 
         GameObject rowGo = new GameObject("Buttons", typeof(RectTransform), typeof(HorizontalLayoutGroup));
@@ -236,7 +300,7 @@ public sealed class M12BattleSettlementUi : MonoBehaviour
         _buttonRowRt.anchoredPosition = new Vector2(0f, 24f);
         _buttonRowRt.sizeDelta = new Vector2(-48f, 72f);
         HorizontalLayoutGroup hlg = rowGo.GetComponent<HorizontalLayoutGroup>();
-        hlg.spacing = 16f;
+        hlg.spacing = 12f;
         hlg.childAlignment = TextAnchor.MiddleCenter;
         hlg.childControlWidth = true;
         hlg.childControlHeight = true;
@@ -244,6 +308,14 @@ public sealed class M12BattleSettlementUi : MonoBehaviour
         hlg.childForceExpandHeight = true;
 
         _overlayRoot.SetActive(false);
+    }
+
+    private static void ApplyBodyRectLayout(RectTransform bodyRt)
+    {
+        bodyRt.anchorMin = Vector2.zero;
+        bodyRt.anchorMax = Vector2.one;
+        bodyRt.offsetMin = new Vector2(BodyHorizontalPad, FooterBandHeight);
+        bodyRt.offsetMax = new Vector2(-BodyHorizontalPad, -TitleBandHeight);
     }
 
     private void ClearButtons()
@@ -273,7 +345,7 @@ public sealed class M12BattleSettlementUi : MonoBehaviour
         textRt.offsetMax = Vector2.zero;
         TextMeshProUGUI tmp = textGo.GetComponent<TextMeshProUGUI>();
         tmp.text = label;
-        tmp.fontSize = 24f;
+        tmp.fontSize = 22f;
         tmp.alignment = TextAlignmentOptions.Center;
         tmp.color = Color.white;
         ApplyFont(tmp);

@@ -49,6 +49,32 @@ public static partial class BattleLaunchContext
         IsFreeBattle = false;
         IsM12TrioTutorialBattle = false;
         IsM12CoachPracticeBattle = true;
+        IsM13WeatherTutorialBattle = false;
+        IsM13RivalDuelBattle = false;
+        ReturnToStoryProgressAfterBattle = true;
+    }
+
+    public static void BeginM13WeatherTutorialBattleLaunch()
+    {
+        IsIntroTutorialBattle = false;
+        IsHarborTrainingGroundBattle = false;
+        IsFreeBattle = false;
+        IsM12TrioTutorialBattle = false;
+        IsM12CoachPracticeBattle = false;
+        IsM13WeatherTutorialBattle = true;
+        IsM13RivalDuelBattle = false;
+        ReturnToStoryProgressAfterBattle = true;
+    }
+
+    public static void BeginM13RivalDuelBattleLaunch()
+    {
+        IsIntroTutorialBattle = false;
+        IsHarborTrainingGroundBattle = false;
+        IsFreeBattle = false;
+        IsM12TrioTutorialBattle = false;
+        IsM12CoachPracticeBattle = false;
+        IsM13WeatherTutorialBattle = false;
+        IsM13RivalDuelBattle = true;
         ReturnToStoryProgressAfterBattle = true;
     }
 }

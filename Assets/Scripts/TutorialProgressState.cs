@@ -18,6 +18,22 @@ public static class TutorialProgressState
     private const string M12MidPatrolCompleteKey = "m12_mid_patrol_complete";
     private const string M12SealedSpellFoundKey = "m12_sealed_spell_found";
     private const string M12IntroSeenKey = "m12_intro_seen";
+    private const string M12PhaseADefeatCountKey = "m12_phase_a_defeat_count";
+    public const int M12PhaseAExamMemoUnlockDefeatCount = 2;
+    private const string M13OpeningSeenKey = "m13_opening_seen";
+    private const string M13RoseTrialSeenKey = "m13_rose_trial_seen";
+    private const string M13RoseIntactKey = "m13_rose_intact";
+    private const string M13RoseBurnedKey = "m13_rose_burned";
+    private const string M13PlayerDemandedMiracleKey = "m13_player_demanded_miracle";
+    private const string M13RiverForkClearedKey = "m13_river_fork_cleared";
+    private const string M13TideMarkGlimmerKey = "m13_tide_mark_glimmer";
+    private const string M13BirdDuelCompleteKey = "m13_bird_duel_complete";
+    private const string M13BirdDuelSkippedKey = "m13_bird_duel_skipped";
+    private const string M13BirdDuelSRankKey = "m13_bird_duel_s_rank";
+    private const string M13ForkStrollCompleteKey = "m13_fork_stroll_complete";
+    private const string M13ForkSteadyPathKey = "m13_fork_steady_path";
+    private const string M13PhaseACompleteKey = "m13_phase_a_complete";
+    private const string M13OpeningWeatherPickKey = "m13_opening_weather_pick";
     private const string AcademyGraduatedKey = "academy_intro_graduated";
 
     private const string PlotDonePrefix = "tutorial_plot_done_v1_slot_";
@@ -424,6 +440,19 @@ public static class TutorialProgressState
     public static void SetM12IntroSeen(int slot, bool seen = true) =>
         WriteCompleted(slot, M12IntroSeenKey, null, seen);
 
+    public static int GetM12PhaseADefeatCount(int slot) =>
+        ReadSlotCounter(slot, M12PhaseADefeatCountKey);
+
+    /// <summary>段考 A 未通關落敗累計（達 <see cref="M12PhaseAExamMemoUnlockDefeatCount"/> 解鎖段考备忘）。</summary>
+    public static int IncrementM12PhaseADefeatCount(int slot) =>
+        IncrementSlotCounter(slot, M12PhaseADefeatCountKey);
+
+    public static bool IsM12PhaseAExamMemoUnlocked(int slot) =>
+        GetM12PhaseADefeatCount(slot) >= M12PhaseAExamMemoUnlockDefeatCount;
+
+    public static void SetM12PhaseADefeatCount(int slot, int count) =>
+        WriteSlotCounter(slot, M12PhaseADefeatCountKey, count);
+
     public static bool IsM12PhaseAComplete(int slot) =>
         ReadCompleted(slot, M12PhaseACompleteKey, null);
 
@@ -460,6 +489,118 @@ public static class TutorialProgressState
     public static void SetM12SealedSpellFound(int slot, bool found = true) =>
         WriteCompleted(slot, M12SealedSpellFoundKey, null, found);
 
+    public static bool IsM13OpeningSeen(int slot) =>
+        ReadCompleted(slot, M13OpeningSeenKey, null);
+
+    public static void SetM13OpeningSeen(int slot, bool seen = true) =>
+        WriteCompleted(slot, M13OpeningSeenKey, null, seen);
+
+    public static bool IsM13RoseTrialSeen(int slot) =>
+        ReadCompleted(slot, M13RoseTrialSeenKey, null);
+
+    public static void SetM13RoseTrialSeen(int slot, bool seen = true) =>
+        WriteCompleted(slot, M13RoseTrialSeenKey, null, seen);
+
+    public static bool IsM13RoseIntact(int slot) =>
+        ReadCompleted(slot, M13RoseIntactKey, null);
+
+    public static void SetM13RoseIntact(int slot, bool intact = true)
+    {
+        WriteCompleted(slot, M13RoseIntactKey, null, intact);
+        if (intact)
+            WriteCompleted(slot, M13RoseBurnedKey, null, false);
+    }
+
+    public static bool IsM13RoseBurned(int slot) =>
+        ReadCompleted(slot, M13RoseBurnedKey, null);
+
+    public static void SetM13RoseBurned(int slot, bool burned = true)
+    {
+        WriteCompleted(slot, M13RoseBurnedKey, null, burned);
+        if (burned)
+            WriteCompleted(slot, M13RoseIntactKey, null, false);
+    }
+
+    public static bool IsM13PlayerDemandedMiracle(int slot) =>
+        ReadCompleted(slot, M13PlayerDemandedMiracleKey, null);
+
+    public static void SetM13PlayerDemandedMiracle(int slot, bool demanded = true) =>
+        WriteCompleted(slot, M13PlayerDemandedMiracleKey, null, demanded);
+
+    public static bool IsM13RiverForkCleared(int slot) =>
+        ReadCompleted(slot, M13RiverForkClearedKey, null);
+
+    public static void SetM13RiverForkCleared(int slot, bool cleared = true) =>
+        WriteCompleted(slot, M13RiverForkClearedKey, null, cleared);
+
+    public static bool IsM13TideMarkGlimmer(int slot) =>
+        ReadCompleted(slot, M13TideMarkGlimmerKey, null);
+
+    public static void SetM13TideMarkGlimmer(int slot, bool glimmer = true) =>
+        WriteCompleted(slot, M13TideMarkGlimmerKey, null, glimmer);
+
+    public static bool IsM13BirdDuelComplete(int slot) =>
+        ReadCompleted(slot, M13BirdDuelCompleteKey, null);
+
+    public static bool IsM13BirdDuelSkipped(int slot) =>
+        ReadCompleted(slot, M13BirdDuelSkippedKey, null);
+
+    public static bool IsM13BirdDuelSRank(int slot) =>
+        ReadCompleted(slot, M13BirdDuelSRankKey, null);
+
+    public static void SetM13BirdDuelComplete(int slot, bool skipped, bool sRank) =>
+        SetM13BirdDuelProgress(slot, complete: true, skipped, sRank);
+
+    public static void SetM13BirdDuelProgress(int slot, bool complete, bool skipped = false, bool sRank = false)
+    {
+        WriteCompleted(slot, M13BirdDuelCompleteKey, null, complete);
+        WriteCompleted(slot, M13BirdDuelSkippedKey, null, complete && skipped);
+        WriteCompleted(slot, M13BirdDuelSRankKey, null, complete && !skipped && sRank);
+    }
+
+    public static bool IsM13ForkStrollComplete(int slot) =>
+        ReadCompleted(slot, M13ForkStrollCompleteKey, null);
+
+    public static bool IsM13ForkSteadyPath(int slot) =>
+        ReadCompleted(slot, M13ForkSteadyPathKey, null);
+
+    public static bool IsM13PhaseAComplete(int slot) =>
+        ReadCompleted(slot, M13PhaseACompleteKey, null);
+
+    public static int ReadM13OpeningWeatherPick(int slot) =>
+        ReadSlotCounter(slot, M13OpeningWeatherPickKey);
+
+    public static void SetM13ForkStrollComplete(int slot, bool steadyPath) =>
+        SetM13ForkStrollProgress(slot, complete: true, steadyPath);
+
+    public static void SetM13ForkStrollProgress(int slot, bool complete, bool steadyPath = false)
+    {
+        WriteCompleted(slot, M13ForkStrollCompleteKey, null, complete);
+        WriteCompleted(slot, M13ForkSteadyPathKey, null, complete && steadyPath);
+    }
+
+    public static void SetM13PhaseAComplete(int slot, bool complete = true) =>
+        WriteCompleted(slot, M13PhaseACompleteKey, null, complete);
+
+    public static void SetM13OpeningWeatherPick(int slot, M13OpeningWeatherPick pick) =>
+        WriteSlotCounter(slot, M13OpeningWeatherPickKey, (int)pick);
+
+    /// <summary>重溫 1-3：清中段旗標，保留通關／潮印／S 評。</summary>
+    public static void ResetM13ReplayRunProgress(int slot)
+    {
+        WriteCompleted(slot, M13OpeningSeenKey, null, false);
+        WriteCompleted(slot, M13BirdDuelCompleteKey, null, false);
+        WriteCompleted(slot, M13BirdDuelSkippedKey, null, false);
+        WriteCompleted(slot, M13ForkStrollCompleteKey, null, false);
+        WriteCompleted(slot, M13ForkSteadyPathKey, null, false);
+        WriteCompleted(slot, M13PhaseACompleteKey, null, false);
+        WriteCompleted(slot, M13RoseTrialSeenKey, null, false);
+        WriteCompleted(slot, M13RoseIntactKey, null, false);
+        WriteCompleted(slot, M13RoseBurnedKey, null, false);
+        WriteCompleted(slot, M13PlayerDemandedMiracleKey, null, false);
+        WriteSlotCounter(slot, M13OpeningWeatherPickKey, 0);
+    }
+
     public static void SetTutorialPlotCompleted(int slot, bool completed = true) =>
         WriteCompleted(slot, PlotKey, PlotDonePrefix, completed);
 
@@ -487,6 +628,40 @@ public static class TutorialProgressState
     /// <summary>寫入 slot 旗標列。</summary>
     public static void WriteSlotFlag(int slot, string saveKey, bool value) =>
         WriteCompleted(slot, saveKey, null, value);
+
+    public static int ReadSlotCounter(int slot, string saveKey)
+    {
+        slot = Mathf.Clamp(slot, 1, PlayerData.MaxPlayerSlots);
+        if (!TryLoadSaveLines(out string[] rows))
+            return 0;
+
+        for (int i = 0; i < rows.Length; i++)
+        {
+            if (TryParseSlotFlagRow(rows[i], slot, saveKey, out int value))
+                return Mathf.Max(0, value);
+        }
+
+        return 0;
+    }
+
+    public static int IncrementSlotCounter(int slot, string saveKey)
+    {
+        int next = ReadSlotCounter(slot, saveKey) + 1;
+        WriteSlotCounter(slot, saveKey, next);
+        return next;
+    }
+
+    public static void WriteSlotCounter(int slot, string saveKey, int value)
+    {
+        slot = Mathf.Clamp(slot, 1, PlayerData.MaxPlayerSlots);
+        value = Mathf.Max(0, value);
+        string newRow = FormatSlotFlagCounterRow(slot, saveKey, value);
+        PlayerSaveCoordinator.UpsertSlotKeyedRow(
+            slot,
+            saveKey,
+            newRow,
+            row => TryParseSlotFlagRow(row, slot, saveKey, out _));
+    }
 
     private static bool ReadCompleted(int slot, string saveKey, string legacyPrefsPrefix)
     {
@@ -549,7 +724,10 @@ public static class TutorialProgressState
     }
 
     private static string FormatSlotFlagRow(int slot, string saveKey, bool completed) =>
-        $"slot,{slot},{saveKey},{(completed ? 1 : 0)}";
+        FormatSlotFlagCounterRow(slot, saveKey, completed ? 1 : 0);
+
+    private static string FormatSlotFlagCounterRow(int slot, string saveKey, int value) =>
+        $"slot,{slot},{saveKey},{value}";
 
     private static bool TryParseSlotFlagRow(string row, int slot, string saveKey, out int value)
     {

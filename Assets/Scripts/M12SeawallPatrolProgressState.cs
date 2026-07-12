@@ -86,4 +86,20 @@ public static class M12SeawallPatrolProgressState
     {
         TutorialProgressState.SetM12TrioMasteryCleared(slot, true);
     }
+
+    /// <summary>段考 A 未通關結算：累計落敗次數；回傳是否本次剛解鎖备忘。</summary>
+    public static bool RecordPhaseADefeatAttempt(int slot, out bool firstMemoUnlock)
+    {
+        slot = UnityEngine.Mathf.Clamp(slot, 1, PlayerData.MaxPlayerSlots);
+        firstMemoUnlock = false;
+        if (IsPhaseAComplete(slot))
+            return false;
+
+        int newCount = TutorialProgressState.IncrementM12PhaseADefeatCount(slot);
+        firstMemoUnlock = newCount == TutorialProgressState.M12PhaseAExamMemoUnlockDefeatCount;
+        return true;
+    }
+
+    public static bool IsPhaseAExamMemoUnlocked(int slot) =>
+        TutorialProgressState.IsM12PhaseAExamMemoUnlocked(slot);
 }

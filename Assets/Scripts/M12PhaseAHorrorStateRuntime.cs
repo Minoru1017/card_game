@@ -19,7 +19,7 @@ public static class M12PhaseAHorrorStateRuntime
     public static void ResetForNewBattle()
     {
         lastAppliedHorror = false;
-        roundSixTransitionSfxPlayed = false;
+        roundSixTransitionSfxPlayed = BattleAutoSimPlugin.IsRunning;
         M12PhaseAHorrorTextScrambleUi.SetActiveForBattle(false);
         if (!BattleLaunchContext.IsM12TrioTutorialBattle)
         {
@@ -46,6 +46,12 @@ public static class M12PhaseAHorrorStateRuntime
 
     public static void OnRoundAdvanced(int currentRound, bool battleOver)
     {
+        if (BattleAutoSimPlugin.IsRunning)
+        {
+            SyncAtmosphereStateWithoutPresentation(currentRound, battleOver);
+            return;
+        }
+
         M12PhaseAHorrorStateRunner runner = M12PhaseAHorrorStateRunner.EnsureInActiveBattleScene();
         if (runner != null)
             runner.QueueAtmosphereRefresh(currentRound, battleOver);
@@ -92,6 +98,9 @@ public static class M12PhaseAHorrorStateRuntime
 
     public static void ApplyHorrorAtmosphereImmediate()
     {
+        if (BattleAutoSimPlugin.IsRunning)
+            return;
+
         HarborTrainingBattleBackground.ApplyM12PhaseAHorrorBackground();
         ResolveMusicPlayer()?.PlayM12PhaseAHorrorBgm();
         M12PhaseAHorrorTextScrambleUi.SetActiveForBattle(true);
@@ -99,6 +108,9 @@ public static class M12PhaseAHorrorStateRuntime
 
     public static void ApplyNormalAtmosphereImmediate()
     {
+        if (BattleAutoSimPlugin.IsRunning)
+            return;
+
         HarborTrainingBattleBackground.ApplyClassroomBackground();
         ResolveMusicPlayer()?.PlayM12PhaseABattleBgm();
         M12PhaseAHorrorTextScrambleUi.SetActiveForBattle(false);
@@ -113,6 +125,16 @@ public static class M12PhaseAHorrorStateRuntime
             ApplyHorrorAtmosphereImmediate();
         else
             ApplyNormalAtmosphereImmediate();
+    }
+
+    /// <summary>批次模擬：同步恐怖狀態旗標，略過白閃／BGM／亂碼 UI（傷害凍結仍依 <see cref="IsHorrorActive"/>）。</summary>
+    internal static void SyncAtmosphereStateWithoutPresentation(int currentRound, bool battleOver)
+    {
+        if (!BattleLaunchContext.IsM12TrioTutorialBattle)
+            return;
+
+        lastAppliedHorror = IsHorrorActive(currentRound, battleOver);
+        M12PhaseAHorrorTextScrambleUi.SetActiveForBattle(false);
     }
 
     private static TutorialBattleBackgroundMusicPlayer ResolveMusicPlayer()

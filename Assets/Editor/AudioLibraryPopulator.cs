@@ -34,18 +34,23 @@ public static class AudioLibraryPopulator
 
         // BGM/SFX 實體檔在 Assets/Music/（不在 Resources），用 AssetDatabase 依資產路徑載入。
         AudioClip bgm = AssetDatabase.LoadAssetAtPath<AudioClip>(PlotBackgroundMusicPlayer.EnchantedValleyAssetPath);
+        AudioClip m12PlotBgm = AssetDatabase.LoadAssetAtPath<AudioClip>(PlotBackgroundMusicPlayer.M12SeawallPatrolPlotBgmAssetPath);
+        AudioClip m13PlotBgm = AssetDatabase.LoadAssetAtPath<AudioClip>(PlotBackgroundMusicPlayer.M13RiverForkPlotBgmAssetPath);
         AudioClip hallBgm = AssetDatabase.LoadAssetAtPath<AudioClip>(HallBackgroundMusicPlayer.WhatFloorAssetPath);
         AudioClip buildbeckBgm = AssetDatabase.LoadAssetAtPath<AudioClip>(BuildbeckBackgroundMusicPlayer.EtherealDreamsAssetPath);
         AudioClip cardStoreBgm = AssetDatabase.LoadAssetAtPath<AudioClip>(CardStoreBackgroundMusicPlayer.AdventuryMoodyAssetPath);
         AudioClip birdDuelBgm = AssetDatabase.LoadAssetAtPath<AudioClip>(FightingBirdGameSceneController.ComeAgainAssetPath);
         AudioClip courtMarchBgm = AssetDatabase.LoadAssetAtPath<AudioClip>(FightingBirdGameSceneController.StampedeAssetPath);
         AudioClip morningPrayerBgm = AssetDatabase.LoadAssetAtPath<AudioClip>(FightingBirdGameSceneController.MorningPrayerAssetPath);
+        AudioClip riverForkWaveBgm = AssetDatabase.LoadAssetAtPath<AudioClip>(FightingBirdGameSceneController.RiverForkWaveAssetPath);
         AudioClip birdDuelHitSfx = AssetDatabase.LoadAssetAtPath<AudioClip>(BirdDuelHitSfxBank.SourceAssetPath);
         AudioClip menuClick = AssetDatabase.LoadAssetAtPath<AudioClip>(PlotMenuClickSfx.MenuClickClipAssetPath);
         AudioClip typing = AssetDatabase.LoadAssetAtPath<AudioClip>(PlotDialogueTypewriterSfx.TypingClipAssetPath);
         AudioClip monsterCardAttack = AssetDatabase.LoadAssetAtPath<AudioClip>(BattleFieldMonsterAttackSfx.AssetPath);
         AudioClip monsterCardCounterattack = AssetDatabase.LoadAssetAtPath<AudioClip>(BattleFieldMonsterCounterattackSfx.AssetPath);
         library.EditorSetSingletons(bgm, menuClick, typing);
+        library.EditorSetM12PlotBgm(m12PlotBgm);
+        library.EditorSetM13PlotBgm(m13PlotBgm);
         library.EditorSetHallBgm(hallBgm);
         library.EditorSetBuildbeckBgm(buildbeckBgm);
         library.EditorSetCardStoreBgm(cardStoreBgm);
@@ -60,7 +65,8 @@ public static class AudioLibraryPopulator
         library.EditorSetBirdDuelCdBgms(new[]
         {
             new AudioLibrary.NamedAudioClip { id = "court_march", clip = courtMarchBgm },
-            new AudioLibrary.NamedAudioClip { id = BirdDuelRhythmChart.MorningPrayerCdId, clip = morningPrayerBgm }
+            new AudioLibrary.NamedAudioClip { id = BirdDuelRhythmChart.MorningPrayerCdId, clip = morningPrayerBgm },
+            new AudioLibrary.NamedAudioClip { id = BirdDuelRhythmChart.RiverForkWaveCdId, clip = riverForkWaveBgm }
         });
 
         EditorUtility.SetDirty(library);
@@ -69,9 +75,10 @@ public static class AudioLibraryPopulator
 
         Debug.Log(
             $"AudioLibraryPopulator: 填入 {voices.Length} 個 NPC 語音；" +
-            $"BGM={(bgm != null)}, HallBGM={(hallBgm != null)}, BuildbeckBGM={(buildbeckBgm != null)}, " +
+            $"BGM={(bgm != null)}, M12PlotBGM={(m12PlotBgm != null)}, M13PlotBGM={(m13PlotBgm != null)}, HallBGM={(hallBgm != null)}, BuildbeckBGM={(buildbeckBgm != null)}, " +
             $"CardStoreBGM={(cardStoreBgm != null)}, BirdDuelBGM={(birdDuelBgm != null)}, " +
-            $"CourtMarchBGM={(courtMarchBgm != null)}, MorningPrayerBGM={(morningPrayerBgm != null)}, BirdDuelHitSfx={(birdDuelHitSfx != null)}, " +
+            $"CourtMarchBGM={(courtMarchBgm != null)}, MorningPrayerBGM={(morningPrayerBgm != null)}, " +
+            $"RiverForkWaveBGM={(riverForkWaveBgm != null)}, BirdDuelHitSfx={(birdDuelHitSfx != null)}, " +
             $"MonsterCardAttack={(monsterCardAttack != null)}, MonsterCardCounterattack={(monsterCardCounterattack != null)}, " +
             $"MenuClick={(menuClick != null)}, Typing={(typing != null)} → {LibraryAssetPath}");
 

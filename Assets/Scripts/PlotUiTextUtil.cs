@@ -62,6 +62,17 @@ public static class PlotUiTextUtil
         tmp.ForceMeshUpdate(true, true);
     }
 
+    /// <summary>劇情選項按鈕：允許 StoryTextStyle 的 rich text 標籤。</summary>
+    public static void ApplyRichButtonLabel(TMP_Text tmp, string label, TMP_Text fontSource = null)
+    {
+        ApplyButtonLabel(tmp, label, fontSource);
+        if (tmp == null)
+            return;
+
+        tmp.richText = true;
+        tmp.ForceMeshUpdate(true, true);
+    }
+
     private static void ApplyFont(TMP_Text tmp, TMP_Text fontSource)
     {
         if (tmp == null) return;

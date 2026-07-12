@@ -82,6 +82,23 @@ public static class BattleFxColors
     public static readonly Color CastleFortressReduceLabelText = BattleUiColors.Hex("#F4F7FA");
     public static readonly Color CastleFortressLabelText = BattleUiColors.Hex("#D8E4EE");
 
+    // 戰位克制／被克
+    public static readonly Color CombatRoleAdvantageCore = BattleUiColors.Hex("#E8BB6A");
+    public static readonly Color CombatRoleAdvantageGlow = BattleUiColors.WithAlpha(CombatRoleAdvantageCore, 0.62f);
+    public static readonly Color CombatRoleAdvantageRing = BattleUiColors.WithAlpha(CombatRoleAdvantageCore, 0.78f);
+    public static readonly Color CombatRoleAdvantageLabelBg = BattleUiColors.WithAlpha(BattleUiColors.Hex("#1A1408"), 0.96f);
+    public static readonly Color CombatRoleAdvantageLabelBorder = BattleUiColors.Hex("#FFE8B8");
+    public static readonly Color CombatRoleAdvantageLabelText = BattleUiColors.Hex("#FFF8E8");
+    public static readonly Color CombatRoleAdvantageFlash = BattleUiColors.WithAlpha(CombatRoleAdvantageCore, 0.72f);
+
+    public static readonly Color CombatRoleDisadvantageCore = BattleUiColors.Hex("#8A7A9E");
+    public static readonly Color CombatRoleDisadvantageGlow = BattleUiColors.WithAlpha(CombatRoleDisadvantageCore, 0.48f);
+    public static readonly Color CombatRoleDisadvantageRing = BattleUiColors.WithAlpha(CombatRoleDisadvantageCore, 0.66f);
+    public static readonly Color CombatRoleDisadvantageLabelBg = BattleUiColors.WithAlpha(BattleUiColors.Hex("#120A18"), 0.96f);
+    public static readonly Color CombatRoleDisadvantageLabelBorder = BattleUiColors.Hex("#C8B8D8");
+    public static readonly Color CombatRoleDisadvantageLabelText = BattleUiColors.Hex("#E8E0F0");
+    public static readonly Color CombatRoleDisadvantageFlash = BattleUiColors.WithAlpha(CombatRoleDisadvantageCore, 0.58f);
+
     // §3.2 — weather base tints
     public static readonly Color WeatherHolyBase = BattleUiColors.WithAlpha(BattleUiColors.PanelMilk, 0.04f);
     public static readonly Color WeatherFogBase = BattleUiColors.WithAlpha(BattleUiColors.DeckTop, 0.10f);

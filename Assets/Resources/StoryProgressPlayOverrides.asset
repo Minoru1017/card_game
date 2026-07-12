@@ -1,0 +1,42 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f7c8e9a0b1d2436586970a1b2c3d4e5f, type: 3}
+  m_Name: StoryProgressPlayOverrides
+  m_EditorClassIdentifier: 
+  applyOnEnterPlayMode: 1
+  persistOverridesToSaveFile: 0
+  targetPlayerSlot: 0
+  harborCombatCleared: 1
+  seawallPatrol:
+    introSeen: 0
+    phaseAComplete: 0
+    phaseATrioMilitia: 0
+    phaseATrioQueen: 0
+    phaseATrioKing: 0
+    midPatrolComplete: 0
+    sealedSpellFound: 0
+    nodeCleared: 0
+    religiousLineRewardGranted: 0
+  riverFork:
+    openingSeen: 0
+    birdDuelComplete: 0
+    birdDuelSkipped: 0
+    birdDuelSRank: 0
+    forkStrollComplete: 0
+    forkPath: 0
+    phaseAComplete: 0
+    roseTrialSeen: 0
+    roseOutcome: 0
+    openingWeatherPickConfigured: 0
+    openingWeatherPick: 1
+    nodeCleared: 0
+    tideMarkGlimmer: 0

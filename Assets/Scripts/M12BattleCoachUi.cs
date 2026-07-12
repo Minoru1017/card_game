@@ -1,24 +1,24 @@
+using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
-using UnityEngine.UI;
 
-/// <summary>M-1-2 教練 UI（讀取 <see cref="M12BattleCoachCatalog"/>）；僅階段 B 加練，階段 A 段考不提示。</summary>
+/// <summary>M-1-2 教練 UI：林可姐浮動視窗先講克制概念，再帶領實戰練習（階段 A 段考不提示）。</summary>
 public sealed class M12BattleCoachUi : MonoBehaviour
 {
     private const float ReEvaluateIntervalSeconds = 1.35f;
-    private const float PanelLeftMarginPx = 80f;
 
     private BattleSimulationManager _manager;
+    private LinKeFloatingCoachPanel _panel;
     private Transform _canvasRoot;
     private TMP_FontAsset _preferredFont;
-    private GameObject _root;
-    private TMP_Text _bodyText;
-    private TMP_Text _speakerText;
-    private Image _portraitImage;
     private string _currentKey = string.Empty;
     private float _nextEvaluateUnscaled;
-    private bool _uiBuilt;
     private bool _eventsBound;
+    private bool _lessonComplete;
+    private bool _lessonStarted;
+    private int _lessonStepIndex;
+    private bool _wasPlayerTurn;
+    private readonly HashSet<string> _shownThisTurnWindow = new HashSet<string>();
 
     public static bool IsActiveForCurrentBattle =>
         BattleLaunchContext.IsM12CoachPracticeBattle;
@@ -31,6 +31,12 @@ public sealed class M12BattleCoachUi : MonoBehaviour
         _manager = manager;
         _canvasRoot = canvasRoot;
         _preferredFont = uiFont;
+        _lessonComplete = false;
+        _lessonStarted = false;
+        _lessonStepIndex = 0;
+        _wasPlayerTurn = false;
+        _shownThisTurnWindow.Clear();
+        EnsurePanel();
         if (_manager != null && !_eventsBound)
         {
             _manager.PlayerTurnActionWindowOpenedForPromptUi += OnPlayerTurnWindowOpened;
@@ -43,6 +49,8 @@ public sealed class M12BattleCoachUi : MonoBehaviour
 
     private void OnDestroy()
     {
+        if (_panel != null)
+            _panel.PanelAdvanceRequested -= OnLessonPanelAdvanceRequested;
         if (_eventsBound && _manager != null)
         {
             _manager.PlayerTurnActionWindowOpenedForPromptUi -= OnPlayerTurnWindowOpened;
@@ -56,19 +64,129 @@ public sealed class M12BattleCoachUi : MonoBehaviour
 
     private void Update()
     {
-        if (!IsActiveForCurrentBattle || _manager == null || BattleAutoSimPlugin.IsRunning)
+        if (!ShouldRun())
+            return;
+
+        _panel?.Tick(Time.unscaledDeltaTime);
+
+        if (_manager == null || _manager.IsBattleOver())
+            return;
+
+        if (_manager.IsOpeningPresentationInProgress() || BattleAutoSimPlugin.IsRunning)
+            return;
+
+        if (!_lessonComplete)
         {
-            if (_root != null) _root.SetActive(false);
+            TryBeginLesson();
             return;
         }
 
+        SyncDiscardLayout();
+        TrackPlayerTurnChanges();
+
+        if (!_manager.IsPlayerTurn())
+            return;
+
+        if (_manager.IsTurnSequenceInProgress() || _manager.IsSpellCastPresentationActive())
+            return;
+
         if (Time.unscaledTime >= _nextEvaluateUnscaled)
-            EvaluateHints();
+            EvaluatePracticeHints();
+    }
+
+    private bool ShouldRun()
+    {
+        if (!IsActiveForCurrentBattle || _manager == null || BattleAutoSimPlugin.IsRunning)
+        {
+            _panel?.Hide();
+            return false;
+        }
+
+        return true;
+    }
+
+    private void EnsurePanel()
+    {
+        if (_panel != null) return;
+        _panel = GetComponent<LinKeFloatingCoachPanel>();
+        if (_panel == null)
+            _panel = gameObject.AddComponent<LinKeFloatingCoachPanel>();
+        _panel.Initialize(_canvasRoot, _preferredFont, M12BattleCoachCatalog.SpeakerName);
+        _panel.PanelAdvanceRequested += OnLessonPanelAdvanceRequested;
+    }
+
+    private void TryBeginLesson()
+    {
+        if (_lessonStarted || _manager == null) return;
+        if (_manager.IsOpeningPresentationInProgress()) return;
+
+        _lessonStarted = true;
+        _panel.PanelClickMode = LinKeFloatingCoachPanel.ClickMode.TapToAdvance;
+        ShowCurrentLessonStep();
+    }
+
+    private void ShowCurrentLessonStep()
+    {
+        if (!M12BattleCoachCatalog.TryGetLessonStep(_lessonStepIndex, out _, out string message))
+            return;
+
+        _panel.ShowHint(message, forceExpand: true);
+    }
+
+    private void OnLessonPanelAdvanceRequested()
+    {
+        if (_lessonComplete || !_lessonStarted) return;
+        if (_panel.IsTypewriterActive) return;
+
+        _lessonStepIndex++;
+        if (_lessonStepIndex >= M12BattleCoachCatalog.LessonStepCount)
+        {
+            CompleteLesson();
+            return;
+        }
+
+        ShowCurrentLessonStep();
+    }
+
+    private void CompleteLesson()
+    {
+        _lessonComplete = true;
+        _panel.PanelClickMode = LinKeFloatingCoachPanel.ClickMode.ToggleExpand;
+        _panel.CollapsePanel();
+        _currentKey = string.Empty;
+        _shownThisTurnWindow.Clear();
+        ScheduleEvaluate(0.15f);
+    }
+
+    private void SyncDiscardLayout()
+    {
+        if (_panel == null || _manager == null) return;
+        bool discard = _manager.IsPlayerInDiscardSelection() || _manager.GetPlayerPendingDiscardCount() > 0;
+        _panel.SetDiscardPhaseActive(discard);
+    }
+
+    private void TrackPlayerTurnChanges()
+    {
+        bool isPlayerTurn = _manager.IsPlayerTurn();
+        if (isPlayerTurn == _wasPlayerTurn) return;
+
+        _wasPlayerTurn = isPlayerTurn;
+        if (isPlayerTurn)
+        {
+            _shownThisTurnWindow.Clear();
+            _currentKey = string.Empty;
+            ScheduleEvaluate(0.12f);
+        }
+        else
+        {
+            ShowPracticeHint("enemy_turn", "敵方在行動等他打完再輪到你", oncePerTurnWindow: false);
+        }
     }
 
     private void OnPlayerTurnWindowOpened()
     {
         _currentKey = string.Empty;
+        _shownThisTurnWindow.Clear();
         ScheduleEvaluate(0.12f);
     }
 
@@ -76,152 +194,52 @@ public sealed class M12BattleCoachUi : MonoBehaviour
 
     private void OnPlayerPressedEndTurn()
     {
-        if (_root != null) _root.SetActive(false);
+        _panel?.Hide();
     }
 
     private void OnBattleEnded(int result)
     {
-        if (_root != null) _root.SetActive(false);
+        _panel?.Hide();
     }
 
     public void HideForSettlement()
     {
-        if (_root != null) _root.SetActive(false);
+        _panel?.Hide();
     }
 
-    private void ScheduleEvaluate(float delay)
-    {
+    private void ScheduleEvaluate(float delay) =>
         _nextEvaluateUnscaled = Time.unscaledTime + Mathf.Max(0f, delay);
-    }
 
-    private void EvaluateHints()
+    private void EvaluatePracticeHints()
     {
         _nextEvaluateUnscaled = Time.unscaledTime + ReEvaluateIntervalSeconds;
         if (_manager == null || !_manager.IsPlayerTurn() || _manager.IsBattleOver())
             return;
 
         bool ok = M12BattleCoachCatalog.TryEvaluatePhaseB(_manager, out string key, out string message);
-
         if (!ok || string.IsNullOrWhiteSpace(message))
         {
-            if (_root != null) _root.SetActive(false);
+            _panel?.Hide();
             return;
         }
 
-        if (key == _currentKey && _root != null && _root.activeSelf)
+        bool forceExpand = key == "discard";
+        ShowPracticeHint(key, message, oncePerTurnWindow: true, forceExpand: forceExpand);
+    }
+
+    private void ShowPracticeHint(string key, string message, bool oncePerTurnWindow, bool forceExpand = false)
+    {
+        if (string.IsNullOrWhiteSpace(message)) return;
+        if (oncePerTurnWindow && _shownThisTurnWindow.Contains(key)) return;
+
+        EnsurePanel();
+        if (oncePerTurnWindow)
+            _shownThisTurnWindow.Add(key);
+
+        if (key == _currentKey && _panel.IsExpanded && _panel.IsTypewriterActive)
             return;
 
         _currentKey = key;
-        EnsureUi();
-        if (_root == null) return;
-        _root.SetActive(true);
-        _root.transform.SetAsLastSibling();
-        if (_speakerText != null)
-            _speakerText.text = M12BattleCoachCatalog.SpeakerName;
-        if (_bodyText != null)
-            _bodyText.text = message;
-    }
-
-    private void EnsureUi()
-    {
-        if (_uiBuilt || _canvasRoot == null)
-            return;
-
-        _uiBuilt = true;
-        _root = new GameObject("M12BattleCoach", typeof(RectTransform));
-        _root.transform.SetParent(_canvasRoot, false);
-        RectTransform panelRt = _root.GetComponent<RectTransform>();
-        panelRt.anchorMin = new Vector2(0f, 0.5f);
-        panelRt.anchorMax = new Vector2(0f, 0.5f);
-        panelRt.pivot = new Vector2(0f, 0.5f);
-        panelRt.anchoredPosition = new Vector2(PanelLeftMarginPx, 96f);
-        panelRt.sizeDelta = new Vector2(500f, 220f);
-
-        Image bg = _root.AddComponent<Image>();
-        bg.color = new Color(0.12f, 0.10f, 0.08f, 0.92f);
-        Outline outline = _root.AddComponent<Outline>();
-        outline.effectColor = new Color(0.97f, 0.85f, 0.47f, 0.95f);
-        outline.effectDistance = new Vector2(2f, -2f);
-
-        GameObject portraitFrameObj = new GameObject("PortraitFrame", typeof(RectTransform), typeof(Image), typeof(Outline));
-        portraitFrameObj.transform.SetParent(_root.transform, false);
-        RectTransform portraitFrameRt = portraitFrameObj.GetComponent<RectTransform>();
-        portraitFrameRt.anchorMin = new Vector2(0f, 0.5f);
-        portraitFrameRt.anchorMax = new Vector2(0f, 0.5f);
-        portraitFrameRt.pivot = new Vector2(0f, 0.5f);
-        portraitFrameRt.anchoredPosition = new Vector2(16f, 0f);
-        portraitFrameRt.sizeDelta = new Vector2(150f, 150f);
-        Image portraitFrameImg = portraitFrameObj.GetComponent<Image>();
-        portraitFrameImg.color = BattleUiColors.CoachPortraitMat;
-        portraitFrameImg.raycastTarget = false;
-        Outline portraitFrameOutline = portraitFrameObj.GetComponent<Outline>();
-        portraitFrameOutline.effectColor = BattleUiColors.CoachPortraitFrame;
-        portraitFrameOutline.effectDistance = new Vector2(2f, -2f);
-
-        GameObject portraitObj = new GameObject("Portrait", typeof(RectTransform), typeof(Image));
-        portraitObj.transform.SetParent(portraitFrameObj.transform, false);
-        RectTransform portraitRt = portraitObj.GetComponent<RectTransform>();
-        portraitRt.anchorMin = Vector2.zero;
-        portraitRt.anchorMax = Vector2.one;
-        portraitRt.offsetMin = new Vector2(4f, 4f);
-        portraitRt.offsetMax = new Vector2(-4f, -4f);
-        _portraitImage = portraitObj.GetComponent<Image>();
-        _portraitImage.color = Color.white;
-        Sprite portrait = HarborCombatCoachExpressionCatalog.ResolveNeutralOrFallback();
-        if (portrait != null)
-        {
-            _portraitImage.sprite = portrait;
-            _portraitImage.preserveAspect = true;
-        }
-
-        GameObject textCol = new GameObject("TextColumn", typeof(RectTransform));
-        textCol.transform.SetParent(_root.transform, false);
-        RectTransform textRt = textCol.GetComponent<RectTransform>();
-        textRt.anchorMin = new Vector2(0f, 0f);
-        textRt.anchorMax = new Vector2(1f, 1f);
-        textRt.offsetMin = new Vector2(180f, 16f);
-        textRt.offsetMax = new Vector2(-16f, -16f);
-
-        GameObject speakerGo = new GameObject("Speaker", typeof(RectTransform), typeof(TextMeshProUGUI));
-        speakerGo.transform.SetParent(textCol.transform, false);
-        RectTransform speakerRt = speakerGo.GetComponent<RectTransform>();
-        speakerRt.anchorMin = new Vector2(0f, 1f);
-        speakerRt.anchorMax = new Vector2(1f, 1f);
-        speakerRt.pivot = new Vector2(0f, 1f);
-        speakerRt.anchoredPosition = Vector2.zero;
-        speakerRt.sizeDelta = new Vector2(0f, 36f);
-        _speakerText = speakerGo.GetComponent<TextMeshProUGUI>();
-        _speakerText.fontSize = 26f;
-        _speakerText.fontStyle = FontStyles.Bold;
-        _speakerText.color = new Color(0.97f, 0.85f, 0.47f, 1f);
-        ApplyFont(_speakerText);
-
-        GameObject bodyGo = new GameObject("Body", typeof(RectTransform), typeof(TextMeshProUGUI));
-        bodyGo.transform.SetParent(textCol.transform, false);
-        RectTransform bodyRt = bodyGo.GetComponent<RectTransform>();
-        bodyRt.anchorMin = new Vector2(0f, 0f);
-        bodyRt.anchorMax = new Vector2(1f, 1f);
-        bodyRt.offsetMin = new Vector2(0f, 0f);
-        bodyRt.offsetMax = new Vector2(0f, -40f);
-        _bodyText = bodyGo.GetComponent<TextMeshProUGUI>();
-        _bodyText.fontSize = 24f;
-        _bodyText.color = new Color(0.95f, 0.93f, 0.88f, 1f);
-        _bodyText.enableWordWrapping = true;
-        ApplyFont(_bodyText);
-    }
-
-    private void ApplyFont(TMP_Text tmp)
-    {
-        if (tmp == null) return;
-        TMP_FontAsset font = _preferredFont ?? ResolveFont();
-        if (font != null)
-            tmp.font = font;
-    }
-
-    private static TMP_FontAsset ResolveFont()
-    {
-        TMP_FontAsset settings = SettingsUiFonts.ResolveParameterDetailsFont();
-        if (settings != null) return settings;
-        return BuildbeckUiFonts.ResolveBuildbeckButtonFont();
+        _panel.ShowHint(message, forceExpand);
     }
 }

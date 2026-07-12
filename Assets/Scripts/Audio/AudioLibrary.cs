@@ -29,6 +29,8 @@ public sealed class AudioLibrary : ScriptableObject
 
     [Header("Main Plot 單一音軌")]
     [SerializeField] private AudioClip plotBgm;
+    [SerializeField] private AudioClip m12PlotBgm;
+    [SerializeField] private AudioClip m13PlotBgm;
     [SerializeField] private AudioClip hallBgm;
     [SerializeField] private AudioClip buildbeckBgm;
     [SerializeField] private AudioClip cardStoreBgm;
@@ -43,6 +45,8 @@ public sealed class AudioLibrary : ScriptableObject
     [SerializeField] private NamedAudioClip[] birdDuelCdBgms = new NamedAudioClip[0];
 
     public AudioClip PlotBgm => plotBgm;
+    public AudioClip M12PlotBgm => m12PlotBgm;
+    public AudioClip M13PlotBgm => m13PlotBgm;
     public AudioClip HallBgm => hallBgm;
     public AudioClip BuildbeckBgm => buildbeckBgm;
     public AudioClip CardStoreBgm => cardStoreBgm;
@@ -156,6 +160,18 @@ public sealed class AudioLibrary : ScriptableObject
         plotBgm = bgm;
         menuClickSfx = menuClick;
         typingSfx = typing;
+    }
+
+    /// <summary>供 Editor 自動填表工具使用，請勿在執行期呼叫。</summary>
+    public void EditorSetM12PlotBgm(AudioClip bgm)
+    {
+        m12PlotBgm = bgm;
+    }
+
+    /// <summary>供 Editor 自動填表工具使用，請勿在執行期呼叫。</summary>
+    public void EditorSetM13PlotBgm(AudioClip bgm)
+    {
+        m13PlotBgm = bgm;
     }
 
     /// <summary>供 Editor 自動填表工具使用，請勿在執行期呼叫。</summary>

@@ -41,4 +41,16 @@ public static class StoryProgressBattleReturn
         M12PhaseDeckApplicator.ApplyPhaseBDeck();
         SceneLoader.LaunchM12PhaseBBattleDirect();
     }
+
+    public static void RetryM13PhaseABattle()
+    {
+        M13PhaseDeckApplicator.ApplyPhaseADeck();
+        SceneLoader.LaunchM13PhaseABattleDirect();
+    }
+
+    public static void RetryM13PhaseBBattle()
+    {
+        M13PhaseDeckApplicator.ApplyPhaseBDeck();
+        SceneLoader.LaunchM13PhaseBBattleDirect();
+    }
 }

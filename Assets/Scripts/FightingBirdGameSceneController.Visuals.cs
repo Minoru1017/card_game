@@ -238,8 +238,10 @@ public sealed partial class FightingBirdGameSceneController
             scoreFill.anchorMax = new Vector2(Mathf.Clamp01((float)score / scoreBarMax), 1f);
         if (insightFill != null)
             insightFill.anchorMax = new Vector2(Mathf.Clamp01((float)insight / insightBarMax), 1f);
-        if (scoreLabel != null) scoreLabel.text = $"分數 {score}";
-        if (insightLabel != null) insightLabel.text = $"看破 {insight}";
+        if (scoreLabel != null)
+            scoreLabel.text = m13StoryMode ? $"同頻 {score}" : $"分數 {score}";
+        if (insightLabel != null)
+            insightLabel.text = m13StoryMode ? $"聽波 {insight}" : $"看破 {insight}";
     }
 
     private static Color GestureColor(BirdGesture gesture)

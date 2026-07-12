@@ -22,6 +22,7 @@ MonoBehaviour:
   harborBayBackground: {fileID: 7635544513007904724, guid: 98d475c23bdfa884692c1197a89fa39e, type: 3}
   classroomBackground: {fileID: 1689218350021173170, guid: 27e3ddd06e7a74048878e89a6c1de28b, type: 3}
   classroomHorrorBackground: {fileID: -3118716471409650132, guid: 36ac9f5120be2db4c82a2c759a57656f, type: 3}
+  classroomCoachPracticeBackground: {fileID: 8605018466363746977, guid: 92da65686a1aa2d428c621e94cd69ab1, type: 3}
   battlePreviewPanel: {fileID: 7725769104599324719, guid: 0264243783b371346b79b739c14d58a1, type: 3}
   difficultyIntro: {fileID: 7523385733433441043, guid: a4d7782115db81341916a073e5c41300, type: 3}
   difficultyEasy: {fileID: -5798597686317507224, guid: cf8392f4793cec44e99465dd5af2a505, type: 3}

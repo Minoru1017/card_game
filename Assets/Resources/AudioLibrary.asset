@@ -74,6 +74,8 @@ MonoBehaviour:
   - id: 1-1_9
     clip: {fileID: 8300000, guid: 527aa6e06aae37f4dbbc2f202d327a3d, type: 3}
   plotBgm: {fileID: 8300000, guid: c8a2aceb289fe55488f1afc3ee6922ca, type: 3}
+  m12PlotBgm: {fileID: 8300000, guid: c97dbaa152c88f34d8d11dfcd78f700a, type: 3}
+  m13PlotBgm: {fileID: 8300000, guid: fe1ab17729b76824e95a24cddd94ec86, type: 3}
   hallBgm: {fileID: 8300000, guid: c36f1288221619e4dac3e8ce9a959450, type: 3}
   buildbeckBgm: {fileID: 8300000, guid: 501107cad9594654e90d3dbcf43664b8, type: 3}
   cardStoreBgm: {fileID: 8300000, guid: c0514e72bbb7ab043afa6b1e3cc8cd67, type: 3}
@@ -88,3 +90,5 @@ MonoBehaviour:
     clip: {fileID: 8300000, guid: 798a926c3312d464394a0e4dfa537ac8, type: 3}
   - id: morning_prayer
     clip: {fileID: 8300000, guid: c2853616855feb14b8a99fa49e73bf5e, type: 3}
+  - id: river_fork_wave
+    clip: {fileID: 8300000, guid: 6e5f927b2efb0234489e28e7f175df8b, type: 3}

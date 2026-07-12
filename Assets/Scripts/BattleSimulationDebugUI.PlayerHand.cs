@@ -177,6 +177,8 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
             if (display != null)
             {
                 display.SetCard(card);
+                display.SetCombatRoleBadgeVisible(
+                    card is MonsterCard && CombatRoleBattleRules.ShouldShowRoleOnHandMonster());
                 if (card is SpellCard && display.effectText != null)
                 {
                     display.effectText.gameObject.SetActive(false);
@@ -260,6 +262,8 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         if (display != null)
         {
             display.SetCard(card);
+            display.SetCombatRoleBadgeVisible(
+                card is MonsterCard && CombatRoleBattleRules.ShouldShowRoleOnHandMonster());
             HideSkillTextOnHandCardDisplay(display);
             ApplyPrefabVisualTuning(display);
             display.RefreshCardArtRarityOverlayExternal();

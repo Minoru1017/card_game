@@ -25,6 +25,7 @@ public sealed partial class FightingBirdGameSceneController : MonoBehaviour
     public const string ComeAgainAssetPath = "Assets/Music/feinsmecker - Come Again.mp3";
     public const string StampedeAssetPath = "Assets/Music/Risian - Stampede.mp3";
     public const string MorningPrayerAssetPath = "Assets/Music/Naama Zafran - Who Are You Hiding From.mp3";
+    public const string RiverForkWaveAssetPath = "Assets/Music/ES_Maracuja - Kristoffer Adamah.mp3";
 #endif
     public const string HitSfxAssetPath = BirdDuelHitSfxBank.SourceAssetPath;
 
@@ -97,6 +98,9 @@ public sealed partial class FightingBirdGameSceneController : MonoBehaviour
 
     // UI references.
     private TextMeshProUGUI subtitleText;
+    private TextMeshProUGUI titleText;
+    private TextMeshProUGUI m13ForkLeftBadge;
+    private TextMeshProUGUI m13ForkRightBadge;
     private Image opponentPad;
     private TextMeshProUGUI opponentGlyph;
     private TextMeshProUGUI opponentName;
@@ -131,6 +135,7 @@ public sealed partial class FightingBirdGameSceneController : MonoBehaviour
 
     // 戰前模式：由戰前預覽進入時為 true，結束後接續戰鬥（而非返回 hall）。
     private bool preBattleMode;
+    private bool m13StoryMode;
     private string lastIntelText = "";
     private BirdDuelResult lastResult = BirdDuelResult.Lose;
 
@@ -141,6 +146,7 @@ public sealed partial class FightingBirdGameSceneController : MonoBehaviour
     private Canvas overlayCanvas;
     private Transform overlayRoot;
     private GameObject resultOverlayRoot;
+    private GameObject replayButtonRoot;
     // 收束／假 scare 動畫快取：僅在數值變化時寫 transform，減少 Canvas 網格重建。
     private float shrinkAnimScale = -1f;
     private float shrinkAnimAlpha = -1f;
@@ -214,18 +220,24 @@ public sealed partial class FightingBirdGameSceneController : MonoBehaviour
 
     private void Awake()
     {
-        preBattleMode = PreBattleDuelContext.IsActive;
+        m13StoryMode = M13StoryDuelContext.IsActive;
+        preBattleMode = PreBattleDuelContext.IsActive && !m13StoryMode;
         ConfigurePerformance();
         npc = ResolveNpcProfile();
         EnsureEventSystem();
         BuildUi();
         SetupAudio();
         ComputeBarMaxes();
+        if (m13StoryMode)
+            ConfigureM13StoryUi();
         StartMatch();
     }
 
     private BirdDuelNpcProfile ResolveNpcProfile()
     {
+        if (m13StoryMode)
+            return M13BirdDuelNpcProfile.Create();
+
         if (PreBattleDuelContext.IsHarborTraining)
             return EnemyHeroCatalog.ResolveForHarbor().ToBirdDuelNpcProfile();
 

@@ -33,6 +33,8 @@
 | **戰前預覽謎題** | `BATTLE_PREVIEW_PUZZLE_INDEX.md` | **已停用**（PZ 謎題）；預覽 modal 仍用 | 程式、美術 | `SceneLoader.BattlePreview.cs` | 謎題解鎖已由鬥鳥取代；港灣預覽敘事（見待定 §ART） |
 | **鬥鳥暖身賽** | `Docs/鬥鳥手勢小遊戲企劃.md` | **定案** | 企劃、程式 | `FightingBirdGameSceneController.*`、`BirdDuelCore`、`SceneLoader.BirdDuel`、`BirdDuelRhythmSync` | CD Phase1 實裝見待定 §BD-CD |
 | **卡牌熟練度** | `CARD_PROFICIENCY_GDD.md` | 部分定案（v1 暫採） | 企劃 | `proficiency` CSV 鍵、`MonsterSkillRegistry` | §7 八項待決；彙總見待定 §PROF |
+| **卡牌戰鬥屬性** | `CARD_ATTRIBUTES_GDD.md` | **定案方向**（v1 四屬） | 企劃、程式 | `CardList.csv`（規劃 `combat_role`） | 元素 v1 場地化；§CARD-ATTR |
+| **卡牌合成／大牌** | —（觀望） | **觀望** | 企劃 | — | 見待定 §CARD-SYN |
 | **單卡戰技文案** | `卡牌技能階段式揭露.md` | 草案 | 企劃 | `MonsterSkillRegistry` | 逐卡填表進度 |
 | **牌組存檔** | `DECK_SAVE_IMPLEMENTATION.md` | **定案**（2026-06 牌組名稱驗收） | 程式 | `PlayerDeckSlotNameStorage`、`PlayerData`、`DeckManager` | 驗收：[`Docs/DECK_SLOT_NAME_BUG_CHECKLIST.md`](Docs/DECK_SLOT_NAME_BUG_CHECKLIST.md) |
 | **大地圖節點文案** | `StoryProgressNodeDatabase.json` + `StoryProgressLevelCopy.cs` | 部分定案 | 程式 | `StoryProgressWorldMapRuntime.cs` | 節點點擊→進關流程（見待定 §MAP） |
@@ -71,6 +73,7 @@
 | P0 | ~~修訂 `STORY_PROGRESS_WORLDVIEW.md` §三、§七~~ | ✅ 2026-06-21 對齊 GDD §2.3 |
 | P0 | `LEVEL_DESIGN` 補港灣三難度數值表或「同配置僅標籤」聲明 | §L1-1-DIFF |
 | P1 | `LEVEL_DESIGN_M-1-2.md`（或 GDD 第二章） | §L1-2 |
+| P1 | **卡牌戰鬥屬性 v1** 實作（CSV + 克制 + 入門關關閉） | §CARD-ATTR |
 | P1 | 大地圖「點擊節點 → 進關」流程圖 | §MAP |
 | P2 | 舊存檔遷移說明 | §SAVE |
 

@@ -10,6 +10,8 @@ public static partial class BattleLaunchContext
     public static EnemyAiPlayStyle FreeBattleAiStyle { get; private set; } = EnemyAiPlayStyle.Balanced;
     public static bool IsM12TrioTutorialBattle { get; private set; }
     public static bool IsM12CoachPracticeBattle { get; private set; }
+    public static bool IsM13WeatherTutorialBattle { get; private set; }
+    public static bool IsM13RivalDuelBattle { get; private set; }
     public static string EnemyHeroId { get; private set; }
     public static string EnemyHeroDisplayName { get; private set; }
 
@@ -49,6 +51,8 @@ public static partial class BattleLaunchContext
         FreeBattleAiStyle = EnemyAiPlayStyle.Balanced;
         IsM12TrioTutorialBattle = false;
         IsM12CoachPracticeBattle = false;
+        IsM13WeatherTutorialBattle = false;
+        IsM13RivalDuelBattle = false;
         EnemyHeroId = null;
         EnemyHeroDisplayName = null;
     }

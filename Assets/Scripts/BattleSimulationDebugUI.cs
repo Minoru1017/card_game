@@ -12,7 +12,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
     //    BattleSimulationDebugUI.TurnBanner.cs — 回合橫幅、閒置提示、手牌按下通知
     //    BattleSimulationDebugUI.WeatherUiBuild.cs — 天氣全螢幕 FX 圖層建構
     //    BattleSimulationDebugUI.WeatherRuntime.cs — 天氣動畫迴圈、預報 overlay
-    //    BattleSimulationDebugUI.Settlement.cs — 結算面板、熟練度、凍結截圖
+    //    BattleSimulationDebugUI.CombatRoleFx.cs — 戰位克制／被克標籤與光環
     //    (+ FieldCards, PlayerHand, Pause, OpeningRoll, BattleHistory, FX partials)
     // A) Core debug UI lifecycle (legacy):
     //    - Start()/Update() orchestration, panel visibility, input lock, pause flow.
@@ -309,8 +309,11 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         EnsureHarborCombatCoach(canvas2);
         EnsureM12BattleCoach(canvas2);
         EnsureM12BattleMissionBar(canvas2);
+        EnsureM13BattleCoach(canvas2);
+        EnsureM13BattleMissionBar(canvas2);
         EnsureTutorialBattleSettlement(canvas2);
         EnsureM12BattleSettlement(canvas2);
+        EnsureM13BattleSettlement(canvas2);
         SyncHandUiIfBattleAlreadyStarted();
 
         BattleAutoSimPlugin.Started += OnBatchWinRateSimStarted;
@@ -759,11 +762,35 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         missionBar.Initialize(battleManager, canvasRoot, sharedUIFont);
     }
 
+    private void EnsureM13BattleCoach(Transform canvasRoot)
+    {
+        if (!M13BattleCoachUi.IsActiveForCurrentBattle) return;
+        M13BattleCoachUi coach = GetComponent<M13BattleCoachUi>();
+        if (coach == null) coach = gameObject.AddComponent<M13BattleCoachUi>();
+        coach.Initialize(battleManager, canvasRoot, sharedUIFont);
+    }
+
+    private void EnsureM13BattleMissionBar(Transform canvasRoot)
+    {
+        if (!M13BattleMissionBarUi.IsActiveForCurrentBattle) return;
+        M13BattleMissionBarUi missionBar = GetComponent<M13BattleMissionBarUi>();
+        if (missionBar == null) missionBar = gameObject.AddComponent<M13BattleMissionBarUi>();
+        missionBar.Initialize(battleManager, canvasRoot, sharedUIFont);
+    }
+
     private void EnsureM12BattleSettlement(Transform canvasRoot)
     {
         if (!M12BattleSettlementUi.IsActiveForCurrentBattle) return;
         M12BattleSettlementUi settlement = GetComponent<M12BattleSettlementUi>();
         if (settlement == null) settlement = gameObject.AddComponent<M12BattleSettlementUi>();
+        settlement.Initialize(battleManager, canvasRoot, sharedUIFont);
+    }
+
+    private void EnsureM13BattleSettlement(Transform canvasRoot)
+    {
+        if (!M13BattleSettlementUi.IsActiveForCurrentBattle) return;
+        M13BattleSettlementUi settlement = GetComponent<M13BattleSettlementUi>();
+        if (settlement == null) settlement = gameObject.AddComponent<M13BattleSettlementUi>();
         settlement.Initialize(battleManager, canvasRoot, sharedUIFont);
     }
 
@@ -2175,6 +2202,8 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         {
             bool defenderIsPlayer = !attackerIsPlayer;
             GameObject targetObj = ResolveFieldMonsterVisualForFx(defenderIsPlayer);
+            GameObject fxAnchor = attackerObj ?? ResolveFieldMonsterVisualForFx(attackerIsPlayer);
+            TryStartCombatRoleMatchupFx(fxAnchor, attackData.attackerHitMatchup);
             if (targetObj != null)
             {
                 // First show defender getting hit, then add a pause before counter-hit feedback.
@@ -2214,7 +2243,8 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
                             counterTarget,
                             attackData.counterDamage,
                             hitFxDur,
-                            counterFromPlayer));
+                            counterFromPlayer,
+                            attackData.counterHitMatchup));
                     }
                 }
             }
@@ -2545,7 +2575,8 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         GameObject counterTargetObj,
         int counterDamage,
         float hitFxDur,
-        bool counterFromPlayer)
+        bool counterFromPlayer,
+        CombatRoleMatchup counterMatchup = CombatRoleMatchup.Neutral)
     {
         if (counterAttackerObj == null) yield break;
         RectTransform counterRt = counterAttackerObj.GetComponent<RectTransform>();
@@ -2561,6 +2592,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         Vector2 microJab = counterIsPlayer ? new Vector2(16f, 6f) : new Vector2(-16f, 6f);
 
         StartCoroutine(PlayCounterAttackLabel(counterAttackerObj, counterFromPlayer));
+        TryStartCombatRoleMatchupFx(counterAttackerObj, counterMatchup);
 
         const float windUpDur = 0.07f;
         float t = 0f;
@@ -3297,6 +3329,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
             handTooltipSubtitleTmp.gameObject.SetActive(false);
         if (handTooltipBodyTmp != null)
             handTooltipBodyTmp.gameObject.SetActive(false);
+        HideHandTooltipAttributeTags();
         tooltipText.gameObject.SetActive(true);
 
         Image tipBg = tooltipPanel.GetComponent<Image>();
@@ -3339,6 +3372,8 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
             handTooltipBodyTmp.text = model.bodyRich ?? string.Empty;
         }
 
+        RefreshHandTooltipAttributeTags(model.attributeTags);
+
         Image tipBg = tooltipPanel.GetComponent<Image>();
         if (tipBg != null) tipBg.color = new Color(0.1f, 0.09f, 0.12f, HandTooltipBackgroundAlpha);
 
@@ -3369,6 +3404,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
     private void HideTooltip()
     {
         if (tooltipPanel != null) tooltipPanel.gameObject.SetActive(false);
+        HideHandTooltipAttributeTags();
         RestoreRaisedCardLayer();
     }
 
@@ -3385,6 +3421,8 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
             handTooltipTitleTmp = null;
             handTooltipSubtitleTmp = null;
             handTooltipBodyTmp = null;
+            handTooltipTagRowRt = null;
+            handTooltipTagChipPool.Clear();
         }
 
         if (tooltipPanel == null)
@@ -3420,6 +3458,9 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         handTooltipBodyTmp = CreateHandTooltipTextBlock(
             "Body", tooltipPanel, font, HandTooltipBodyFontSize, FontStyles.Normal,
             new Color(0.9f, 0.93f, 0.97f, 1f), padH, bodyTop, 0f, padBottom);
+
+        EnsureHandTooltipTagRow();
+        ApplyHandTooltipBodyTopInset(CalculateHandTooltipBodyTopInset(false));
 
         RectTransform bodyRt = handTooltipBodyTmp.rectTransform;
         bodyRt.anchorMin = Vector2.zero;

@@ -51,7 +51,7 @@ public class CardStore : MonoBehaviour
             }
             else if (rowArray[0] == "monster")
             {
-                // New: monster,id,nameZh,nameEn,rarity,atk,hp[,artResourcePath]
+                // New: monster,id,nameZh,nameEn,rarity,atk,hp[,combat_role][,artResourcePath]
                 // Legacy with EN: monster,id,nameZh,nameEn,atk,hp[,art]
                 // Legacy no EN: monster,id,nameZh,atk,hp[,art]
                 if (rowArray.Length < 5) continue;
@@ -71,7 +71,6 @@ public class CardStore : MonoBehaviour
                 {
                     nameEn = rowArray[3].Trim();
                     rarity = parsedRarityAt4;
-                    if (rowArray.Length >= 8) artPath = rowArray[7].Trim();
                 }
                 else if (rowArray.Length >= 6 &&
                          int.TryParse(rowArray[4].Trim(), out atk) &&
@@ -90,6 +89,17 @@ public class CardStore : MonoBehaviour
                 MonsterCard monsterCard = new MonsterCard(id, name, atk, health);
                 monsterCard.cardNameEnglish = nameEn;
                 monsterCard.rarity = rarity;
+                if (col4IsRarity && rowArray.Length >= 8 &&
+                    CombatRoleUtility.TryParse(rowArray[7].Trim(), out CombatRole parsedRole))
+                {
+                    monsterCard.combatRole = parsedRole;
+                    if (rowArray.Length >= 9) artPath = rowArray[8].Trim();
+                }
+                else if (col4IsRarity && rowArray.Length >= 7 &&
+                         !CombatRoleUtility.TryParse(rowArray[7].Trim(), out _))
+                {
+                    artPath = rowArray[7].Trim();
+                }
                 ApplyCardArtwork(monsterCard, artPath);
                 cardList.Add(monsterCard);
             }

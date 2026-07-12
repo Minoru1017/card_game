@@ -29,6 +29,7 @@ public sealed class UiSpriteLibrary : ScriptableObject
     [SerializeField] private Sprite harborBayBackground;
     [SerializeField] private Sprite classroomBackground;
     [SerializeField] private Sprite classroomHorrorBackground;
+    [SerializeField] private Sprite classroomCoachPracticeBackground;
     [SerializeField] private Sprite battlePreviewPanel;
 
     [Header("難度分級圖")]
@@ -73,6 +74,8 @@ public sealed class UiSpriteLibrary : ScriptableObject
     public Sprite ClassroomBackground => classroomBackground;
     /// <summary>教室恐怖背景（Classroom_FR）；M-1-2 階段 A 段考恐怖狀態。</summary>
     public Sprite ClassroomHorrorBackground => classroomHorrorBackground;
+    /// <summary>教室加練背景（Classroom_DA）；M-1-2 階段 B 教練實戰。</summary>
+    public Sprite ClassroomCoachPracticeBackground => classroomCoachPracticeBackground;
     public Sprite BattlePreviewPanel => battlePreviewPanel;
     /// <summary>「You will die」致死預警全屏圖示；白色線稿，需搭配暗色底顯示。</summary>
     public Sprite YouWillDieIcon => youWillDieIcon;
@@ -188,12 +191,18 @@ public sealed class UiSpriteLibrary : ScriptableObject
     }
 
     /// <summary>供 Editor 填表工具使用，請勿在執行期呼叫。</summary>
-    public void EditorSetBattleScene(Sprite harborBay, Sprite previewPanel, Sprite classroom, Sprite classroomHorror = null)
+    public void EditorSetBattleScene(
+        Sprite harborBay,
+        Sprite previewPanel,
+        Sprite classroom,
+        Sprite classroomHorror = null,
+        Sprite classroomCoach = null)
     {
         harborBayBackground = harborBay;
         battlePreviewPanel = previewPanel;
         classroomBackground = classroom;
         classroomHorrorBackground = classroomHorror;
+        classroomCoachPracticeBackground = classroomCoach;
     }
 
     /// <summary>供 Editor 填表工具使用，請勿在執行期呼叫。</summary>

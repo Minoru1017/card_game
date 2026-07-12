@@ -137,6 +137,19 @@ public class StoryProgressSceneController : MonoBehaviour
         RefreshPresentation();
         ScheduleDeferredBackButtonLayout();
         StartCoroutine(DeferredRefreshChapterMapStatus());
+        StartCoroutine(CoTryContinueM13AfterBirdDuel());
+    }
+
+    private System.Collections.IEnumerator CoTryContinueM13AfterBirdDuel()
+    {
+        yield return null;
+        if (!StoryProgressSession.TryConsumeM13ContinueAfterBirdDuel())
+            yield break;
+
+        if (!M13RiverForkFlow.CanEnterFromStoryProgress(PlayerData.GetActivePlayerSlotOrDefault()))
+            yield break;
+
+        M13RiverForkFlow.ContinueAfterBirdDuel();
     }
 
     private void OnEnable()
@@ -235,6 +248,15 @@ public class StoryProgressSceneController : MonoBehaviour
             return;
         }
 
+        if (string.Equals(selectedNode, StoryProgressSession.RiverForkNodeId, System.StringComparison.OrdinalIgnoreCase))
+        {
+            if (M13RiverForkFlow.CanEnterFromStoryProgress(slot))
+                M13RiverForkFlow.LaunchFromStoryProgress();
+            else
+                Debug.LogWarning("StoryProgressSceneController: M-1-3 locked — clear M-1-2 first.");
+            return;
+        }
+
         if (TutorialProgressState.IsAcademyIntroGraduated(slot))
         {
             // 已畢業走港灣實戰：一樣先播進關演出，黑幕後開啟難度預覽。
@@ -287,28 +309,58 @@ public class StoryProgressSceneController : MonoBehaviour
         string selectedNode = StoryProgressWorldMapRuntime.SelectedStageNodeId;
         bool isM12Selected = string.Equals(selectedNode, StoryProgressSession.SeawallPatrolNodeId,
             System.StringComparison.OrdinalIgnoreCase);
+        bool isM13Selected = string.Equals(selectedNode, StoryProgressSession.RiverForkNodeId,
+            System.StringComparison.OrdinalIgnoreCase);
+        bool isStoryStageSelected = isM12Selected || isM13Selected;
         bool canEnterM12 = M12SeawallPatrolFlow.CanEnterFromStoryProgress(slot);
+        bool canEnterM13 = M13RiverForkFlow.CanEnterFromStoryProgress(slot);
 
         if (scenarioRewardsTmp == null)
             scenarioRewardsTmp = FindFooterRewardsTmp();
         string footerRewards = null;
         if (scenarioRewardsTmp != null)
         {
-            footerRewards = isM12Selected
-                ? StoryProgressLevelCopyM12.BuildScenarioRewards(cardStore, slot)
-                : StoryProgressLevelCopy.BuildScenarioRewards(cardStore);
+            if (isM12Selected)
+                footerRewards = StoryProgressLevelCopyM12.BuildScenarioRewards(cardStore, slot);
+            else if (isM13Selected)
+                footerRewards = StoryProgressLevelCopyM13.BuildScenarioRewards(cardStore, slot);
+            else
+                footerRewards = StoryProgressLevelCopy.BuildScenarioRewards(cardStore);
         }
 
         if (enterStageButtonLabel != null)
         {
-            string enterLabel = isM12Selected
-                ? StoryProgressLevelCopyM12.ResolveEnterButtonLabel(slot)
-                : (introGraduated ? "挑戰港灣訓練場" : "進入關卡");
+            string enterLabel;
+            if (isM12Selected)
+                enterLabel = StoryProgressLevelCopyM12.ResolveEnterButtonLabel(slot);
+            else if (isM13Selected)
+                enterLabel = StoryProgressLevelCopyM13.ResolveEnterButtonLabel(slot);
+            else
+                enterLabel = introGraduated ? "挑戰港灣訓練場" : "進入關卡";
             PlotUiTextUtil.ApplyButtonLabel(enterStageButtonLabel, enterLabel, ResolveUiFontSource());
         }
 
         if (enterStageButton != null)
-            enterStageButton.interactable = !isM12Selected || canEnterM12;
+        {
+            if (isM12Selected)
+                enterStageButton.interactable = canEnterM12;
+            else if (isM13Selected)
+                enterStageButton.interactable = canEnterM13;
+            else
+                enterStageButton.interactable = true;
+        }
+
+        if (scenarioPreviewTmp != null)
+        {
+            string introText;
+            if (isM12Selected)
+                introText = StoryProgressLevelCopyM12.BuildScenarioIntro(slot);
+            else if (isM13Selected)
+                introText = StoryProgressLevelCopyM13.BuildScenarioIntro(slot);
+            else
+                introText = StoryProgressLevelCopy.BuildScenarioIntro(introGraduated);
+            ApplyScenarioIntroText(introText);
+        }
 
         if (introGraduated)
         {
@@ -355,13 +407,22 @@ public class StoryProgressSceneController : MonoBehaviour
             }
         }
 
-        ApplyFooterActionButtonLayout(introGraduated, isM12Selected);
+        ApplyFooterActionButtonLayout(introGraduated, isStoryStageSelected);
         if (scenarioRewardsTmp != null && !string.IsNullOrEmpty(footerRewards))
             ApplyFooterRewardsText(scenarioRewardsTmp, footerRewards);
 
         ApplyResponsiveRightDockLayout();
         ApplyRightDetailPanelThemeAndLayout();
         ApplyResponsiveRightDockTextScale();
+
+        if (levelPanelTitleTmp != null && isStoryStageSelected)
+        {
+            levelPanelTitleTmp.richText = true;
+            levelPanelTitleTmp.text = isM13Selected
+                ? StoryProgressLevelCopyM13.LevelTitle
+                : StoryProgressLevelCopyM12.LevelTitle;
+            levelPanelTitleTmp.ForceMeshUpdate(true, true);
+        }
     }
 
     private void ApplyResponsiveRightDockLayout()
@@ -691,7 +752,18 @@ public class StoryProgressSceneController : MonoBehaviour
             scenarioIntroScrollRect.verticalNormalizedPosition = 1f;
     }
 
-    private void ApplyFooterActionButtonLayout(bool tutorialComplete, bool isM12Selected)
+    private void ApplyScenarioIntroText(string richText)
+    {
+        if (scenarioPreviewTmp == null || string.IsNullOrEmpty(richText))
+            return;
+
+        scenarioPreviewTmp.richText = true;
+        scenarioPreviewTmp.text = richText;
+        EnsureScenarioIntroScroll();
+        SyncScenarioIntroScrollContentHeight();
+    }
+
+    private void ApplyFooterActionButtonLayout(bool tutorialComplete, bool isStoryStageSelected)
     {
         Transform footerParent = ResolveFooterPanelTransform();
         if (footerParent == null || enterStageButton == null) return;
@@ -708,7 +780,7 @@ public class StoryProgressSceneController : MonoBehaviour
         if (layout != null)
             layout.spacing = buttonSpacing;
 
-        if (isM12Selected)
+        if (isStoryStageSelected)
         {
             if (replayIntroButton != null)
                 replayIntroButton.gameObject.SetActive(false);

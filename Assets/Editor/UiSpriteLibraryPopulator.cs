@@ -53,7 +53,8 @@ public static class UiSpriteLibraryPopulator
         Sprite previewPanel = LoadPreviewPanelSprite(BattlePreviewPanelPath);
         Sprite classroom = LoadSpriteFromAssetPath(ClassroomAssetPath);
         Sprite classroomHorror = LoadSpriteFromAssetPath(ClassroomHorrorAssetPath);
-        library.EditorSetBattleScene(harborBay, previewPanel, classroom, classroomHorror);
+        Sprite classroomCoach = LoadSpriteFromAssetPath(ClassroomCoachAssetPath);
+        library.EditorSetBattleScene(harborBay, previewPanel, classroom, classroomHorror, classroomCoach);
 
         Sprite dIntro = LoadSprite(DifficultyRoot + "/Basics");
         Sprite dEasy = LoadSprite(DifficultyRoot + "/Easy");
@@ -90,7 +91,7 @@ public static class UiSpriteLibraryPopulator
             $"serious={serious != null}, encourage={encourage != null}), return={returnButton != null}, " +
             $"battlePause={battlePauseButton != null}, " +
             $"basePlate={basePlate != null}, " +
-            $"harborBay={harborBay != null}, previewPanel={previewPanel != null}, classroom={classroom != null}, classroomHorror={classroomHorror != null}, " +
+            $"harborBay={harborBay != null}, previewPanel={previewPanel != null}, classroom={classroom != null}, classroomHorror={classroomHorror != null}, classroomCoach={classroomCoach != null}, " +
             $"difficulty(intro={dIntro != null}, easy={dEasy != null}, normal={dNormal != null}, " +
             $"hard={dHard != null}, boss={dBoss != null}), " +
             $"rarity(N={rN != null}, R={rR != null}, SR={rSr != null}, SSR={rSsr != null}, UR={rUr != null}), " +
@@ -174,6 +175,7 @@ public static class UiSpriteLibraryPopulator
     private const string BasePlateAssetPath = "Assets/UI/base plate.png";
     private const string ClassroomAssetPath = "Assets/UI/Level background/Classroom_FE.png";
     private const string ClassroomHorrorAssetPath = "Assets/UI/Level background/Classroom_FR.png";
+    private const string ClassroomCoachAssetPath = "Assets/UI/Level background/Classroom_DA.png";
     private const string CoachNeutralAssetPath = "Assets/UI/NPC/Linkk_Smile.jpeg.png";
     private const string YouWillDieAssetPath = "Assets/UI/Combat status/You will die.png";
     private const string Intro11InstructionAssetPath = "Assets/UI/1-1 Instruction.png";

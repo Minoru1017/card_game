@@ -53,6 +53,7 @@
 |------|------|
 | [`GAMEPLAY_AND_RULES.md`](GAMEPLAY_AND_RULES.md) | 卡牌 CSV、組牌、對戰流程、天氣、Settings |
 | [`CARD_PROFICIENCY_GDD.md`](CARD_PROFICIENCY_GDD.md) | 熟練度、A/B/C 解鎖、存檔欄位 |
+| [`CARD_ATTRIBUTES_GDD.md`](CARD_ATTRIBUTES_GDD.md) | **卡牌戰鬥屬性**（方案 1 定案；四屬 + 克制；元素 v1 場地化） |
 | [`卡牌技能階段式揭露.md`](卡牌技能階段式揭露.md) | 單卡三階戰技文案範例 |
 | [`DECK_SAVE_IMPLEMENTATION.md`](DECK_SAVE_IMPLEMENTATION.md) | 牌組槽、CSV 鍵、Buildbeck 索引對照 |
 | [`Docs/DECK_SLOT_NAME_BUG_CHECKLIST.md`](Docs/DECK_SLOT_NAME_BUG_CHECKLIST.md) | **牌組名稱**驗收清單（2026-06 定案；含三流程與存檔污染） |

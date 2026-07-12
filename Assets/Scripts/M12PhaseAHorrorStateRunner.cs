@@ -35,6 +35,13 @@ public sealed class M12PhaseAHorrorStateRunner : MonoBehaviour
 
     private IEnumerator CoRefreshAtmosphere(int currentRound, bool battleOver)
     {
+        if (BattleAutoSimPlugin.IsRunning)
+        {
+            M12PhaseAHorrorStateRuntime.SyncAtmosphereStateWithoutPresentation(currentRound, battleOver);
+            refreshRoutine = null;
+            yield break;
+        }
+
         if (!M12PhaseAHorrorStateRuntime.TryBeginAtmosphereTransition(currentRound, battleOver, out bool enteringHorror))
         {
             refreshRoutine = null;

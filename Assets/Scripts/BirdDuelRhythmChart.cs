@@ -14,31 +14,55 @@ public static partial class BirdDuelRhythmChart
     {
         if (IsMorningPrayer(cdId))
             return MorningPrayerPattern;
+        if (IsRiverForkWave(cdId))
+            return RiverForkPattern;
         return fallback ?? Array.Empty<BirdGesture>();
     }
 
     public static bool TryGetNormalStepGap(string cdId, int stepIndex, out double gapBeats)
     {
         gapBeats = 0d;
-        if (!IsMorningPrayer(cdId))
-            return false;
+        if (IsMorningPrayer(cdId))
+        {
+            if (stepIndex < 0 || stepIndex >= MorningPrayerStepGaps.Length)
+                return false;
 
-        if (stepIndex < 0 || stepIndex >= MorningPrayerStepGaps.Length)
-            return false;
+            gapBeats = MorningPrayerStepGaps[stepIndex];
+            return true;
+        }
 
-        gapBeats = MorningPrayerStepGaps[stepIndex];
-        return true;
+        if (IsRiverForkWave(cdId))
+        {
+            if (stepIndex < 0 || stepIndex >= RiverForkStepGaps.Length)
+                return false;
+
+            gapBeats = RiverForkStepGaps[stepIndex];
+            return true;
+        }
+
+        return false;
     }
 
     public static bool ShouldSuspenseAfterStep(string cdId, int completedStepIndex)
     {
-        if (!IsMorningPrayer(cdId))
-            return false;
-
-        for (int i = 0; i < MorningPrayerSuspenseAfterStepIndices.Length; i++)
+        if (IsMorningPrayer(cdId))
         {
-            if (MorningPrayerSuspenseAfterStepIndices[i] == completedStepIndex)
-                return true;
+            for (int i = 0; i < MorningPrayerSuspenseAfterStepIndices.Length; i++)
+            {
+                if (MorningPrayerSuspenseAfterStepIndices[i] == completedStepIndex)
+                    return true;
+            }
+
+            return false;
+        }
+
+        if (IsRiverForkWave(cdId))
+        {
+            for (int i = 0; i < RiverForkSuspenseAfterStepIndices.Length; i++)
+            {
+                if (RiverForkSuspenseAfterStepIndices[i] == completedStepIndex)
+                    return true;
+            }
         }
 
         return false;

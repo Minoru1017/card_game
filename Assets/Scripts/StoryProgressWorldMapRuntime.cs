@@ -29,8 +29,10 @@ public sealed class StoryProgressWorldMapRuntime : MonoBehaviour
     private const float TutorialNodeSize = NodeSize;
     private const string TutorialRootNodeId = "M-1-1";
     private const string SeawallPatrolNodeId = StoryProgressSession.SeawallPatrolNodeId;
+    private const string RiverForkNodeId = StoryProgressSession.RiverForkNodeId;
     private const string TutorialRootDisplayName = "港灣訓練場";
     private const string SeawallPatrolDisplayName = "海牆巡邏";
+    private const string RiverForkDisplayName = "河岔分波";
     /// <summary>新玩家預設對焦：節點落在 viewport 寬度此比例處（0.5 = 正中）。</summary>
     private const float NewPlayerMapNodeViewportXFromLeft = 0.28f;
     [Header("World Map Zoom (focus mode: [ / ] only)")]
@@ -507,6 +509,8 @@ public sealed class StoryProgressWorldMapRuntime : MonoBehaviour
             clearedNodeIds.Add("M-1-1");
         if (TutorialProgressState.IsM12TrioMasteryCleared(slot))
             clearedNodeIds.Add(SeawallPatrolNodeId);
+        if (M13RiverForkProgressState.IsNodeCleared(slot))
+            clearedNodeIds.Add(RiverForkNodeId);
     }
 
     private void BuildNodeGraphVisuals()
@@ -564,6 +568,9 @@ public sealed class StoryProgressWorldMapRuntime : MonoBehaviour
         bool isSelectedSeawallNode = node != null &&
                                      string.Equals(node.nodeId, SeawallPatrolNodeId, StringComparison.OrdinalIgnoreCase) &&
                                      string.Equals(selectedStageNodeId, SeawallPatrolNodeId, StringComparison.OrdinalIgnoreCase);
+        bool isSelectedRiverForkNode = node != null &&
+                                       string.Equals(node.nodeId, RiverForkNodeId, StringComparison.OrdinalIgnoreCase) &&
+                                       string.Equals(selectedStageNodeId, RiverForkNodeId, StringComparison.OrdinalIgnoreCase);
 
         GameObject go = new GameObject(
             "Node_" + node.nodeId,
@@ -652,6 +659,12 @@ public sealed class StoryProgressWorldMapRuntime : MonoBehaviour
             AddSelectedSeawallName(rt);
             AddSelectedSeawallSubtitle(rt);
         }
+        else if (isSelectedRiverForkNode)
+        {
+            AddSelectedRiverForkStatusBadge(rt);
+            AddSelectedRiverForkName(rt);
+            AddSelectedRiverForkSubtitle(rt);
+        }
 
         return rt;
     }
@@ -686,7 +699,9 @@ public sealed class StoryProgressWorldMapRuntime : MonoBehaviour
             string.Equals(node.nodeId, TutorialRootNodeId, StringComparison.OrdinalIgnoreCase);
         bool isSeawallNode =
             string.Equals(node.nodeId, SeawallPatrolNodeId, StringComparison.OrdinalIgnoreCase);
-        if (!isTutorialRootNode && !isSeawallNode)
+        bool isRiverForkNode =
+            string.Equals(node.nodeId, RiverForkNodeId, StringComparison.OrdinalIgnoreCase);
+        if (!isTutorialRootNode && !isSeawallNode && !isRiverForkNode)
             return null;
 
         if (state == NodeState.Cleared)
@@ -702,7 +717,8 @@ public sealed class StoryProgressWorldMapRuntime : MonoBehaviour
     {
         if (node != null &&
             (string.Equals(node.nodeId, TutorialRootNodeId, StringComparison.OrdinalIgnoreCase) ||
-             string.Equals(node.nodeId, SeawallPatrolNodeId, StringComparison.OrdinalIgnoreCase)))
+             string.Equals(node.nodeId, SeawallPatrolNodeId, StringComparison.OrdinalIgnoreCase) ||
+             string.Equals(node.nodeId, RiverForkNodeId, StringComparison.OrdinalIgnoreCase)))
             return TutorialNodeSize * 1.35f;
 
         return ResolveNodeIconSize(node);
@@ -917,6 +933,122 @@ public sealed class StoryProgressWorldMapRuntime : MonoBehaviour
         return "御三家段考";
     }
 
+    private void AddSelectedRiverForkStatusBadge(RectTransform nodeRt)
+    {
+        if (nodeRt == null) return;
+
+        string statusText = ResolveRiverForkStatusText();
+        Color statusColor = ResolveTutorialRootStatusColor(statusText);
+
+        GameObject badgeGo = new GameObject("StatusBadge", typeof(RectTransform), typeof(Image));
+        badgeGo.transform.SetParent(nodeRt, false);
+        RectTransform badgeRt = badgeGo.GetComponent<RectTransform>();
+        badgeRt.anchorMin = new Vector2(0.5f, 1f);
+        badgeRt.anchorMax = new Vector2(0.5f, 1f);
+        badgeRt.pivot = new Vector2(0.5f, 0f);
+        badgeRt.anchoredPosition = new Vector2(0f, 6f);
+        badgeRt.sizeDelta = new Vector2(92f, 28f);
+
+        Image badgeBg = badgeGo.GetComponent<Image>();
+        badgeBg.sprite = GetWhiteSprite();
+        badgeBg.type = Image.Type.Sliced;
+        badgeBg.color = statusColor;
+        badgeBg.raycastTarget = false;
+
+        GameObject textGo = new GameObject("StatusText", typeof(RectTransform), typeof(TextMeshProUGUI));
+        textGo.transform.SetParent(badgeGo.transform, false);
+        RectTransform textRt = textGo.GetComponent<RectTransform>();
+        textRt.anchorMin = Vector2.zero;
+        textRt.anchorMax = Vector2.one;
+        textRt.offsetMin = Vector2.zero;
+        textRt.offsetMax = Vector2.zero;
+
+        TextMeshProUGUI tmp = textGo.GetComponent<TextMeshProUGUI>();
+        tmp.text = statusText;
+        tmp.fontSize = 16f;
+        tmp.fontStyle = FontStyles.Bold;
+        tmp.alignment = TextAlignmentOptions.Center;
+        tmp.color = Color.white;
+        tmp.raycastTarget = false;
+        SettingsUiFonts.ApplyTo(tmp);
+    }
+
+    private void AddSelectedRiverForkName(RectTransform nodeRt)
+    {
+        if (nodeRt == null) return;
+
+        GameObject nameGo = new GameObject("StageName", typeof(RectTransform), typeof(TextMeshProUGUI));
+        nameGo.transform.SetParent(nodeRt, false);
+        RectTransform nameRt = nameGo.GetComponent<RectTransform>();
+        nameRt.anchorMin = new Vector2(0.5f, 0f);
+        nameRt.anchorMax = new Vector2(0.5f, 0f);
+        nameRt.pivot = new Vector2(0.5f, 1f);
+        nameRt.anchoredPosition = new Vector2(0f, -44f);
+        nameRt.sizeDelta = new Vector2(180f, 34f);
+
+        TextMeshProUGUI nameTmp = nameGo.GetComponent<TextMeshProUGUI>();
+        nameTmp.text = RiverForkDisplayName;
+        nameTmp.fontSize = 20f;
+        nameTmp.fontStyle = FontStyles.Bold;
+        nameTmp.alignment = TextAlignmentOptions.Center;
+        nameTmp.color = new Color(0.96f, 0.96f, 0.96f, 1f);
+        nameTmp.raycastTarget = false;
+        SettingsUiFonts.ApplyTo(nameTmp);
+    }
+
+    private void AddSelectedRiverForkSubtitle(RectTransform nodeRt)
+    {
+        if (nodeRt == null) return;
+
+        GameObject subGo = new GameObject("StageSubtitle", typeof(RectTransform), typeof(TextMeshProUGUI));
+        subGo.transform.SetParent(nodeRt, false);
+        RectTransform subRt = subGo.GetComponent<RectTransform>();
+        subRt.anchorMin = new Vector2(0.5f, 0f);
+        subRt.anchorMax = new Vector2(0.5f, 0f);
+        subRt.pivot = new Vector2(0.5f, 1f);
+        subRt.anchoredPosition = new Vector2(0f, -78f);
+        subRt.sizeDelta = new Vector2(200f, 26f);
+
+        TextMeshProUGUI subTmp = subGo.GetComponent<TextMeshProUGUI>();
+        subTmp.text = ResolveRiverForkSubtitleText();
+        subTmp.fontSize = 15f;
+        subTmp.fontStyle = FontStyles.Normal;
+        subTmp.alignment = TextAlignmentOptions.Center;
+        subTmp.color = new Color(0.82f, 0.88f, 0.84f, 0.95f);
+        subTmp.raycastTarget = false;
+        SettingsUiFonts.ApplyTo(subTmp);
+    }
+
+    private static string ResolveRiverForkStatusText()
+    {
+        int slot = PlayerData.GetActivePlayerSlotOrDefault();
+        if (M13RiverForkProgressState.IsNodeCleared(slot))
+            return "Clear";
+        if (M13RiverForkProgressState.IsRoseTrialSeen(slot) ||
+            M13RiverForkProgressState.IsBirdDuelComplete(slot) ||
+            M13RiverForkProgressState.IsOpeningSeen(slot))
+            return "進行中";
+        return "NEW";
+    }
+
+    private static string ResolveRiverForkSubtitleText()
+    {
+        int slot = PlayerData.GetActivePlayerSlotOrDefault();
+        if (M13RiverForkProgressState.IsNodeCleared(slot))
+            return "可重溫關卡";
+        if (M13RiverForkProgressState.IsRoseTrialSeen(slot))
+            return "分波對決";
+        if (M13RiverForkProgressState.IsPhaseAComplete(slot))
+            return "玫瑰試煉";
+        if (M13RiverForkProgressState.IsForkStrollComplete(slot))
+            return "冷爐迎測";
+        if (M13RiverForkProgressState.IsBirdDuelComplete(slot))
+            return M13RiverForkProgressState.HasBirdDuelSRank(slot) ? "S 評 · 岔路散策" : "岔路散策";
+        if (M13RiverForkProgressState.IsOpeningSeen(slot))
+            return "分波鬥鳥";
+        return "迎潮實測 · 燈下之詢";
+    }
+
     public static string SelectedStageNodeId => selectedStageNodeId;
 
     public static void SetSelectedStageNodeId(string nodeId)
@@ -1096,7 +1228,8 @@ public sealed class StoryProgressWorldMapRuntime : MonoBehaviour
     {
         if (node == null) return;
         if (string.Equals(node.nodeId, TutorialRootNodeId, StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(node.nodeId, SeawallPatrolNodeId, StringComparison.OrdinalIgnoreCase))
+            string.Equals(node.nodeId, SeawallPatrolNodeId, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(node.nodeId, RiverForkNodeId, StringComparison.OrdinalIgnoreCase))
         {
             if (state == NodeState.Locked)
             {

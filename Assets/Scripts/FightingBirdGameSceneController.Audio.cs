@@ -120,6 +120,9 @@ public sealed partial class FightingBirdGameSceneController
 
     private static string ResolveActiveCdId()
     {
+        if (M13StoryDuelContext.IsActive)
+            return BirdDuelRhythmChart.RiverForkWaveCdId;
+
         if (PreBattleCdContext.HasSelection)
             return PreBattleCdContext.SelectedCdId;
         return BirdDuelCdCatalog.DefaultCdId;
@@ -154,6 +157,8 @@ public sealed partial class FightingBirdGameSceneController
             return StampedeAssetPath;
         if (BirdDuelRhythmChart.IsMorningPrayer(cdId))
             return MorningPrayerAssetPath;
+        if (BirdDuelRhythmChart.IsRiverForkWave(cdId))
+            return RiverForkWaveAssetPath;
         return ComeAgainAssetPath;
     }
 #endif

@@ -4,7 +4,7 @@ using UnityEngine.UI;
 
 /// <summary>
 /// M-1-2 任務欄（LEVEL_DESIGN_M-1-2.md §3.0）：
-/// 階段 A「御三家應用」顯示本局三戰技即時進度；階段 B「教會三張搭配」顯示 A+B 合計進度。
+/// 階段 A「御三家應用」顯示本局三戰技即時進度；階段 B「戰位克制教學」顯示 A+B 合計進度。
 /// </summary>
 public sealed class M12BattleMissionBarUi : MonoBehaviour
 {
@@ -103,7 +103,7 @@ public sealed class M12BattleMissionBarUi : MonoBehaviour
     {
         bool phaseA = BattleLaunchContext.IsM12TrioTutorialBattle;
         if (_titleText != null)
-            _titleText.text = phaseA ? "關卡目標：御三家應用" : "關卡目標：教會三張搭配";
+            _titleText.text = phaseA ? "關卡目標：御三家應用" : "關卡目標：戰位克制教學";
         if (_winRowText != null)
         {
             _winRowText.text = "○ 取得勝利";

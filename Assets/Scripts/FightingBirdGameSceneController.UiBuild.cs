@@ -17,7 +17,7 @@ public sealed partial class FightingBirdGameSceneController
         CreateImage("BG", root, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero, ColorBg, false);
 
         // 標題與說明。
-        CreateText("Title", root, "鬥鳥暖身賽", 64f, TextAlignmentOptions.Center,
+        titleText = CreateText("Title", root, "鬥鳥暖身賽", 64f, TextAlignmentOptions.Center,
             new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -70f), new Vector2(900f, 84f),
             BirdDuelUiColors.WonderBadge);
         subtitleText = CreateText("Subtitle", root,
@@ -242,6 +242,7 @@ public sealed partial class FightingBirdGameSceneController
             new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), Vector2.zero, Vector2.zero, ColorWing, true);
         replay.rectTransform.sizeDelta = new Vector2(320f, 112f);
         replay.rectTransform.anchoredPosition = new Vector2(-190f, 80f);
+        replayButtonRoot = replay.gameObject;
         Button replayBtn = replay.gameObject.AddComponent<Button>();
         replayBtn.targetGraphic = replay;
         replayBtn.onClick.AddListener(StartMatch);
@@ -257,10 +258,19 @@ public sealed partial class FightingBirdGameSceneController
         Button leaveBtn = leave.gameObject.AddComponent<Button>();
         leaveBtn.targetGraphic = leave;
         leaveBtn.onClick.AddListener(OnLeavePressed);
-        leaveButtonLabel = CreateText("Label", leave.transform, preBattleMode ? "進入對戰" : "返回大廳", 38f,
+        leaveButtonLabel = CreateText("Label", leave.transform, ResolveLeaveButtonLabel(), 38f,
             TextAlignmentOptions.Center, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero, Color.white);
         leaveButtonLabel.raycastTarget = false;
 
         resultOverlayRoot.SetActive(false);
+    }
+
+    private string ResolveLeaveButtonLabel()
+    {
+        if (m13StoryMode)
+            return "繼續迎測";
+        if (preBattleMode)
+            return "進入對戰";
+        return "返回大廳";
     }
 }

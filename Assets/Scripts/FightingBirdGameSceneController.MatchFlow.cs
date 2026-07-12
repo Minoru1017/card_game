@@ -34,7 +34,15 @@ public sealed partial class FightingBirdGameSceneController
         for (int c = 0; c < CountInBeats; c++)
         {
             if (subtitleText != null)
-                subtitleText.text = c < CountInBeats - 1 ? "預備…" : "開始！";
+            {
+                if (m13StoryMode)
+                {
+                    subtitleText.text = ResolveM13CountInText(c);
+                    subtitleText.color = c < CountInBeats - 1 ? M13LeftForkAccent : M13ForkSplitAccent;
+                }
+                else
+                    subtitleText.text = c < CountInBeats - 1 ? "預備…" : "開始！";
+            }
             double beatDsp = BeatDsp(matchFirstBeat + c);
             while (AudioSettings.dspTime < beatDsp)
                 yield return null;
@@ -62,7 +70,13 @@ public sealed partial class FightingBirdGameSceneController
 
             bool peek = insightPeekActive;
             insightPeekActive = false;
-            ShowTelegraph(opp, peek);
+            if (m13StoryMode)
+            {
+                ApplyM13ForkStep(step);
+                ShowM13Telegraph(opp, peek, step);
+            }
+            else
+                ShowTelegraph(opp, peek);
 
             pendingInput = default;
             inputLocked = false;
@@ -91,7 +105,10 @@ public sealed partial class FightingBirdGameSceneController
                 opp, input, timingError, passRewardAvailable, perfectWindow, goodWindow);
 
             ApplyJudgement(opp, input, judgement);
-            ShowFeedback(judgement);
+            if (m13StoryMode)
+                ShowM13Feedback(judgement);
+            else
+                ShowFeedback(judgement);
             ClearTelegraph();
 
             // 玩家快要贏：首次跨過門檻時給視覺提示，並開始拉長／隨機化步距。
@@ -103,8 +120,16 @@ public sealed partial class FightingBirdGameSceneController
             {
                 if (BirdDuelRhythmChart.ShouldSuspenseAfterStep(activeCdId, step))
                 {
-                    yield return RunMorningPrayerSuspense(beatCursor);
-                    beatCursor += BirdDuelRhythmChart.MorningPrayerSuspenseBeats;
+                    string suspenseText = null;
+                    if (BirdDuelRhythmChart.TryGetSuspenseSubtitle(activeCdId, step, out string chartSubtitle))
+                        suspenseText = chartSubtitle;
+                    if (m13StoryMode)
+                        ApplyM13SuspensePresentation(suspenseText);
+                    yield return RunChartSuspense(
+                        beatCursor,
+                        suspenseText,
+                        BirdDuelRhythmChart.ResolveSuspenseBeats(activeCdId));
+                    beatCursor += BirdDuelRhythmChart.ResolveSuspenseBeats(activeCdId);
                 }
 
                 double nextGapBeats = ResolveNextStepBeatDelta(step);
@@ -127,6 +152,9 @@ public sealed partial class FightingBirdGameSceneController
     /// <summary>進入決勝拍：視覺提示並收緊判定窗口／預告時間。</summary>
     private void EnterDecisiveMode()
     {
+        if (m13StoryMode)
+            return;
+
         decisiveMode = true;
         ApplyDecisiveDifficulty();
 
@@ -335,16 +363,21 @@ public sealed partial class FightingBirdGameSceneController
     private bool IsCourtMarchCd() =>
         string.Equals(activeCdId, "court_march", System.StringComparison.OrdinalIgnoreCase);
 
-    /// <summary>晨禱段末屏息：tick 繼續、無判定，製造「被窺視」的緊張感。</summary>
-    private IEnumerator RunMorningPrayerSuspense(double beatCursor)
+    /// <summary>段末屏息：tick 繼續、無判定。</summary>
+    private IEnumerator RunChartSuspense(double beatCursor, string subtitle, double beats)
     {
-        if (subtitleText != null)
+        if (subtitleText != null && !string.IsNullOrWhiteSpace(subtitle))
+        {
+            subtitleText.text = subtitle;
+            subtitleText.color = ColorDecisive;
+        }
+        else if (subtitleText != null)
         {
             subtitleText.text = "聆聽…";
             subtitleText.color = ColorDecisive;
         }
 
-        double endDsp = BeatFractionDsp(beatCursor + BirdDuelRhythmChart.MorningPrayerSuspenseBeats);
+        double endDsp = BeatFractionDsp(beatCursor + beats);
         while (AudioSettings.dspTime < endDsp)
             yield return null;
 
@@ -354,6 +387,10 @@ public sealed partial class FightingBirdGameSceneController
             subtitleText.color = ColorSubtitle;
         }
     }
+
+    /// <summary>晨禱段末屏息：tick 繼續、無判定，製造「被窺視」的緊張感。</summary>
+    private IEnumerator RunMorningPrayerSuspense(double beatCursor) =>
+        RunChartSuspense(beatCursor, "聆聽…", BirdDuelRhythmChart.MorningPrayerSuspenseBeats);
 
     private void ResetState()
     {
@@ -419,7 +456,7 @@ public sealed partial class FightingBirdGameSceneController
         lastResult = result;
         lastIntelText = npc.ResolveIntelText(tier);
 
-        if (resultTitle != null)
+        if (resultTitle != null && !m13StoryMode)
         {
             switch (result)
             {
@@ -431,7 +468,10 @@ public sealed partial class FightingBirdGameSceneController
 
         if (resultLine != null)
             resultLine.text = $"{npc.ResolveResultLine(result)}\n分數 {score} / {scoreBarMax}　看破 {insight}";
-        if (resultIntel != null)
+
+        if (m13StoryMode)
+            ApplyM13StoryResultCopy(result);
+        else if (resultIntel != null)
             resultIntel.text = lastIntelText;
 
         SetBeatFxVisible(false);
@@ -442,6 +482,9 @@ public sealed partial class FightingBirdGameSceneController
 
     private string DefaultSubtitle()
     {
+        if (m13StoryMode)
+            return "與分波同頻：左汊右汊，鼓點對齊水流";
+
         const string baseLine = "看對手鳥勢，在鼓點按正確反制：啄擊←巢　振翅←啄　築巢←翅";
         if (preBattleMode && PreBattleDuelContext.HasHiddenTier)
             return baseLine + "　｜　勝出鬥鳥可挑戰魔王級";
@@ -450,6 +493,12 @@ public sealed partial class FightingBirdGameSceneController
 
     private void OnLeavePressed()
     {
+        if (m13StoryMode)
+        {
+            FinishM13StoryDuel();
+            return;
+        }
+
         if (preBattleMode)
         {
             BeginBonusDraft();

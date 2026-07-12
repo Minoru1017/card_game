@@ -57,6 +57,15 @@ public class CardDisplay : MonoBehaviour
         
     }
 
+    private bool showCombatRoleBadge;
+
+    public void SetCombatRoleBadgeVisible(bool visible)
+    {
+        showCombatRoleBadge = visible;
+        if (card != null)
+            ShowCard();
+    }
+
     public void SetCard(Card c)
     {
         card = c;
@@ -76,7 +85,10 @@ public class CardDisplay : MonoBehaviour
         if (rarityText != null)
         {
             rarityText.gameObject.SetActive(true);
-            rarityText.text = card.rarity.ToString();
+            if (card is MonsterCard roleMonster && showCombatRoleBadge)
+                rarityText.text = card.rarity + " · " + CombatRoleUtility.GetDisplayName(roleMonster.combatRole);
+            else
+                rarityText.text = card.rarity.ToString();
         }
 
         Sprite portrait = ResolvePortraitSpriteForCurrentContext();

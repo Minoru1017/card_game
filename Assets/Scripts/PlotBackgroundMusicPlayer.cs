@@ -7,17 +7,17 @@ using UnityEditor;
 #endif
 
 /// <summary>
-/// Main Plot 場景 Main Camera 上的 1-1 劇情 BGM（場景內直接指定 <see cref="plotBgmClip"/>）。
+/// Main Plot 場景 Main Camera 上的劇情 BGM（1-1 Enchanted Valley、M-1-2 HYPERCRUSH、M-1-3 Bait）。
 /// 先完整播完一遍，再開啟循環。
 /// </summary>
 [RequireComponent(typeof(AudioListener))]
 [RequireComponent(typeof(AudioSource))]
 public class PlotBackgroundMusicPlayer : MonoBehaviour
 {
-#if UNITY_EDITOR
     // 僅供 AudioLibrary 填表工具定位實體檔（檔案在 Assets/Music/，不在 Resources）。
     public const string EnchantedValleyAssetPath = "Assets/Music/Roie Shpigler - Enchanted Valley.mp3";
-#endif
+    public const string M12SeawallPatrolPlotBgmAssetPath = "Assets/Music/ZISO - HYPERCRUSH.mp3";
+    public const string M13RiverForkPlotBgmAssetPath = "Assets/Music/DaniHaDani - Bait.mp3";
 
     [SerializeField] private AudioClip plotBgmClip;
     [SerializeField] [Range(0f, 1.5f)] private float volume = 1.2f;
@@ -31,7 +31,7 @@ public class PlotBackgroundMusicPlayer : MonoBehaviour
     {
         PlotBackgroundMusicPlayer player = FindInMainPlotScene();
         if (player != null)
-            player.StopTutorialPlotBgm();
+            player.StopPlotBgm();
     }
 
     public static PlotBackgroundMusicPlayer FindInMainPlotScene()
@@ -51,11 +51,12 @@ public class PlotBackgroundMusicPlayer : MonoBehaviour
         return null;
     }
 
-    public void PlayTutorialPlotBgm()
+    public void PlayPlotBgm()
     {
-        if (!IsOnMainPlotScene() || !ShouldPlayTutorialPlotBgm())
+        if (!IsOnMainPlotScene() || !ShouldPlayPlotBgm())
             return;
 
+        plotBgmClip = ResolveActivePlotBgmClip();
         shouldKeepPlaying = true;
         loopEnabled = false;
         if (playRoutine != null)
@@ -63,7 +64,7 @@ public class PlotBackgroundMusicPlayer : MonoBehaviour
         playRoutine = StartCoroutine(PlayWhenReady());
     }
 
-    public void StopTutorialPlotBgm()
+    public void StopPlotBgm()
     {
         shouldKeepPlaying = false;
         loopEnabled = false;
@@ -190,8 +191,46 @@ public class PlotBackgroundMusicPlayer : MonoBehaviour
         gameObject.scene.IsValid() &&
         gameObject.scene.name == StoryProgressSession.MainPlotSceneName;
 
-    private static bool ShouldPlayTutorialPlotBgm() =>
-        StoryProgressSession.TutorialPlotBgmRequested;
+    private static bool ShouldPlayPlotBgm() =>
+        StoryProgressSession.TutorialPlotBgmRequested ||
+        StoryProgressSession.M12PlotBgmRequested ||
+        StoryProgressSession.M13PlotBgmRequested;
+
+    private AudioClip ResolveActivePlotBgmClip()
+    {
+        if (StoryProgressSession.M12PlotBgmRequested)
+        {
+            AudioLibrary library = AudioLibrary.Instance;
+            if (library != null && library.M12PlotBgm != null)
+                return library.M12PlotBgm;
+#if UNITY_EDITOR
+            return AssetDatabase.LoadAssetAtPath<AudioClip>(M12SeawallPatrolPlotBgmAssetPath);
+#else
+            return null;
+#endif
+        }
+
+        if (StoryProgressSession.M13PlotBgmRequested)
+        {
+            AudioLibrary library = AudioLibrary.Instance;
+            if (library != null && library.M13PlotBgm != null)
+                return library.M13PlotBgm;
+#if UNITY_EDITOR
+            return AssetDatabase.LoadAssetAtPath<AudioClip>(M13RiverForkPlotBgmAssetPath);
+#else
+            return null;
+#endif
+        }
+
+        AudioLibrary lib = AudioLibrary.Instance;
+        if (lib != null && lib.PlotBgm != null)
+            return lib.PlotBgm;
+#if UNITY_EDITOR
+        return AssetDatabase.LoadAssetAtPath<AudioClip>(EnchantedValleyAssetPath);
+#else
+        return plotBgmClip;
+#endif
+    }
 
     public void ApplyUserBgmVolume()
     {
@@ -226,10 +265,7 @@ public class PlotBackgroundMusicPlayer : MonoBehaviour
         if (plotBgmClip != null)
             return;
 
-        AudioLibrary library = AudioLibrary.Instance;
-        if (library != null)
-            plotBgmClip = library.PlotBgm;
-
+        plotBgmClip = ResolveActivePlotBgmClip();
         if (plotBgmClip == null)
         {
             Debug.LogWarning(
@@ -250,5 +286,5 @@ public class PlotBackgroundMusicPlayer : MonoBehaviour
         source.mute = false;
     }
 
-    private void OnDestroy() => StopTutorialPlotBgm();
+    private void OnDestroy() => StopPlotBgm();
 }

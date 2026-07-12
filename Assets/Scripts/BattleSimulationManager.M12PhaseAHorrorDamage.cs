@@ -66,6 +66,23 @@ public partial class BattleSimulationManager
 
         int before = enemyHp;
         enemyHp = Mathf.Max(0, enemyHp - damage);
-        return before - enemyHp;
+        int dealt = before - enemyHp;
+
+        if (BattleLaunchContext.IsM13RivalDuelBattle && playerTurn && dealt > 0)
+            M13RivalDuelBattleTracker.NotifyPlayerTurnHeroDamage(dealt);
+
+        if (BattleLaunchContext.IsM13RivalDuelBattle &&
+            !m13HotBloodReversalConsumed &&
+            enemyHp > 0 &&
+            enemyHp <= M13PhaseBBattleRules.HotBloodReversalHpThreshold)
+        {
+            m13HotBloodReversalConsumed = true;
+            M13RivalDuelBattleTracker.NotifyHotBloodReversal();
+            ShowBattleToast("阿潮：現在呢 還信灰燼嗎", 3.2f);
+            LogBattleHistory("熱血逆轉：阿潮 HP≤8，敵方多抽 1 張");
+            EnemyDrawCards(1);
+        }
+
+        return dealt;
     }
 }
