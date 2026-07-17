@@ -72,6 +72,8 @@ public sealed class StoryProgressWorldMapRuntime : MonoBehaviour
     private static string selectedStageNodeId = TutorialRootNodeId;
     private StoryProgressNodeDatabase nodeDb;
     private static Sprite whiteSprite;
+    private bool pendingProgressRefresh;
+    private string graphBuiltForSelectedStageNodeId;
 
     private enum NodeState
     {
@@ -132,8 +134,7 @@ public sealed class StoryProgressWorldMapRuntime : MonoBehaviour
         SetMapZoom(DefaultMapZoom);
 
         int slot = PlayerData.GetActivePlayerSlotOrDefault();
-        TutorialProgressState.EnsureSlotIntroProgressConsistent(slot);
-        HarborTrainingProgressState.EnsureSlotHarborProgressConsistent(slot);
+        StoryProgressSlotConsistency.EnsureAll(slot);
         LoadClearedNodeProgress();
         nodeDb = StoryProgressNodeDatabaseLibrary.Load();
         BuildNodeGraphVisuals();
@@ -262,6 +263,12 @@ public sealed class StoryProgressWorldMapRuntime : MonoBehaviour
 
     private void LateUpdate()
     {
+        if (pendingProgressRefresh)
+        {
+            pendingProgressRefresh = false;
+            RefreshProgressFromSaveImmediate();
+        }
+
         if (mapFocusMode && viewportRt != null && viewportRt.GetSiblingIndex() != viewportRt.parent.childCount - 1)
             viewportRt.SetAsLastSibling();
         if (viewportRt != null && viewportSiblingIndex >= 0 && viewportRt.GetSiblingIndex() != viewportSiblingIndex)
@@ -551,6 +558,8 @@ public sealed class StoryProgressWorldMapRuntime : MonoBehaviour
             if (!nodeRects.TryGetValue(edge.toNodeId, out RectTransform toRt)) continue;
             CreateEdgeUi(edgeLayerRt, fromRt.anchoredPosition, toRt.anchoredPosition, edge.pathType);
         }
+
+        graphBuiltForSelectedStageNodeId = selectedStageNodeId;
     }
 
     private static void Stretch(RectTransform rt)
@@ -627,7 +636,7 @@ public sealed class StoryProgressWorldMapRuntime : MonoBehaviour
         cb.colorMultiplier = 1f;
         button.colors = cb;
         button.interactable = state != NodeState.Locked;
-        button.onClick.AddListener(() => OnNodeClicked(node, state));
+        button.onClick.AddListener(() => OnNodeClicked(node));
 
         GameObject textGo = new GameObject("StageCode", typeof(RectTransform), typeof(TextMeshProUGUI));
         textGo.transform.SetParent(go.transform, false);
@@ -1064,20 +1073,34 @@ public sealed class StoryProgressWorldMapRuntime : MonoBehaviour
         StoryProgressWorldMapRuntime runtime =
             UnityEngine.Object.FindFirstObjectByType<StoryProgressWorldMapRuntime>();
         if (runtime == null) return;
-        runtime.RefreshProgressFromSave();
+        runtime.pendingProgressRefresh = true;
     }
 
     public void RefreshProgressFromSave()
     {
+        pendingProgressRefresh = true;
+    }
+
+    private void RefreshProgressFromSaveImmediate()
+    {
         int slot = PlayerData.GetActivePlayerSlotOrDefault();
-        TutorialProgressState.EnsureSlotIntroProgressConsistent(slot);
-        HarborTrainingProgressState.EnsureSlotHarborProgressConsistent(slot);
+        StoryProgressSlotConsistency.EnsureAll(slot);
         LoadClearedNodeProgress();
         if (nodeDb == null)
             nodeDb = StoryProgressNodeDatabaseLibrary.Load();
-        BuildNodeGraphVisuals();
-        ApplyTutorialRootStatusBadgeToExistingNode();
+
+        if (!TryApplyProgressToExistingGraph())
+            BuildNodeGraphVisuals();
+
+        ApplyProgressBadgesToExistingNodes();
         ReapplyMapFocusOnPreferredNode();
+    }
+
+    private void ApplyProgressBadgesToExistingNodes()
+    {
+        ApplyTutorialRootStatusBadgeToExistingNode();
+        ApplySeawallPatrolStatusBadgeToExistingNode();
+        ApplyRiverForkStatusBadgeToExistingNode();
     }
 
     private void ApplyTutorialRootStatusBadgeToExistingNode()
@@ -1085,12 +1108,40 @@ public sealed class StoryProgressWorldMapRuntime : MonoBehaviour
         if (!nodeRects.TryGetValue(TutorialRootNodeId, out RectTransform nodeRt) || nodeRt == null)
             return;
 
+        string statusText = ResolveTutorialRootStatusText();
+        ApplyStatusBadgeToExistingNode(nodeRt, statusText, ResolveTutorialRootStatusColor(statusText));
+        ApplySubtitleToExistingNode(nodeRt, ResolveTutorialRootSubtitleText());
+    }
+
+    private void ApplySeawallPatrolStatusBadgeToExistingNode()
+    {
+        if (!string.Equals(selectedStageNodeId, SeawallPatrolNodeId, StringComparison.OrdinalIgnoreCase))
+            return;
+        if (!nodeRects.TryGetValue(SeawallPatrolNodeId, out RectTransform nodeRt) || nodeRt == null)
+            return;
+
+        string statusText = ResolveSeawallPatrolStatusText();
+        ApplyStatusBadgeToExistingNode(nodeRt, statusText, ResolveTutorialRootStatusColor(statusText));
+        ApplySubtitleToExistingNode(nodeRt, ResolveSeawallPatrolSubtitleText());
+    }
+
+    private void ApplyRiverForkStatusBadgeToExistingNode()
+    {
+        if (!string.Equals(selectedStageNodeId, RiverForkNodeId, StringComparison.OrdinalIgnoreCase))
+            return;
+        if (!nodeRects.TryGetValue(RiverForkNodeId, out RectTransform nodeRt) || nodeRt == null)
+            return;
+
+        string statusText = ResolveRiverForkStatusText();
+        ApplyStatusBadgeToExistingNode(nodeRt, statusText, ResolveTutorialRootStatusColor(statusText));
+        ApplySubtitleToExistingNode(nodeRt, ResolveRiverForkSubtitleText());
+    }
+
+    private static void ApplyStatusBadgeToExistingNode(RectTransform nodeRt, string statusText, Color statusColor)
+    {
         Transform statusTextTf = nodeRt.Find("StatusBadge/StatusText");
         if (statusTextTf == null)
             return;
-
-        string statusText = ResolveTutorialRootStatusText();
-        Color statusColor = ResolveTutorialRootStatusColor(statusText);
 
         if (statusTextTf.parent != null)
         {
@@ -1102,6 +1153,94 @@ public sealed class StoryProgressWorldMapRuntime : MonoBehaviour
         TextMeshProUGUI tmp = statusTextTf.GetComponent<TextMeshProUGUI>();
         if (tmp != null)
             tmp.text = statusText;
+    }
+
+    private static void ApplySubtitleToExistingNode(RectTransform nodeRt, string subtitle)
+    {
+        Transform subtitleTf = nodeRt.Find("StageSubtitle");
+        if (subtitleTf == null)
+            return;
+
+        TextMeshProUGUI tmp = subtitleTf.GetComponent<TextMeshProUGUI>();
+        if (tmp != null)
+            tmp.text = subtitle;
+    }
+
+    private bool TryApplyProgressToExistingGraph()
+    {
+        RectTransform nodeParent = mapGraphicRt != null ? mapGraphicRt : mapContentRt;
+        if (nodeParent == null || nodeDb == null || nodeDb.nodes == null)
+            return false;
+
+        Transform nodeLayer = nodeParent.Find(NodeLayerName);
+        if (nodeLayer == null || nodeRects.Count == 0)
+            return false;
+        if (!string.Equals(graphBuiltForSelectedStageNodeId, selectedStageNodeId, StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        for (int i = 0; i < nodeDb.nodes.Length; i++)
+        {
+            StoryProgressNodeEntry node = nodeDb.nodes[i];
+            if (node == null || string.IsNullOrWhiteSpace(node.nodeId))
+                continue;
+            if (!nodeRects.TryGetValue(node.nodeId, out RectTransform nodeRt) || nodeRt == null)
+                return false;
+
+            NodeState state = ResolveNodeState(node);
+            if (!ApplyNodeProgressVisual(nodeRt, node, state))
+                return false;
+        }
+
+        return true;
+    }
+
+    private bool ApplyNodeProgressVisual(RectTransform nodeRt, StoryProgressNodeEntry node, NodeState state)
+    {
+        Image image = nodeRt.GetComponent<Image>();
+        Button button = nodeRt.GetComponent<Button>();
+        if (image == null || button == null)
+            return false;
+
+        bool isTutorialRootNode = string.Equals(node.nodeId, TutorialRootNodeId, StringComparison.OrdinalIgnoreCase);
+        Sprite customIcon = ResolveStoryMapNodeIcon(node, state);
+        if (customIcon != null)
+        {
+            if (isTutorialRootNode)
+            {
+                Sprite expectedTutorialIcon = ResolveTutorialRootNodeIcon();
+                if (expectedTutorialIcon != null && image.sprite != expectedTutorialIcon)
+                    return false;
+            }
+
+            image.sprite = customIcon;
+            image.type = Image.Type.Simple;
+            image.preserveAspect = true;
+            image.color = Color.white;
+            float aspect = customIcon.rect.width / Mathf.Max(1f, customIcon.rect.height);
+            float height = ResolveCustomNodeIconHeight(node);
+            nodeRt.sizeDelta = new Vector2(height * aspect, height);
+        }
+        else
+        {
+            image.sprite = GetWhiteSprite();
+            image.type = Image.Type.Sliced;
+            image.preserveAspect = false;
+            Color baseColor = isTutorialRootNode
+                ? new Color(1f, 1f, 1f, 0.98f)
+                : ResolveNodeColor(state, node);
+            image.color = baseColor;
+
+            ColorBlock cb = button.colors;
+            cb.normalColor = baseColor;
+            cb.highlightedColor = Color.Lerp(baseColor, Color.white, 0.2f);
+            cb.pressedColor = Color.Lerp(baseColor, Color.black, 0.16f);
+            cb.selectedColor = cb.highlightedColor;
+            cb.disabledColor = baseColor;
+            button.colors = cb;
+        }
+
+        button.interactable = state != NodeState.Locked;
+        return true;
     }
 
     private static Color ResolveTutorialRootStatusColor(string statusText)
@@ -1224,9 +1363,10 @@ public sealed class StoryProgressWorldMapRuntime : MonoBehaviour
         return new Color(0.82f, 0.76f, 0.67f, 0.42f);
     }
 
-    private void OnNodeClicked(StoryProgressNodeEntry node, NodeState state)
+    private void OnNodeClicked(StoryProgressNodeEntry node)
     {
         if (node == null) return;
+        NodeState state = ResolveNodeState(node);
         if (string.Equals(node.nodeId, TutorialRootNodeId, StringComparison.OrdinalIgnoreCase) ||
             string.Equals(node.nodeId, SeawallPatrolNodeId, StringComparison.OrdinalIgnoreCase) ||
             string.Equals(node.nodeId, RiverForkNodeId, StringComparison.OrdinalIgnoreCase))

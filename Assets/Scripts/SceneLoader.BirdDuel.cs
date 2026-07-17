@@ -21,8 +21,12 @@ public partial class SceneLoader
         bool hasHiddenTier,
         BattleDifficultyTier hiddenTier,
         bool freeBattle = false,
-        EnemyAiPlayStyle freeBattleAiStyle = EnemyAiPlayStyle.Balanced)
+        EnemyAiPlayStyle freeBattleAiStyle = EnemyAiPlayStyle.Balanced,
+        string birdDuelCdId = null)
     {
+        string resolvedCdId = ResolveLaunchBirdDuelCdId(birdDuelCdId);
+        PreBattleCdContext.SetSelectedCd(resolvedCdId);
+
         string battleScene = string.IsNullOrWhiteSpace(battleSceneName)
             ? DefaultHarborBattleScene
             : battleSceneName;
@@ -50,9 +54,11 @@ public partial class SceneLoader
             heroId,
             heroName,
             freeBattle,
-            freeBattleAiStyle);
+            freeBattleAiStyle,
+            resolvedCdId);
         PreBattleBonusContext.Clear();
         HideBattlePreviewModal();
+        StopBackgroundMusicBeforeBirdDuel();
 
         if (!Application.CanStreamedLevelBeLoaded(BirdDuelSceneName))
         {
@@ -153,8 +159,8 @@ public partial class SceneLoader
         Canvas canvas = ResolveBattlePreviewParentCanvas();
         if (canvas == null)
         {
-            PreBattleCdContext.SetSelectedCd(BirdDuelCdCatalog.DefaultCdId);
-            LaunchBirdDuelThenBattle(false, selected, false, BattleDifficultyTier.Boss, true, aiStyle);
+            LaunchBirdDuelThenBattle(false, selected, false, BattleDifficultyTier.Boss, true, aiStyle,
+                BirdDuelCdCatalog.DefaultCdId);
             return;
         }
 
@@ -248,8 +254,8 @@ public partial class SceneLoader
         Canvas canvas = ResolveBattlePreviewParentCanvas();
         if (canvas == null)
         {
-            PreBattleCdContext.SetSelectedCd(BirdDuelCdCatalog.DefaultCdId);
-            LaunchBirdDuelThenBattle(harbor, selected, hasHidden, hiddenTier);
+            LaunchBirdDuelThenBattle(harbor, selected, hasHidden, hiddenTier,
+                birdDuelCdId: BirdDuelCdCatalog.DefaultCdId);
             return;
         }
 
@@ -317,8 +323,8 @@ public partial class SceneLoader
         Canvas canvas = ResolveBattlePreviewParentCanvas();
         if (canvas == null)
         {
-            PreBattleCdContext.SetSelectedCd(BirdDuelCdCatalog.DefaultCdId);
-            LaunchBirdDuelThenBattle(harbor, selected, hasHidden, hiddenTier, freeBattle, freeBattleAiStyle);
+            LaunchBirdDuelThenBattle(harbor, selected, hasHidden, hiddenTier, freeBattle, freeBattleAiStyle,
+                BirdDuelCdCatalog.DefaultCdId);
             return;
         }
 
@@ -327,9 +333,17 @@ public partial class SceneLoader
             battlePreviewFontAsset,
             cdId =>
             {
-                PreBattleCdContext.SetSelectedCd(
-                    string.IsNullOrWhiteSpace(cdId) ? BirdDuelCdCatalog.DefaultCdId : cdId);
-                LaunchBirdDuelThenBattle(harbor, selected, hasHidden, hiddenTier, freeBattle, freeBattleAiStyle);
+                string resolvedCdId = string.IsNullOrWhiteSpace(cdId)
+                    ? BirdDuelCdCatalog.DefaultCdId
+                    : cdId.Trim();
+                LaunchBirdDuelThenBattle(
+                    harbor,
+                    selected,
+                    hasHidden,
+                    hiddenTier,
+                    freeBattle,
+                    freeBattleAiStyle,
+                    resolvedCdId);
             },
             () =>
             {
@@ -395,5 +409,25 @@ public partial class SceneLoader
             isRematch,
             battlePreviewFontAsset,
             onContinue);
+    }
+
+    private static string ResolveLaunchBirdDuelCdId(string explicitCdId)
+    {
+        if (!string.IsNullOrWhiteSpace(explicitCdId))
+            return explicitCdId.Trim();
+        if (PreBattleCdContext.HasSelection)
+            return PreBattleCdContext.SelectedCdId;
+        return BirdDuelCdCatalog.DefaultCdId;
+    }
+
+    private static void StopBackgroundMusicBeforeBirdDuel()
+    {
+        HallBackgroundMusicPlayer.StopAll();
+        StoryProgressBackgroundMusicPlayer.StopAll();
+        CardStoreBackgroundMusicPlayer.StopAll();
+        BuildbeckBackgroundMusicPlayer.StopAll();
+        TutorialBattleBackgroundMusicPlayer.StopAll();
+        FreeBattleBackgroundMusicPlayer.StopAll();
+        PlotBackgroundMusicPlayer.StopAllInMainPlotIfLoaded();
     }
 }

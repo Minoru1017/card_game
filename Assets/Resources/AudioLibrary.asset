@@ -86,6 +86,8 @@ MonoBehaviour:
   monsterCardAttackSfx: {fileID: 8300000, guid: 1dc1211166abfc14ab9b571c92cd3ec7, type: 3}
   monsterCardCounterattackSfx: {fileID: 8300000, guid: 687a9a3997f66e1479eb06558e65e141, type: 3}
   birdDuelCdBgms:
+  - id: harbor_practice_tape
+    clip: {fileID: 8300000, guid: 64691ed4e38b63446bc18cf54dcca6aa, type: 3}
   - id: court_march
     clip: {fileID: 8300000, guid: 798a926c3312d464394a0e4dfa537ac8, type: 3}
   - id: morning_prayer

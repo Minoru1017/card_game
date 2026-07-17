@@ -12,6 +12,10 @@ public sealed class M12PhaseAHorrorTextScrambleUi : MonoBehaviour
     private float nextScrambleUnscaled;
     private readonly Dictionary<TextMeshProUGUI, string> originalTmpTexts = new Dictionary<TextMeshProUGUI, string>();
     private readonly Dictionary<Text, string> originalLegacyTexts = new Dictionary<Text, string>();
+    private readonly List<TextMeshProUGUI> scrambleTmpTargets = new List<TextMeshProUGUI>(128);
+    private readonly List<Text> scrambleLegacyTargets = new List<Text>(16);
+    private Canvas battleCanvas;
+    private bool targetsDirty = true;
 
     public static bool IsActive => instance != null && instance.enabled;
 
@@ -34,8 +38,17 @@ public sealed class M12PhaseAHorrorTextScrambleUi : MonoBehaviour
 
         ui.originalTmpTexts.Clear();
         ui.originalLegacyTexts.Clear();
+        ui.targetsDirty = true;
         ui.enabled = true;
         ui.nextScrambleUnscaled = 0f;
+    }
+
+    /// <summary>手牌重建等動態 UI 變更後，重新收集可亂碼文字（僅限對戰 Canvas 子樹）。</summary>
+    public static void NotifyBattleTextTargetsChanged()
+    {
+        if (instance == null || !instance.enabled)
+            return;
+        instance.targetsDirty = true;
     }
 
     private static M12PhaseAHorrorTextScrambleUi EnsureInstance()
@@ -69,16 +82,51 @@ public sealed class M12PhaseAHorrorTextScrambleUi : MonoBehaviour
             return;
 
         nextScrambleUnscaled = Time.unscaledTime + ScrambleIntervalSeconds;
-        ScrambleAllVisibleText();
+        if (targetsDirty)
+            RebuildTargetLists();
+        ScrambleRegisteredText();
     }
 
-    private void ScrambleAllVisibleText()
+    private void RebuildTargetLists()
     {
-        TextMeshProUGUI[] tmps = Object.FindObjectsByType<TextMeshProUGUI>(FindObjectsSortMode.None);
-        for (int i = 0; i < tmps.Length; i++)
+        targetsDirty = false;
+        scrambleTmpTargets.Clear();
+        scrambleLegacyTargets.Clear();
+
+        Canvas canvas = ResolveBattleCanvas();
+        if (canvas == null)
+            return;
+
+        canvas.GetComponentsInChildren(true, scrambleTmpTargets);
+        canvas.GetComponentsInChildren(true, scrambleLegacyTargets);
+    }
+
+    private Canvas ResolveBattleCanvas()
+    {
+        if (battleCanvas != null)
+            return battleCanvas;
+
+        BattleSimulationDebugUI debugUi = Object.FindFirstObjectByType<BattleSimulationDebugUI>();
+        if (debugUi == null)
+            return null;
+
+        battleCanvas = debugUi.GetComponentInParent<Canvas>();
+        return battleCanvas;
+    }
+
+    private void ScrambleRegisteredText()
+    {
+        for (int i = scrambleTmpTargets.Count - 1; i >= 0; i--)
         {
-            TextMeshProUGUI tmp = tmps[i];
-            if (tmp == null || !tmp.isActiveAndEnabled || ShouldSkip(tmp.transform))
+            TextMeshProUGUI tmp = scrambleTmpTargets[i];
+            if (tmp == null)
+            {
+                scrambleTmpTargets.RemoveAt(i);
+                originalTmpTexts.Remove(tmp);
+                continue;
+            }
+
+            if (!tmp.isActiveAndEnabled || ShouldSkip(tmp.transform))
                 continue;
             if (string.IsNullOrEmpty(tmp.text))
                 continue;
@@ -88,11 +136,17 @@ public sealed class M12PhaseAHorrorTextScrambleUi : MonoBehaviour
             tmp.text = M12PhaseAHorrorTextScramble.ScrambleRichText(originalTmpTexts[tmp]);
         }
 
-        Text[] legacyTexts = Object.FindObjectsByType<Text>(FindObjectsSortMode.None);
-        for (int i = 0; i < legacyTexts.Length; i++)
+        for (int i = scrambleLegacyTargets.Count - 1; i >= 0; i--)
         {
-            Text legacy = legacyTexts[i];
-            if (legacy == null || !legacy.isActiveAndEnabled || ShouldSkip(legacy.transform))
+            Text legacy = scrambleLegacyTargets[i];
+            if (legacy == null)
+            {
+                scrambleLegacyTargets.RemoveAt(i);
+                originalLegacyTexts.Remove(legacy);
+                continue;
+            }
+
+            if (!legacy.isActiveAndEnabled || ShouldSkip(legacy.transform))
                 continue;
             if (string.IsNullOrEmpty(legacy.text))
                 continue;
@@ -119,6 +173,9 @@ public sealed class M12PhaseAHorrorTextScrambleUi : MonoBehaviour
 
         originalTmpTexts.Clear();
         originalLegacyTexts.Clear();
+        scrambleTmpTargets.Clear();
+        scrambleLegacyTargets.Clear();
+        targetsDirty = true;
     }
 
     private static void ForceRefreshBattleUi()

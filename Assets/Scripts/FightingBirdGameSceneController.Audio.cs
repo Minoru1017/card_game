@@ -1,15 +1,13 @@
 using UnityEngine;
 
-#if UNITY_EDITOR
-using UnityEditor;
-#endif
-
 public sealed partial class FightingBirdGameSceneController
 {
     // ----------------------------------------------------------------- audio
 
     private void SetupAudio()
     {
+        StopCompetingBackgroundMusic();
+
         audioSource = gameObject.AddComponent<AudioSource>();
         audioSource.playOnAwake = false;
         audioSource.spatialBlend = 0f;
@@ -24,6 +22,17 @@ public sealed partial class FightingBirdGameSceneController
         hitSfxBank = BirdDuelHitSfxBank.TryCreate(ResolveHitSfxSourceClip());
 
         SetupBgm();
+    }
+
+    private static void StopCompetingBackgroundMusic()
+    {
+        HallBackgroundMusicPlayer.StopAll();
+        StoryProgressBackgroundMusicPlayer.StopAll();
+        CardStoreBackgroundMusicPlayer.StopAll();
+        BuildbeckBackgroundMusicPlayer.StopAll();
+        TutorialBattleBackgroundMusicPlayer.StopAll();
+        FreeBattleBackgroundMusicPlayer.StopAll();
+        PlotBackgroundMusicPlayer.StopAllInMainPlotIfLoaded();
     }
 
     private AudioClip ResolveHitSfxSourceClip()
@@ -51,11 +60,10 @@ public sealed partial class FightingBirdGameSceneController
         hitSfxSource.PlayOneShot(clip, GameAudioUserSettings.ScaleBattleSfx(BirdDuelHitSfxBank.ResolveVolume(outcome)));
     }
 
-    /// <summary>鬥鳥預設曲：feinsmecker - Come Again。建立並備妥音源；實際排程於每場開始時 <see cref="RestartSongAndClock"/>。</summary>
+    /// <summary>鬥鳥 BGM：依所選 CD 解析 clip；實際排程於每場開始時 <see cref="RestartSongAndClock"/>。</summary>
     private void SetupBgm()
     {
-        LoadRhythmSync();
-        ResolveBgmClipIfMissing();
+        ApplyActiveCdAudioProfile();
 
         if (bgmClip == null)
         {
@@ -64,12 +72,16 @@ public sealed partial class FightingBirdGameSceneController
             return;
         }
 
-        bgmSource = gameObject.AddComponent<AudioSource>();
-        bgmSource.playOnAwake = false;
+        if (bgmSource == null)
+        {
+            bgmSource = gameObject.AddComponent<AudioSource>();
+            bgmSource.playOnAwake = false;
+            bgmSource.spatialBlend = 0f;
+            bgmSource.bypassListenerEffects = true;
+            bgmSource.ignoreListenerPause = true;
+        }
+
         bgmSource.loop = !rhythmProfile.UsesCustomBgmLoop;
-        bgmSource.spatialBlend = 0f;
-        bgmSource.bypassListenerEffects = true;
-        bgmSource.ignoreListenerPause = true;
         bgmSource.volume = GameAudioUserSettings.ScaleBgm(BgmVolume);
         bgmSource.clip = bgmClip;
 
@@ -77,17 +89,19 @@ public sealed partial class FightingBirdGameSceneController
             bgmClip.LoadAudioData();
     }
 
-    /// <summary>每場開始（含「再練一次」）：歌曲從頭重播，並把節拍時鐘錨點重設到新的排程起點。</summary>
+    /// <summary>每場開始（含「再練一次」）：重載 CD 設定、歌曲從頭重播，並重設節拍時鐘。</summary>
     private void RestartSongAndClock()
     {
-        // 節拍時鐘錨點：BGM 從此 dsp 時間開始，第一個下拍 = songStartDsp + firstDownbeatOffset。
-        // 即使缺 BGM 也設定，讓節拍格點（靜音）仍可運作。
+        ApplyActiveCdAudioProfile();
+
         songStartDsp = AudioSettings.dspTime + ScheduleLeadSeconds;
 
-        if (bgmSource == null)
+        if (bgmSource == null || bgmClip == null)
             return;
 
         bgmSource.Stop();
+        bgmSource.clip = bgmClip;
+        bgmSource.loop = !rhythmProfile.UsesCustomBgmLoop;
         bgmSource.time = rhythmProfile.UsesCustomBgmLoop ? bgmLoopStartSeconds : 0f;
         bgmSource.PlayScheduled(songStartDsp);
     }
@@ -100,6 +114,12 @@ public sealed partial class FightingBirdGameSceneController
 
         if (bgmSource.time >= bgmLoopStartSeconds + bgmLoopLengthSeconds)
             bgmSource.time = bgmLoopStartSeconds;
+    }
+
+    private void ApplyActiveCdAudioProfile()
+    {
+        LoadRhythmSync();
+        bgmClip = BirdDuelBgmResolver.Resolve(activeCdId);
     }
 
     private void LoadRhythmSync()
@@ -123,45 +143,18 @@ public sealed partial class FightingBirdGameSceneController
         if (M13StoryDuelContext.IsActive)
             return BirdDuelRhythmChart.RiverForkWaveCdId;
 
+        if (PreBattleDuelContext.IsActive && !string.IsNullOrWhiteSpace(PreBattleDuelContext.BirdDuelCdId))
+            return PreBattleDuelContext.BirdDuelCdId;
+
         if (PreBattleCdContext.HasSelection)
             return PreBattleCdContext.SelectedCdId;
+
         return BirdDuelCdCatalog.DefaultCdId;
     }
 
     /// <summary>第 beatIndex 個整拍的 dsp 命中時間（count-in 用）。</summary>
     private double BeatDsp(int beatIndex) =>
         songStartDsp + firstDownbeatOffset + beatIndex * SecondsPerBeat;
-
-    private void ResolveBgmClipIfMissing()
-    {
-        if (bgmClip != null)
-            return;
-
-        AudioLibrary library = AudioLibrary.Instance;
-        if (library != null)
-            bgmClip = library.GetBirdDuelCdBgm(activeCdId);
-
-#if UNITY_EDITOR
-        if (bgmClip == null)
-        {
-            string path = ResolveBirdDuelBgmAssetPath(activeCdId);
-            bgmClip = AssetDatabase.LoadAssetAtPath<AudioClip>(path);
-        }
-#endif
-    }
-
-#if UNITY_EDITOR
-    private static string ResolveBirdDuelBgmAssetPath(string cdId)
-    {
-        if (string.Equals(cdId, "court_march", System.StringComparison.OrdinalIgnoreCase))
-            return StampedeAssetPath;
-        if (BirdDuelRhythmChart.IsMorningPrayer(cdId))
-            return MorningPrayerAssetPath;
-        if (BirdDuelRhythmChart.IsRiverForkWave(cdId))
-            return RiverForkWaveAssetPath;
-        return ComeAgainAssetPath;
-    }
-#endif
 
     public void ApplyUserBgmVolume()
     {
@@ -197,7 +190,7 @@ public sealed partial class FightingBirdGameSceneController
         for (int i = 0; i < samples; i++)
         {
             float t = (float)i / sampleRate;
-            float envelope = Mathf.Exp(-t * 28f); // 快速衰減的鼓點感
+            float envelope = Mathf.Exp(-t * 28f);
             data[i] = Mathf.Sin(2f * Mathf.PI * frequency * t) * envelope * 0.6f;
         }
         clip.SetData(data, 0);

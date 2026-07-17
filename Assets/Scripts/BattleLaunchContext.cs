@@ -42,6 +42,7 @@ public static partial class BattleLaunchContext
 
     public static void ClearActiveBattle()
     {
+        ActiveModeKind = BattleModeKind.None;
         ActiveBattleDifficultyLabelZh = null;
         PendingDifficultyLabelZh = null;
         ReturnToStoryProgressAfterBattle = false;

@@ -138,6 +138,9 @@ public sealed class LinKeFloatingCoachPanel : MonoBehaviour
         if (_backdrop != null) _backdrop.SetActive(false);
     }
 
+    public void ApplyPortraitExpression(string hintKey) =>
+        HarborCombatCoachExpressionCatalog.ApplyToPortrait(_portraitImage, hintKey);
+
     public void CollapsePanel()
     {
         if (!_expanded || _panelRt == null) return;

@@ -37,6 +37,9 @@ public static class PreBattleDuelContext
     /// <summary>本場敵方英雄顯示名。</summary>
     public static string EnemyHeroDisplayName { get; private set; }
 
+    /// <summary>本場鬥鳥所選 CD（跨場景快照；與 <see cref="PreBattleCdContext"/> 同步寫入）。</summary>
+    public static string BirdDuelCdId { get; private set; }
+
     /// <summary>由戰前預覽寫入：開始一段戰前鬥鳥。</summary>
     public static void Begin(
         string battleSceneName,
@@ -47,7 +50,8 @@ public static class PreBattleDuelContext
         string heroId = null,
         string enemyHeroDisplayName = null,
         bool isFreeBattle = false,
-        EnemyAiPlayStyle freeBattleAiStyle = EnemyAiPlayStyle.Balanced)
+        EnemyAiPlayStyle freeBattleAiStyle = EnemyAiPlayStyle.Balanced,
+        string birdDuelCdId = null)
     {
         IsActive = true;
         BattleSceneName = string.IsNullOrWhiteSpace(battleSceneName) ? null : battleSceneName.Trim();
@@ -62,6 +66,16 @@ public static class PreBattleDuelContext
         EnemyHeroDisplayName = string.IsNullOrWhiteSpace(enemyHeroDisplayName)
             ? null
             : enemyHeroDisplayName.Trim();
+        BirdDuelCdId = ResolveBirdDuelCdId(birdDuelCdId);
+    }
+
+    private static string ResolveBirdDuelCdId(string explicitCdId)
+    {
+        if (!string.IsNullOrWhiteSpace(explicitCdId))
+            return explicitCdId.Trim();
+        if (PreBattleCdContext.HasSelection)
+            return PreBattleCdContext.SelectedCdId;
+        return BirdDuelCdCatalog.DefaultCdId;
     }
 
     /// <summary>由戰鬥場景載入時讀取情報並清空，避免重複顯示。</summary>
@@ -88,5 +102,6 @@ public static class PreBattleDuelContext
         HasHiddenTier = false;
         HeroId = null;
         EnemyHeroDisplayName = null;
+        BirdDuelCdId = null;
     }
 }

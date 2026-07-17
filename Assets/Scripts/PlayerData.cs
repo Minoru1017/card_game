@@ -32,12 +32,34 @@ public partial class PlayerData : MonoBehaviour
     [Header("UI")]
     public TextMeshProUGUI coinsText;
 
+    private static PlayerData cachedCanonical;
+
+    private static int GetCanonicalPriority(PlayerData p)
+    {
+        if (p == null) return 0;
+        if (p.gameObject.name == "DataManager") return 3;
+        if (p.GetComponent<DeckManager>() != null) return 2;
+        return 1;
+    }
+
+    private static void RegisterCanonicalCandidate(PlayerData candidate)
+    {
+        if (candidate == null)
+            return;
+
+        if (cachedCanonical == null || GetCanonicalPriority(candidate) >= GetCanonicalPriority(cachedCanonical))
+            cachedCanonical = candidate;
+    }
+
     /// <summary>
     /// 唯一應讀寫存檔的 <see cref="PlayerData"/>（優先 <c>DataManager</c> 物件上的實例，其次帶 <see cref="DeckManager"/> 者）。
     /// 全專案請用此方法，勿再 <c>FindFirstObjectByType&lt;PlayerData&gt;</c>。
     /// </summary>
     public static PlayerData ResolveCanonical()
     {
+        if (cachedCanonical != null)
+            return cachedCanonical;
+
         PlayerData[] all = UnityEngine.Object.FindObjectsByType<PlayerData>(FindObjectsSortMode.None);
         PlayerData onDataManager = null;
         PlayerData withDeckManager = null;
@@ -53,9 +75,9 @@ public partial class PlayerData : MonoBehaviour
                 withDeckManager = p;
         }
 
-        if (onDataManager != null) return onDataManager;
-        if (withDeckManager != null) return withDeckManager;
-        return any;
+        cachedCanonical = onDataManager != null ? onDataManager :
+            withDeckManager != null ? withDeckManager : any;
+        return cachedCanonical;
     }
 
     private const string FallbackHostName = "TutorialPlotPlayerDataHost";
@@ -111,6 +133,7 @@ public partial class PlayerData : MonoBehaviour
 
     void Awake()
     {
+        RegisterCanonicalCandidate(this);
         if (CardStore != null) CardStore.LoadCardData();
         if (ResolveCanonical() == this)
         {
@@ -129,6 +152,12 @@ public partial class PlayerData : MonoBehaviour
     }
 
     /// <summary>手機切背景／來電、PC 失焦時：將延遲存檔與貴重品變更落盤。</summary>
+    private void OnDestroy()
+    {
+        if (cachedCanonical == this)
+            cachedCanonical = null;
+    }
+
     private void OnApplicationPause(bool pauseStatus)
     {
         if (!pauseStatus || ResolveCanonical() != this)

@@ -27,10 +27,6 @@ public class CardStore : MonoBehaviour
         LoadCardData();
     }
 
-    void Update()
-    {
-    }
-
     public void LoadCardData()
     {
         cardList.Clear();

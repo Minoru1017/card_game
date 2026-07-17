@@ -97,10 +97,64 @@ public static class StoryProgressSession
     /// <summary>離開劇情或載入非 Main Plot 場景時呼叫，停止 BGM 並清除請求旗標。</summary>
     public static void EndPlotBgmSession()
     {
+        ClearPlotBgmRequestFlags();
+        PlotBackgroundMusicPlayer.StopAllInMainPlotIfLoaded();
+    }
+
+    private enum PlotLaunchTeardownScope
+    {
+        StoryProgressMusicOnly,
+        IncludeBattleBgms,
+    }
+
+    /// <summary>進入 Main Plot 或銜接劇情前：清對戰旗標並停止 Story／對戰 BGM。</summary>
+    private static void ResetForPlotLaunch(PlotLaunchTeardownScope teardownScope)
+    {
+        BattleLaunchContext.ClearActiveBattle();
+        StoryProgressBackgroundMusicPlayer.StopAll();
+        if (teardownScope == PlotLaunchTeardownScope.IncludeBattleBgms)
+        {
+            TutorialBattleBackgroundMusicPlayer.StopAll();
+            FreeBattleBackgroundMusicPlayer.StopAll();
+        }
+    }
+
+    private static void ClearPlotBgmRequestFlags()
+    {
         tutorialPlotBgmRequested = false;
         m12PlotBgmRequested = false;
         m13PlotBgmRequested = false;
-        PlotBackgroundMusicPlayer.StopAllInMainPlotIfLoaded();
+    }
+
+    private static void SetPlotBgmRequest(bool tutorial, bool m12, bool m13)
+    {
+        tutorialPlotBgmRequested = tutorial;
+        m12PlotBgmRequested = m12;
+        m13PlotBgmRequested = m13;
+    }
+
+    private static void ResetCrossChapterBridgeFlags()
+    {
+        tutorialPlotEpilogueActive = false;
+        harborCombatClearBridgeActive = false;
+        launchTutorialBattleAfterPlot = false;
+    }
+
+    private static void ResetM12PlotSessionFlags()
+    {
+        m12IntroPlotActive = false;
+        m12MidPatrolPlotActive = false;
+        m12VictoryEpilogueActive = false;
+        launchM12PhaseABattleAfterPlot = false;
+        launchM12PhaseBBattleAfterPlot = false;
+    }
+
+    private static void ResetM13PlotSessionFlags()
+    {
+        m13OpeningPlotActive = false;
+        m13RoseTrialPlotActive = false;
+        m13EpiloguePlotActive = false;
+        launchM13PhaseBBattleAfterPlot = false;
     }
 
     /// <summary>離開 1-1 劇情或載入非 Main Plot 場景時呼叫，停止 BGM 並清除請求旗標。</summary>
@@ -157,17 +211,13 @@ public static class StoryProgressSession
     {
         StoryProgressBackgroundMusicPlayer.StopAll();
         launchTutorialBattleAfterPlot = battleAfterPlot;
-        tutorialPlotBgmRequested = true;
-        m12PlotBgmRequested = false;
-        m13PlotBgmRequested = false;
+        SetPlotBgmRequest(tutorial: true, m12: false, m13: false);
         SetPendingPlotSteps(TutorialPlotScriptFactory.BuildTutorialPlotSteps());
         if (!UnityEngine.Application.CanStreamedLevelBeLoaded(MainPlotSceneName))
         {
             UnityEngine.Debug.LogError("StoryProgressSession: cannot load Main Plot — add scene to Build Settings.");
             launchTutorialBattleAfterPlot = false;
-            tutorialPlotBgmRequested = false;
-            m12PlotBgmRequested = false;
-            m13PlotBgmRequested = false;
+            ClearPlotBgmRequestFlags();
             return;
         }
 
@@ -185,13 +235,8 @@ public static class StoryProgressSession
         tutorialPlotEpilogueActive = true;
         launchTutorialBattleAfterPlot = false;
         NotifyTutorialBattleFinished(won: true);
-        BattleLaunchContext.ClearActiveBattle();
-        StoryProgressBackgroundMusicPlayer.StopAll();
-        TutorialBattleBackgroundMusicPlayer.StopAll();
-        FreeBattleBackgroundMusicPlayer.StopAll();
-        tutorialPlotBgmRequested = true;
-        m12PlotBgmRequested = false;
-        m13PlotBgmRequested = false;
+        ResetForPlotLaunch(PlotLaunchTeardownScope.IncludeBattleBgms);
+        SetPlotBgmRequest(tutorial: true, m12: false, m13: false);
         SetPendingPlotSteps(TutorialPlotScriptFactory.BuildTutorialPlotEpilogueSteps());
 
         if (!UnityEngine.Application.CanStreamedLevelBeLoaded(MainPlotSceneName))
@@ -199,9 +244,7 @@ public static class StoryProgressSession
             UnityEngine.Debug.LogError(
                 "StoryProgressSession: cannot load Main Plot for epilogue — add scene to Build Settings.");
             tutorialPlotEpilogueActive = false;
-            tutorialPlotBgmRequested = false;
-            m12PlotBgmRequested = false;
-            m13PlotBgmRequested = false;
+            ClearPlotBgmRequestFlags();
             LoadStoryProgressFallback();
             return;
         }
@@ -221,15 +264,9 @@ public static class StoryProgressSession
     public static void LaunchHarborCombatClearBridgeAfterFirstVictory()
     {
         harborCombatClearBridgeActive = true;
-        tutorialPlotEpilogueActive = false;
-        launchTutorialBattleAfterPlot = false;
-        tutorialPlotBgmRequested = false;
-        m12PlotBgmRequested = false;
-        m13PlotBgmRequested = false;
-        BattleLaunchContext.ClearActiveBattle();
-        StoryProgressBackgroundMusicPlayer.StopAll();
-        TutorialBattleBackgroundMusicPlayer.StopAll();
-        FreeBattleBackgroundMusicPlayer.StopAll();
+        ResetCrossChapterBridgeFlags();
+        ClearPlotBgmRequestFlags();
+        ResetForPlotLaunch(PlotLaunchTeardownScope.IncludeBattleBgms);
         SetPendingPlotSteps(TutorialPlotScriptFactory.BuildHarborCombatClearBridgeSteps());
 
         if (!UnityEngine.Application.CanStreamedLevelBeLoaded(MainPlotSceneName))
@@ -259,14 +296,10 @@ public static class StoryProgressSession
         m12VictoryEpilogueActive = false;
         launchM12PhaseABattleAfterPlot = true;
         launchM12PhaseBBattleAfterPlot = false;
-        tutorialPlotEpilogueActive = false;
-        harborCombatClearBridgeActive = false;
-        launchTutorialBattleAfterPlot = false;
-        tutorialPlotBgmRequested = false;
-        m12PlotBgmRequested = true;
-        m13PlotBgmRequested = false;
-        BattleLaunchContext.ClearActiveBattle();
-        StoryProgressBackgroundMusicPlayer.StopAll();
+        ResetCrossChapterBridgeFlags();
+        ResetM13PlotSessionFlags();
+        SetPlotBgmRequest(tutorial: false, m12: true, m13: false);
+        ResetForPlotLaunch(PlotLaunchTeardownScope.StoryProgressMusicOnly);
         SetPendingPlotSteps(TutorialPlotScriptFactory.BuildM12IntroPlotSteps());
         LoadMainPlotOrFallback(() =>
         {
@@ -282,14 +315,10 @@ public static class StoryProgressSession
         m12VictoryEpilogueActive = false;
         launchM12PhaseBBattleAfterPlot = true;
         launchM12PhaseABattleAfterPlot = false;
-        tutorialPlotEpilogueActive = false;
-        harborCombatClearBridgeActive = false;
-        launchTutorialBattleAfterPlot = false;
-        tutorialPlotBgmRequested = false;
-        m12PlotBgmRequested = true;
-        m13PlotBgmRequested = false;
-        BattleLaunchContext.ClearActiveBattle();
-        StoryProgressBackgroundMusicPlayer.StopAll();
+        ResetCrossChapterBridgeFlags();
+        ResetM13PlotSessionFlags();
+        SetPlotBgmRequest(tutorial: false, m12: true, m13: false);
+        ResetForPlotLaunch(PlotLaunchTeardownScope.StoryProgressMusicOnly);
         SetPendingPlotSteps(TutorialPlotScriptFactory.BuildM12MidPatrolPlotSteps());
         LoadMainPlotOrFallback(() =>
         {
@@ -305,14 +334,10 @@ public static class StoryProgressSession
         m12MidPatrolPlotActive = false;
         launchM12PhaseABattleAfterPlot = false;
         launchM12PhaseBBattleAfterPlot = false;
-        tutorialPlotEpilogueActive = false;
-        harborCombatClearBridgeActive = false;
-        launchTutorialBattleAfterPlot = false;
-        tutorialPlotBgmRequested = false;
-        m12PlotBgmRequested = true;
-        m13PlotBgmRequested = false;
-        BattleLaunchContext.ClearActiveBattle();
-        StoryProgressBackgroundMusicPlayer.StopAll();
+        ResetCrossChapterBridgeFlags();
+        ResetM13PlotSessionFlags();
+        SetPlotBgmRequest(tutorial: false, m12: true, m13: false);
+        ResetForPlotLaunch(PlotLaunchTeardownScope.StoryProgressMusicOnly);
         SetPendingPlotSteps(TutorialPlotScriptFactory.BuildM12VictoryEpilogueSteps());
         LoadMainPlotOrFallback(() =>
         {
@@ -356,19 +381,10 @@ public static class StoryProgressSession
         m13OpeningPlotActive = true;
         m13RoseTrialPlotActive = false;
         m13EpiloguePlotActive = false;
-        m12IntroPlotActive = false;
-        m12MidPatrolPlotActive = false;
-        m12VictoryEpilogueActive = false;
-        launchM12PhaseABattleAfterPlot = false;
-        launchM12PhaseBBattleAfterPlot = false;
-        tutorialPlotEpilogueActive = false;
-        harborCombatClearBridgeActive = false;
-        launchTutorialBattleAfterPlot = false;
-        tutorialPlotBgmRequested = false;
-        m12PlotBgmRequested = false;
-        m13PlotBgmRequested = true;
-        BattleLaunchContext.ClearActiveBattle();
-        StoryProgressBackgroundMusicPlayer.StopAll();
+        ResetM12PlotSessionFlags();
+        ResetCrossChapterBridgeFlags();
+        SetPlotBgmRequest(tutorial: false, m12: false, m13: true);
+        ResetForPlotLaunch(PlotLaunchTeardownScope.StoryProgressMusicOnly);
         SetPendingPlotSteps(TutorialPlotScriptFactory.BuildM13OpeningPlotSteps());
         LoadMainPlotOrFallback(() => m13OpeningPlotActive = false);
     }
@@ -378,22 +394,12 @@ public static class StoryProgressSession
         m13RoseTrialPlotActive = true;
         m13OpeningPlotActive = false;
         m13EpiloguePlotActive = false;
-        m12IntroPlotActive = false;
-        m12MidPatrolPlotActive = false;
-        m12VictoryEpilogueActive = false;
-        launchM12PhaseABattleAfterPlot = false;
-        launchM12PhaseBBattleAfterPlot = false;
-        launchM13PhaseBBattleAfterPlot = false;
-        tutorialPlotEpilogueActive = false;
-        harborCombatClearBridgeActive = false;
-        launchTutorialBattleAfterPlot = false;
-        tutorialPlotBgmRequested = false;
-        m12PlotBgmRequested = false;
-        m13PlotBgmRequested = true;
-        BattleLaunchContext.ClearActiveBattle();
-        StoryProgressBackgroundMusicPlayer.StopAll();
-        SetPendingPlotSteps(TutorialPlotScriptFactory.BuildM13RoseTrialPlotSteps());
+        ResetM12PlotSessionFlags();
+        ResetCrossChapterBridgeFlags();
         launchM13PhaseBBattleAfterPlot = true;
+        SetPlotBgmRequest(tutorial: false, m12: false, m13: true);
+        ResetForPlotLaunch(PlotLaunchTeardownScope.StoryProgressMusicOnly);
+        SetPendingPlotSteps(TutorialPlotScriptFactory.BuildM13RoseTrialPlotSteps());
         LoadMainPlotOrFallback(() => m13RoseTrialPlotActive = false);
     }
 
@@ -402,20 +408,11 @@ public static class StoryProgressSession
         m13EpiloguePlotActive = true;
         m13OpeningPlotActive = false;
         m13RoseTrialPlotActive = false;
-        m12IntroPlotActive = false;
-        m12MidPatrolPlotActive = false;
-        m12VictoryEpilogueActive = false;
-        launchM12PhaseABattleAfterPlot = false;
-        launchM12PhaseBBattleAfterPlot = false;
+        ResetM12PlotSessionFlags();
+        ResetCrossChapterBridgeFlags();
         launchM13PhaseBBattleAfterPlot = false;
-        tutorialPlotEpilogueActive = false;
-        harborCombatClearBridgeActive = false;
-        launchTutorialBattleAfterPlot = false;
-        tutorialPlotBgmRequested = false;
-        m12PlotBgmRequested = false;
-        m13PlotBgmRequested = true;
-        BattleLaunchContext.ClearActiveBattle();
-        StoryProgressBackgroundMusicPlayer.StopAll();
+        SetPlotBgmRequest(tutorial: false, m12: false, m13: true);
+        ResetForPlotLaunch(PlotLaunchTeardownScope.StoryProgressMusicOnly);
         SetPendingPlotSteps(TutorialPlotScriptFactory.BuildM13EpiloguePlotSteps());
         LoadMainPlotOrFallback(() => m13EpiloguePlotActive = false);
     }

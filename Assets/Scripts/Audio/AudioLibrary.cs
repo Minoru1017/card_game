@@ -96,13 +96,25 @@ public sealed class AudioLibrary : ScriptableObject
     /// <summary>依 CD id 取得鬥鳥 BGM；找不到時回傳預設 <see cref="BirdDuelBgm"/>。</summary>
     public AudioClip GetBirdDuelCdBgm(string cdId)
     {
+        return TryGetBirdDuelCdBgm(cdId, out AudioClip clip) ? clip : birdDuelBgm;
+    }
+
+    /// <summary>依 CD id 取得鬥鳥 BGM；僅在該 CD 有對應 clip 時回傳 true。</summary>
+    public bool TryGetBirdDuelCdBgm(string cdId, out AudioClip clip)
+    {
+        clip = null;
         if (string.IsNullOrWhiteSpace(cdId))
-            return birdDuelBgm;
+            return false;
+
+        cdId = cdId.Trim();
+        if (string.Equals(cdId, BirdDuelCdCatalog.DefaultCdId, System.StringComparison.OrdinalIgnoreCase))
+        {
+            clip = birdDuelBgm;
+            return clip != null;
+        }
 
         EnsureBirdDuelCdBgmLookup();
-        return birdDuelCdBgmLookup.TryGetValue(cdId.Trim(), out AudioClip clip) && clip != null
-            ? clip
-            : birdDuelBgm;
+        return birdDuelCdBgmLookup.TryGetValue(cdId, out clip) && clip != null;
     }
 
     private void EnsureBirdDuelCdBgmLookup()
@@ -110,7 +122,7 @@ public sealed class AudioLibrary : ScriptableObject
         if (birdDuelCdBgmLookup != null)
             return;
 
-        birdDuelCdBgmLookup = new Dictionary<string, AudioClip>();
+        birdDuelCdBgmLookup = new Dictionary<string, AudioClip>(System.StringComparer.OrdinalIgnoreCase);
         if (birdDuelCdBgms == null)
             return;
 

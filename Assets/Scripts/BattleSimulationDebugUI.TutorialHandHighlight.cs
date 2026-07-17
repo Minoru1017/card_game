@@ -182,10 +182,7 @@ public partial class BattleSimulationDebugUI
                 return;
             }
 
-            tutorialHandHintIndexSet.Clear();
-            for (int i = 0; i < tutorialHandHintIndices.Count; i++)
-                tutorialHandHintIndexSet.Add(tutorialHandHintIndices[i]);
-            ApplyTutorialHandPlayHighlightVisuals(tutorialHandHintIndexSet);
+            ApplyHarborHandPlayHighlightIndices(tutorialHandHintIndices);
             return;
         }
 
@@ -202,9 +199,25 @@ public partial class BattleSimulationDebugUI
             return;
         }
 
+        ApplyHarborHandPlayHighlightIndices(tutorialHandHintIndices);
+    }
+
+    private void ApplyHarborHandPlayHighlightIndices(List<int> indices)
+    {
         tutorialHandHintIndexSet.Clear();
-        for (int i = 0; i < tutorialHandHintIndices.Count; i++)
-            tutorialHandHintIndexSet.Add(tutorialHandHintIndices[i]);
+        for (int i = 0; i < indices.Count; i++)
+        {
+            int idx = indices[i];
+            if (battleManager.IsPlayerHandCardPlayableNow(idx))
+                tutorialHandHintIndexSet.Add(idx);
+        }
+
+        if (tutorialHandHintIndexSet.Count == 0)
+        {
+            ApplyTutorialHandPlayHighlightVisuals(null);
+            return;
+        }
+
         ApplyTutorialHandPlayHighlightVisuals(tutorialHandHintIndexSet);
     }
 

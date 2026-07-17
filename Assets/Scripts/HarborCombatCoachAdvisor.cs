@@ -324,7 +324,22 @@ public static class HarborCombatCoachAdvisor
                 ? HarborCombatHandHighlightMode.PlayRecommend
                 : HarborCombatHandHighlightMode.None
         };
+        if (hint.HighlightMode == HarborCombatHandHighlightMode.PlayRecommend &&
+            !HandHasPlayableSpell(manager))
+            hint.HighlightMode = HarborCombatHandHighlightMode.None;
         return true;
+    }
+
+    private static bool HandHasPlayableSpell(BattleSimulationManager manager)
+    {
+        int count = manager.GetPlayerHandCount();
+        for (int i = 0; i < count; i++)
+        {
+            if (manager.GetPlayerHandCard(i) is SpellCard && manager.IsPlayerHandCardPlayableNow(i))
+                return true;
+        }
+
+        return false;
     }
 
     private static bool TryBuildHandNearCap(BattleSimulationManager manager, out HarborCombatCoachHint hint)
@@ -425,9 +440,7 @@ public static class HarborCombatCoachAdvisor
         for (int i = 0; i < count; i++)
         {
             Card card = manager.GetPlayerHandCard(i);
-            if (card is SpellCard sp && sp.SpellOrdinal == 0 &&
-                !manager.IsOpeningRoundFireballBlockedForPlayer() &&
-                (manager.GetPlayerFieldCard() == null || manager.GetEnemyFieldCard() != null))
+            if (card is SpellCard sp && sp.SpellOrdinal == 0 && manager.IsPlayerHandCardPlayableNow(i))
                 return true;
         }
 

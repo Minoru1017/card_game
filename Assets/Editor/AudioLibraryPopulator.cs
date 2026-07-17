@@ -64,6 +64,7 @@ public static class AudioLibraryPopulator
         BattleFieldMonsterCounterattackSfx.EditorInvalidateCachedClip();
         library.EditorSetBirdDuelCdBgms(new[]
         {
+            new AudioLibrary.NamedAudioClip { id = BirdDuelCdCatalog.DefaultCdId, clip = birdDuelBgm },
             new AudioLibrary.NamedAudioClip { id = "court_march", clip = courtMarchBgm },
             new AudioLibrary.NamedAudioClip { id = BirdDuelRhythmChart.MorningPrayerCdId, clip = morningPrayerBgm },
             new AudioLibrary.NamedAudioClip { id = BirdDuelRhythmChart.RiverForkWaveCdId, clip = riverForkWaveBgm }

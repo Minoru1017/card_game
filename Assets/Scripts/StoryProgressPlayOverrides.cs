@@ -146,7 +146,6 @@ public sealed class StoryProgressPlayOverrides : ScriptableObject
 
         if (persistOverridesToSaveFile)
             PlayerSaveCoordinator.FlushDebouncedThenSavePlayerData();
-        StoryProgressWorldMapRuntime.RequestRefreshProgress();
         StoryProgressSceneController.RequestRefreshPresentation();
     }
 

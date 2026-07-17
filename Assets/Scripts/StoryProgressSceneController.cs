@@ -294,8 +294,7 @@ public class StoryProgressSceneController : MonoBehaviour
             return;
 
         int slot = PlayerData.GetActivePlayerSlotOrDefault();
-        TutorialProgressState.EnsureSlotIntroProgressConsistent(slot);
-        HarborTrainingProgressState.EnsureSlotHarborProgressConsistent(slot);
+        StoryProgressSlotConsistency.EnsureAll(slot);
         StoryProgressWorldMapRuntime.RequestRefreshProgress();
         TutorialProgressState.GetAcademyIntroProgressForDisplay(slot, out bool plotComplete, out bool battleComplete);
         bool introGraduated = TutorialProgressState.IsAcademyIntroGraduated(slot);
@@ -1447,15 +1446,14 @@ public class StoryProgressSceneController : MonoBehaviour
         for (int frame = 0; frame < maxFrames; frame++)
         {
             yield return null;
-            int slot = PlayerData.GetActivePlayerSlotOrDefault();
-            TutorialProgressState.EnsureSlotIntroProgressConsistent(slot);
-            HarborTrainingProgressState.EnsureSlotHarborProgressConsistent(slot);
-            StoryProgressWorldMapRuntime.RequestRefreshProgress();
-            AutoBindUi();
-            RefreshPresentation();
-            if (UnityEngine.Object.FindFirstObjectByType<StoryProgressWorldMapRuntime>() != null)
+            if (Object.FindFirstObjectByType<StoryProgressWorldMapRuntime>() != null)
                 break;
         }
+
+        int slot = PlayerData.GetActivePlayerSlotOrDefault();
+        StoryProgressSlotConsistency.EnsureAll(slot);
+        AutoBindUi();
+        RefreshPresentation();
     }
 
     private static TMP_Text FindChapterMapTitleTmp()

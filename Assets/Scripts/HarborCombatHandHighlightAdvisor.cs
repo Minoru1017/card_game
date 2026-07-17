@@ -108,7 +108,7 @@ public static class HarborCombatHandHighlightAdvisor
         int handCount = manager.GetPlayerHandCount();
         for (int i = 0; i < handCount; i++)
         {
-            if (manager.GetPlayerHandCard(i) is SpellCard)
+            if (manager.GetPlayerHandCard(i) is SpellCard && manager.IsPlayerHandCardPlayableNow(i))
             {
                 output.Add(i);
                 return true;
@@ -127,7 +127,8 @@ public static class HarborCombatHandHighlightAdvisor
         for (int i = 0; i < handCount; i++)
         {
             Card card = manager.GetPlayerHandCard(i);
-            if (card is SpellCard sp && sp.SpellOrdinal == ordinal && !IsUnplayable(manager, card))
+            if (card is SpellCard sp && sp.SpellOrdinal == ordinal &&
+                manager.IsPlayerHandCardPlayableNow(i))
             {
                 output.Add(i);
                 return true;
@@ -139,28 +140,4 @@ public static class HarborCombatHandHighlightAdvisor
 
     private static bool CanPlayMonsterNow(BattleSimulationManager manager) =>
         manager.GetPlayerFieldCard() == null;
-
-    private static bool IsUnplayable(BattleSimulationManager manager, Card card)
-    {
-        if (card == null) return true;
-        if (manager.IsOpeningRoundFireballBlockedForPlayer() &&
-            card is SpellCard fireball &&
-            fireball.SpellOrdinal == 0)
-            return true;
-
-        if (manager.PlayerHasFieldMonster())
-        {
-            if (card is MonsterCard && manager.CanPlayerReplaceFieldMonsterForConsecration()) return false;
-            if (card is SpellCard heal && heal.SpellOrdinal == 1) return false;
-            return card is not SpellCard;
-        }
-
-        if (card is SpellCard sp)
-        {
-            if (sp.SpellOrdinal == 1) return true;
-            if (sp.SpellOrdinal == 2 && !manager.CanPlayerCastLinGazeNow()) return true;
-        }
-
-        return false;
-    }
 }
