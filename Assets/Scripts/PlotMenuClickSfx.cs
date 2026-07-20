@@ -91,6 +91,7 @@ public class PlotMenuClickSfx : MonoBehaviour
         source.bypassListenerEffects = true;
         source.ignoreListenerPause = true;
         source.mute = false;
+        GameAudioMixerRouting.ConfigureSource(source, GameAudioChannel.ButtonSfx);
     }
 
     private void EnsureClipResolved()

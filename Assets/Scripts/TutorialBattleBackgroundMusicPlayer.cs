@@ -328,6 +328,7 @@ public class TutorialBattleBackgroundMusicPlayer : MonoBehaviour
         source.bypassListenerEffects = true;
         source.ignoreListenerPause = true;
         source.mute = false;
+        GameAudioMixerRouting.ConfigureSource(source, GameAudioChannel.Bgm);
     }
 
     private static void EnsureClipLoaded(AudioClip clip)

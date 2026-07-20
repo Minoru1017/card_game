@@ -52,17 +52,11 @@ flowchart LR
 | 步驟 | 內容 |
 |------|------|
 | 1 | 結算已顯示「港灣實戰通關 · 海牆巡邏已解鎖」 |
-| 2 | **Main Plot** 林可短台詞（見下表） |
+| 2 | **Main Plot** 林可短台詞（**詳見 [`TUTORIAL_PLOT_SCRIPT.md`](TUTORIAL_PLOT_SCRIPT.md) §8.2**） |
 | 3 | 回 **Story progress**；大地圖 **平移聚焦 `M-1-2`**（`EnterMapFocusMode`） |
 | 4 | 玩家可關閉地圖專注或點節點（進關流程見 MAP-002b，待接） |
 
-**台詞表**（`TutorialPlotScriptFactory.BuildHarborCombatClearBridgeSteps`）
-
-| # | 說話者 | 台詞 |
-|---|--------|------|
-| 1 | 林可姐 | 港灣那一仗過關了 地圖上 **海牆巡邏** 已解鎖 |
-| 2 | 林可姐 | 下一段是御三家戰技段考 不在學院館內了 跟我到海堤上去 |
-| 3 | 林可姐 | 我先帶你看節點 按下回到遊戲進度 |
+**台詞表**：併入 [`TUTORIAL_PLOT_SCRIPT.md`](TUTORIAL_PLOT_SCRIPT.md) **§8.2**（`BuildHarborCombatClearBridgeSteps`）。
 
 **程式錨點**：`StoryProgressSession.LaunchHarborCombatClearBridgeAfterFirstVictory` · `StoryProgressBattleReturn.CompleteReturnFromHarborTraining(firstCombatClear)` · `StoryProgressWorldMapRuntime.ReapplyMapFocusOnPreferredNode`
 
@@ -185,6 +179,8 @@ flowchart TD
 
 #### 3.3.1 短劇情 + 林可台詞（約 30～60 秒）
 
+> **台詞表（權威）**：[`TUTORIAL_PLOT_SCRIPT.md`](TUTORIAL_PLOT_SCRIPT.md) **§8.4**（`BuildM12MidPatrolPlotSteps`）。
+
 | 要素 | 定案 |
 |------|------|
 | **形式** | 沿用 **Main Plot** 逐句／選項（或 Story progress 全屏對話框）；可 1～2 屏 |
@@ -196,6 +192,8 @@ flowchart TD
 **建議不寫進戰鬥規則**：此段僅敘事，不發牌、不改 HP。
 
 #### 3.3.2 海牆散策：走點／點物件拿台詞（約 2～3 分鐘）— **暫定玩法**
+
+> **台詞表（權威）**：[`TUTORIAL_PLOT_SCRIPT.md`](TUTORIAL_PLOT_SCRIPT.md) **§8.5**（`M12SeawallStrollOverlay`）。
 
 | 要素 | 定案 |
 |------|------|
@@ -373,11 +371,12 @@ spell,003,潮印,Tide Mark,N,手牌點擊：本局下一次對我方英雄的直
 | 開戰類型 | `BattleLaunchContext.BeginM12TrioTutorialBattleLaunch` / `BeginM12CoachPracticeBattleLaunch` |
 | 戰技觸發達標 | `M12TrioMasteryBattleTracker`（對局結束查詢） |
 | 旗標 | `TutorialProgressState` · `m12_religious_line_reward`、`m12_trio_mastery_cleared` |
-| 港灣首通 → M-1-2 銜接 | `StoryProgressSession` · `TutorialPlotScriptFactory.BuildHarborCombatClearBridgeSteps` · 地圖聚焦 `M-1-2` |
+| 港灣首通 → M-1-2 銜接 | `StoryProgressSession` · `TutorialPlotScriptFactory.BuildHarborCombatClearBridgeSteps` · 台詞 **§8.2** |
+| M-1-2 劇情 steps | [`TUTORIAL_PLOT_SCRIPT.md`](TUTORIAL_PLOT_SCRIPT.md) **§八** · `BuildM12IntroPlotSteps`／`BuildM12MidPatrolPlotSteps`／`BuildM12VictoryEpilogueSteps` |
 | A／B 定案牌表 | §3.1（15 張，敵方鏡像同表）· §3.2（20 張）；已實裝 `M12PhaseDeckCatalog.PhaseADeckCardIds`／`PhaseBDeckCardIds` |
 | 中段封印法術 | §3.3.3 · §3.3.3a **潮印**（英雄直擊 −5）；`m12_sealed_spell_found` → 支線解封 |
 
-**未實裝（本定案後開發）**：Main Plot 1-2 段考本體劇情、地圖點擊進關、兩場戰鬥場景串接、結算三卡展示 UI。
+**未實裝（本定案後開發）**：地圖點擊進關細節優化、結算三卡展示 UI  polish。Main Plot 1-2 台詞見 [`TUTORIAL_PLOT_SCRIPT.md`](TUTORIAL_PLOT_SCRIPT.md) §八。
 
 ---
 

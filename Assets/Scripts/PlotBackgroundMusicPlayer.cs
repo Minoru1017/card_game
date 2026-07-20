@@ -19,8 +19,17 @@ public class PlotBackgroundMusicPlayer : MonoBehaviour
     public const string M12SeawallPatrolPlotBgmAssetPath = "Assets/Music/ZISO - HYPERCRUSH.mp3";
     public const string M13RiverForkPlotBgmAssetPath = "Assets/Music/DaniHaDani - Bait.mp3";
 
+    /// <summary>M-1-2 Main Plot BGM（HYPERCRUSH）相對基準音量的倍率。</summary>
+    private const float M12PlotBgmVolumeScale = 0.5f;
+
     [SerializeField] private AudioClip plotBgmClip;
     [SerializeField] [Range(0f, 1.5f)] private float volume = 1.2f;
+
+    [Header("M-1-2 劇情 BGM")]
+    [Tooltip("關閉時，M-1-2 開場／中段短劇／通關終幕不播放 HYPERCRUSH。")]
+    [SerializeField] private bool playM12PlotBgm = true;
+
+    public bool PlayM12PlotBgmEnabled => playM12PlotBgm;
 
     private AudioSource audioSource;
     private Coroutine playRoutine;
@@ -54,6 +63,9 @@ public class PlotBackgroundMusicPlayer : MonoBehaviour
     public void PlayPlotBgm()
     {
         if (!IsOnMainPlotScene() || !ShouldPlayPlotBgm())
+            return;
+
+        if (StoryProgressSession.M12PlotBgmRequested && !playM12PlotBgm)
             return;
 
         plotBgmClip = ResolveActivePlotBgmClip();
@@ -116,7 +128,7 @@ public class PlotBackgroundMusicPlayer : MonoBehaviour
         EnsureClipLoaded(plotBgmClip);
         ConfigureAudioSource(audioSource);
         audioSource.clip = plotBgmClip;
-        audioSource.volume = GameAudioUserSettings.ScaleBgm(volume);
+        audioSource.volume = GameAudioUserSettings.ScaleBgm(GetEffectivePlotBgmVolume());
         audioSource.loop = false;
         audioSource.time = 0f;
 
@@ -153,7 +165,7 @@ public class PlotBackgroundMusicPlayer : MonoBehaviour
         audioSource.Play();
 
         GameDevLog.Log("PlotBackgroundMusicPlayer: looping " + plotBgmClip.name + " after full play (" +
-                       plotBgmClip.length.ToString("F1") + "s), vol=" + volume.ToString("F2"));
+                       plotBgmClip.length.ToString("F1") + "s), vol=" + GetEffectivePlotBgmVolume().ToString("F2"));
     }
 
     private IEnumerator WaitForFirstPlaythroughComplete()
@@ -235,7 +247,23 @@ public class PlotBackgroundMusicPlayer : MonoBehaviour
     public void ApplyUserBgmVolume()
     {
         if (audioSource != null)
-            audioSource.volume = GameAudioUserSettings.ScaleBgm(volume);
+            audioSource.volume = GameAudioUserSettings.ScaleBgm(GetEffectivePlotBgmVolume());
+    }
+
+    private float GetEffectivePlotBgmVolume()
+    {
+        if (IsM12PlotBgmClip(plotBgmClip) || StoryProgressSession.M12PlotBgmRequested)
+            return volume * M12PlotBgmVolumeScale;
+        return volume;
+    }
+
+    private static bool IsM12PlotBgmClip(AudioClip clip)
+    {
+        if (clip == null)
+            return false;
+
+        AudioLibrary library = AudioLibrary.Instance;
+        return library != null && library.M12PlotBgm != null && clip == library.M12PlotBgm;
     }
 
     private void EnsureListenerActive()
@@ -284,6 +312,7 @@ public class PlotBackgroundMusicPlayer : MonoBehaviour
         source.bypassListenerEffects = true;
         source.ignoreListenerPause = true;
         source.mute = false;
+        GameAudioMixerRouting.ConfigureSource(source, GameAudioChannel.Bgm);
     }
 
     private void OnDestroy() => StopPlotBgm();

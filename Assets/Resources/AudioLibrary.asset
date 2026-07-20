@@ -73,6 +73,14 @@ MonoBehaviour:
     clip: {fileID: 8300000, guid: eeb1c8d73e3e06540a45b43d6bdb83c0, type: 3}
   - id: 1-1_9
     clip: {fileID: 8300000, guid: 527aa6e06aae37f4dbbc2f202d327a3d, type: 3}
+  - id: 2-1_A0
+    clip: {fileID: 8300000, guid: 68b2ca30288d6d24cbb65d6fafc953bb, type: 3}
+  - id: 2-1_A1
+    clip: {fileID: 8300000, guid: c140f556206efbb4b869e3c7087306e8, type: 3}
+  - id: 2-1_A2
+    clip: {fileID: 8300000, guid: 12120701604a21447a4c5a9ee997e096, type: 3}
+  - id: 2-1_A3
+    clip: {fileID: 8300000, guid: 83862e4371e988b4b9bc678176272cb8, type: 3}
   plotBgm: {fileID: 8300000, guid: c8a2aceb289fe55488f1afc3ee6922ca, type: 3}
   m12PlotBgm: {fileID: 8300000, guid: c97dbaa152c88f34d8d11dfcd78f700a, type: 3}
   m13PlotBgm: {fileID: 8300000, guid: fe1ab17729b76824e95a24cddd94ec86, type: 3}

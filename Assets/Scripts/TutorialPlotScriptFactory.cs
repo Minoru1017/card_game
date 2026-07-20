@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-/// <summary>Runtime plot steps for tutorial (see TUTORIAL_PLOT_SCRIPT.md).</summary>
+/// <summary>Runtime plot steps for main plot (see TUTORIAL_PLOT_SCRIPT.md: 1-1 §四, 1-2 §八; M-1-3 see M13_PLOT_SCRIPT.md).</summary>
 public static class TutorialPlotScriptFactory
 {
     /// <summary>開場劇情「教學期間先給你一副基礎牌組」步驟索引（0-based）。</summary>
@@ -193,17 +193,21 @@ public static class TutorialPlotScriptFactory
         var steps = new List<MainPlotSceneController.PlotStep>(6);
         TapStep(steps, LinKeSpeaker,
             "海堤上的風比館內硬 這一段叫" + StoryTextStyle.Em("海牆巡邏") + " 先考御三家戰技 再練教會三張",
-            1);
+            1,
+            voiceClipId: "2-1_A0");
         TapStep(steps, LinKeSpeaker,
             "牌組我幫你鎖好了 只要" + StoryTextStyle.Hi("國王") + " " + StoryTextStyle.Hi("王后") + " " +
             StoryTextStyle.Hi("民兵") + " 三項戰技本局各觸發一次 再加勝利",
-            2);
+            2,
+            voiceClipId: "2-1_A1");
         TapStep(steps, LinKeSpeaker,
             "臨上場前 我把這枚" + StoryTextStyle.Em("平安符") + "貼在你英雄名旁 " +
             StoryTextStyle.Hi("英雄護盾") + " 能" + StoryTextStyle.Hi("擋一次對英雄的傷害") + " 用了就沒了 別浪費",
-            3);
+            3,
+            voiceClipId: "2-1_A2");
         TapStepEndPlot(steps, LinKeSpeaker,
-            "準備好了就進" + StoryTextStyle.Em("段考 A") + " 這一場我不出聲 看你自己打");
+            "準備好了就進" + StoryTextStyle.Em("段考 A") + " 這一場我不出聲 看你自己打",
+            voiceClipId: "2-1_A3");
         return steps;
     }
 

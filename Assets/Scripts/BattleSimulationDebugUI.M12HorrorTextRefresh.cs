@@ -1,7 +1,15 @@
 using TMPro;
+using UnityEngine;
 
 public partial class BattleSimulationDebugUI
 {
+    /// <summary>恐怖亂碼 UI 收集目標用；與 <see cref="FindCanvas2"/> 同源。</summary>
+    internal Canvas ResolveBattleUiCanvas()
+    {
+        Transform root = FindCanvas2();
+        return root != null ? root.GetComponent<Canvas>() : null;
+    }
+
     /// <summary>恐怖亂碼結束後，略過快取比對並從戰鬥狀態重寫所有可見文字。</summary>
     public void ForceRefreshAllBattleTextAfterHorrorScramble()
     {

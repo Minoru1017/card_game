@@ -90,6 +90,7 @@ public static class YouWillDieWarningSfx
         source.bypassEffects = true;
         source.bypassListenerEffects = true;
         source.ignoreListenerPause = true;
+        GameAudioMixerRouting.ConfigureSource(source, GameAudioChannel.BattleSfx);
         return source;
     }
 }

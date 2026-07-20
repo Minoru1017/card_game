@@ -16,6 +16,17 @@ public static class AudioLibraryPopulator
 {
     private const string LibraryAssetPath = "Assets/Resources/AudioLibrary.asset";
     private const string NpcVoiceResourcesFolder = "NPC voice";
+    private const string NpcVoiceWorkspaceFolder = "Assets/NPC voice";
+    private const string NpcVoiceResourcesPath = "Assets/Resources/NPC voice";
+
+    private static readonly string[] M12IntroNpcVoiceIds = { "2-1_A0", "2-1_A1", "2-1_A2", "2-1_A3" };
+
+    [MenuItem("Tools/Audio/Sync M-1-2 Intro NPC Voices")]
+    public static void SyncM12IntroNpcVoicesAndRefresh()
+    {
+        SyncM12IntroNpcVoiceResourcesCopies();
+        CreateOrRefresh();
+    }
 
     [MenuItem("Tools/Audio/Create or Refresh Audio Library")]
     public static void CreateOrRefresh()
@@ -105,6 +116,21 @@ public static class AudioLibraryPopulator
         Debug.Log("AudioLibraryPopulator: 已同步 Monster Card Counterattack → Resources/Music。");
     }
 
+    private static void SyncMonsterCardAttackResourcesCopy()
+    {
+        const string destinationPath = "Assets/Resources/Music/Monster Card Attack.mp3";
+        string sourceFullPath = Path.GetFullPath(BattleFieldMonsterAttackSfx.AssetPath);
+        string destinationFullPath = Path.GetFullPath(destinationPath);
+        if (!File.Exists(sourceFullPath))
+        {
+            Debug.LogWarning($"AudioLibraryPopulator: 找不到來源音檔 {BattleFieldMonsterAttackSfx.AssetPath}");
+            return;
+        }
+
+        Directory.CreateDirectory(Path.GetDirectoryName(destinationFullPath) ?? string.Empty);
+        File.Copy(sourceFullPath, destinationFullPath, overwrite: true);
+    }
+
     private static void SyncMonsterCardCounterattackResourcesCopy()
     {
         const string destinationPath = "Assets/Resources/Music/Monster Card Counterattack.mp3";
@@ -120,19 +146,23 @@ public static class AudioLibraryPopulator
         File.Copy(sourceFullPath, destinationFullPath, overwrite: true);
     }
 
-    private static void SyncMonsterCardAttackResourcesCopy()
+    private static void SyncM12IntroNpcVoiceResourcesCopies()
     {
-        const string destinationPath = "Assets/Resources/Music/Monster Card Attack.mp3";
-        string sourceFullPath = Path.GetFullPath(BattleFieldMonsterAttackSfx.AssetPath);
-        string destinationFullPath = Path.GetFullPath(destinationPath);
-        if (!File.Exists(sourceFullPath))
+        Directory.CreateDirectory(Path.GetFullPath(NpcVoiceResourcesPath));
+        for (int i = 0; i < M12IntroNpcVoiceIds.Length; i++)
         {
-            Debug.LogWarning($"AudioLibraryPopulator: 找不到來源音檔 {BattleFieldMonsterAttackSfx.AssetPath}");
-            return;
-        }
+            string id = M12IntroNpcVoiceIds[i];
+            string sourcePath = $"{NpcVoiceWorkspaceFolder}/{id}.mp3";
+            string destinationPath = $"{NpcVoiceResourcesPath}/{id}.mp3";
+            string sourceFullPath = Path.GetFullPath(sourcePath);
+            if (!File.Exists(sourceFullPath))
+            {
+                Debug.LogWarning($"AudioLibraryPopulator: 找不到 M-1-2 語音來源 {sourcePath}");
+                continue;
+            }
 
-        Directory.CreateDirectory(Path.GetDirectoryName(destinationFullPath) ?? string.Empty);
-        File.Copy(sourceFullPath, destinationFullPath, overwrite: true);
+            File.Copy(sourceFullPath, Path.GetFullPath(destinationPath), overwrite: true);
+        }
     }
 
     private static AudioLibrary.NamedAudioClip[] CollectNpcVoices()

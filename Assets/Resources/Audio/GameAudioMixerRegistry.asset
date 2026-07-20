@@ -1,0 +1,24 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e1d269f44d527f34cbc7d176ec6edf9f, type: 3}
+  m_Name: GameAudioMixerRegistry
+  m_EditorClassIdentifier: 
+  mixer: {fileID: 24100000, guid: dd2f944b60d566d4f8516a7caa6d357d, type: 2}
+  bgmGroup: {fileID: 8290220970207410269, guid: dd2f944b60d566d4f8516a7caa6d357d, type: 2}
+  npcVoiceGroup: {fileID: -8067774219968995187, guid: dd2f944b60d566d4f8516a7caa6d357d, type: 2}
+  buttonSfxGroup: {fileID: -4621292299714963927, guid: dd2f944b60d566d4f8516a7caa6d357d, type: 2}
+  battleSfxGroup: {fileID: 3375795409316934572, guid: dd2f944b60d566d4f8516a7caa6d357d, type: 2}
+  masterVolumeParam: MasterVolume
+  bgmVolumeParam: BgmVolume
+  npcVoiceVolumeParam: NpcVoiceVolume
+  buttonSfxVolumeParam: ButtonSfxVolume
+  battleSfxVolumeParam: BattleSfxVolume

@@ -178,6 +178,7 @@ public static class BirdDuelRandomEventRevealFx
         src.pitch = 0.88f;
         src.spatialBlend = 0f;
         src.playOnAwake = false;
+        GameAudioMixerRouting.ConfigureSource(src, GameAudioChannel.ButtonSfx);
         src.Play();
         Object.Destroy(host, primary.length / Mathf.Max(0.01f, src.pitch) + 0.15f);
 
@@ -192,6 +193,7 @@ public static class BirdDuelRandomEventRevealFx
         accentSrc.volume = GameAudioUserSettings.ScaleBattleSfx(0.22f);
         accentSrc.pitch = 1.35f;
         accentSrc.spatialBlend = 0f;
+        GameAudioMixerRouting.ConfigureSource(accentSrc, GameAudioChannel.BattleSfx);
         accentSrc.playOnAwake = false;
         accentSrc.Play();
         Object.Destroy(accentHost, 0.35f);

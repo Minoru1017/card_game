@@ -2,7 +2,7 @@
 
 > **狀態**：企劃定案草案（2026-07-07）  
 > **文學原型**：博爾赫斯〈帕拉塞爾蘇斯之玫瑰〉（改寫融入學院世界觀，非歷史考據）  
-> **關聯**：[`LEVEL_DESIGN_M-1-3.md`](LEVEL_DESIGN_M-1-3.md) · [`LEVEL_DESIGN_M-1-2.md`](LEVEL_DESIGN_M-1-2.md) §3.3.3a **潮印** · `TutorialPlotScriptFactory.BuildM13*Steps`  
+> **關聯**：[`LEVEL_DESIGN_M-1-3.md`](LEVEL_DESIGN_M-1-3.md) · [`LEVEL_DESIGN_M-1-2.md`](LEVEL_DESIGN_M-1-2.md) · [`TUTORIAL_PLOT_SCRIPT.md`](TUTORIAL_PLOT_SCRIPT.md) **§八**（1-2 台詞）· §3.3.3a **潮印** · `TutorialPlotScriptFactory.BuildM13*Steps`  
 > **文案標點**：依專案慣例**不用標點**；空格分句；重點色 `#9A7A55`／機制 `#5F8F72`
 
 ---

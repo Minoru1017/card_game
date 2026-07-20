@@ -81,11 +81,11 @@ public static class MonsterSkillRegistry
         switch (stage)
         {
             case CardSkillRevealStage.BasicB:
-                return "🔒 達成<color=#9AD4FF>基礎熟練度</color>後，將顯示戰技一行摘要。";
+                return "達成<color=#9AD4FF>基礎熟練度</color>後，將顯示戰技一行摘要。";
             case CardSkillRevealStage.FullC:
-                return "🔒 達成<color=#9AD4FF>進階熟練度</color>後，可閱讀完整戰技條文（時機、對象、疊加順序）。";
+                return "達成<color=#9AD4FF>進階熟練度</color>後，可閱讀完整戰技條文（時機、對象、疊加順序）。";
             default:
-                return "🔒 <color=#F8D878>熟練後解鎖戰技</color>\n與此牌對戰並納入牌組後將逐步揭露戰技內容";
+                return "<color=#F8D878>熟練後解鎖戰技</color>\n與此牌對戰並納入牌組後將逐步揭露戰技內容";
         }
     }
 
@@ -99,7 +99,7 @@ public static class MonsterSkillRegistry
         switch (stage)
         {
             case CardSkillRevealStage.LockedA:
-                bodyRich = "🔒 <color=#F8D878>熟練後解鎖戰技</color>\n" + entry.lineAFuzzy;
+                bodyRich = "<color=#F8D878>熟練後解鎖戰技</color>\n" + entry.lineAFuzzy;
                 return true;
             case CardSkillRevealStage.BasicB:
                 if (string.IsNullOrWhiteSpace(entry.lineB))

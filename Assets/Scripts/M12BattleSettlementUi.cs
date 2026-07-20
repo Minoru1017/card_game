@@ -200,7 +200,7 @@ public sealed class M12BattleSettlementUi : MonoBehaviour
     private void AddPhaseAIncompleteFooterButtons(int slot)
     {
         if (M12SeawallPatrolProgressState.IsPhaseAExamMemoUnlocked(slot))
-            CreateFooterButton("段考备忘", false, OnClickShowExamMemo);
+            CreateFooterButton("段考備忘", false, OnClickShowExamMemo);
         CreateFooterButton("再試一次", true, OnClickRetry);
         CreateFooterButton("返回地圖", false, OnClickReturnStory);
     }

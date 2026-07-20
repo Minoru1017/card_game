@@ -13,7 +13,7 @@
 2. [`STORY_PROGRESS_WORLDVIEW.md`](STORY_PROGRESS_WORLDVIEW.md) — 空間、敘事、三層命名  
 3. [`LEVEL_DESIGN_GDD.md`](LEVEL_DESIGN_GDD.md) — 1-1 流程、獎勵、地圖解鎖（**進度語意以此為準**）  
 3b. [`LEVEL_DESIGN_M-1-2.md`](LEVEL_DESIGN_M-1-2.md) — 1-2 段考、宗教三張 B、御三家觸發目標  
-4. [`TUTORIAL_PLOT_SCRIPT.md`](TUTORIAL_PLOT_SCRIPT.md) — Main Plot 台詞與步驟索引  
+4. [`TUTORIAL_PLOT_SCRIPT.md`](TUTORIAL_PLOT_SCRIPT.md) — **主劇情台詞表**（1-1 入門 §一～§六；**1-2 海牆巡邏 §八**）；1-3 見 [`M13_PLOT_SCRIPT.md`](M13_PLOT_SCRIPT.md)  
 5. [`GAMEPLAY_AND_RULES.md`](GAMEPLAY_AND_RULES.md) — 對戰規則、卡牌表、Settings  
 6. 實作對照：`Assets/Resources/StoryProgressNodeDatabase.json`、`Assets/Scripts/PROJECT_CODE_INDEX_v2.md`
 
@@ -42,7 +42,7 @@
 | [`HARBOR_1-1_VS_TRAINING_GROUND_DIFFICULTY.md`](HARBOR_1-1_VS_TRAINING_GROUND_DIFFICULTY.md) | **1-1 實戰 vs Buildbeck 訓練場** 簡單／普通難度對照表 |
 | [`HARBOR_COMBAT_COACH_GDD.md`](HARBOR_COMBAT_COACH_GDD.md) | **港灣實戰區戰術教練**（關鍵時刻提示；與入門 coach 分離） |
 | [`Assets/Scripts/HARBOR_COMBAT_COACH_IMPLEMENTATION.md`](Assets/Scripts/HARBOR_COMBAT_COACH_IMPLEMENTATION.md) | 港灣教練**程式實作**（類別、API、資源路徑） |
-| [`TUTORIAL_PLOT_SCRIPT.md`](TUTORIAL_PLOT_SCRIPT.md) | 新手教學劇本 steps（`MainPlotSceneController`） |
+| [`TUTORIAL_PLOT_SCRIPT.md`](TUTORIAL_PLOT_SCRIPT.md) | **主劇情台詞表**（1-1 §一～§六、**1-2 §八**；`MainPlotSceneController`） |
 | `Assets/Resources/StoryProgressNodeDatabase.json` | 大地圖節點資料（`M-1-1`、`M-1-2` 等） |
 
 ---

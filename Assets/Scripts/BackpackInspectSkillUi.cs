@@ -229,7 +229,7 @@ public static class BackpackInspectSkillUiBuilder
         row.statusTmp.color = unlocked ? accent : new Color(0.75f, 0.45f, 0.48f, 1f);
         row.bodyTmp.color = unlocked ? new Color(0.9f, 0.93f, 0.98f, 1f) : BackpackInspectVisualStyle.InkDim;
         row.lockVeil.gameObject.SetActive(!unlocked);
-        row.lockGlyphTmp.gameObject.SetActive(!unlocked);
+        row.lockGlyphTmp.gameObject.SetActive(false);
         row.bodyTmp.alpha = unlocked ? 1f : 0.55f;
     }
 

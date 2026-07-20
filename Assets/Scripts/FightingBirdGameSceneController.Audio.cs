@@ -11,6 +11,7 @@ public sealed partial class FightingBirdGameSceneController
         audioSource = gameObject.AddComponent<AudioSource>();
         audioSource.playOnAwake = false;
         audioSource.spatialBlend = 0f;
+        GameAudioMixerRouting.ConfigureSource(audioSource, GameAudioChannel.BattleSfx);
         tickClip = BuildClickClip(900f, 0.05f);
         downbeatClip = BuildClickClip(500f, 0.07f);
 
@@ -19,6 +20,7 @@ public sealed partial class FightingBirdGameSceneController
         hitSfxSource.spatialBlend = 0f;
         hitSfxSource.bypassListenerEffects = true;
         hitSfxSource.ignoreListenerPause = true;
+        GameAudioMixerRouting.ConfigureSource(hitSfxSource, GameAudioChannel.BattleSfx);
         hitSfxBank = BirdDuelHitSfxBank.TryCreate(ResolveHitSfxSourceClip());
 
         SetupBgm();
@@ -79,6 +81,7 @@ public sealed partial class FightingBirdGameSceneController
             bgmSource.spatialBlend = 0f;
             bgmSource.bypassListenerEffects = true;
             bgmSource.ignoreListenerPause = true;
+            GameAudioMixerRouting.ConfigureSource(bgmSource, GameAudioChannel.Bgm);
         }
 
         bgmSource.loop = !rhythmProfile.UsesCustomBgmLoop;

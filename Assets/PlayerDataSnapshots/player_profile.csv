@@ -1,13 +1,18 @@
 ﻿schema_version,1
 uuid,c7ef143641134940aa0c5bb75808230f
-role,一般玩家
-decks,牌組1:30張 | 牌組2:0張 | 牌組3:0張 | 牌組4:0張 | 牌組5:0張
+role,遊戲測試員
+decks,牌組1:15張 | 牌組2:0張 | 牌組3:0張 | 牌組4:0張 | 牌組5:0張
 heroes,無
 start_date,2026-07-18
-wins,2
-losses,0
+wins,4
+losses,3
 draws,0
 quits,0
-last_result,勝利
+last_result,戰敗
 battle_record,0,1,入門
 battle_record,1,1,普通
+battle_record,2,1,入門
+battle_record,3,-1,入門
+battle_record,4,-1,入門
+battle_record,5,1,普通
+battle_record,6,-1,入門

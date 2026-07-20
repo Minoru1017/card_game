@@ -118,6 +118,7 @@ public class TutorialBattleVictorySfx : MonoBehaviour
         source.bypassListenerEffects = true;
         source.ignoreListenerPause = true;
         source.mute = false;
+        GameAudioMixerRouting.ConfigureSource(source, GameAudioChannel.BattleSfx);
     }
 
     private void EnsureClipResolved()

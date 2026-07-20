@@ -79,6 +79,7 @@ public static class M12PhaseATransitionSfx
         source.bypassEffects = true;
         source.bypassListenerEffects = true;
         source.ignoreListenerPause = true;
+        GameAudioMixerRouting.ConfigureSource(source, GameAudioChannel.BattleSfx);
         return source;
     }
 }

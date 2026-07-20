@@ -38,6 +38,7 @@ public sealed class M12PhaseAHorrorTextScrambleUi : MonoBehaviour
 
         ui.originalTmpTexts.Clear();
         ui.originalLegacyTexts.Clear();
+        ui.battleCanvas = null;
         ui.targetsDirty = true;
         ui.enabled = true;
         ui.nextScrambleUnscaled = 0f;
@@ -95,7 +96,10 @@ public sealed class M12PhaseAHorrorTextScrambleUi : MonoBehaviour
 
         Canvas canvas = ResolveBattleCanvas();
         if (canvas == null)
+        {
+            targetsDirty = true;
             return;
+        }
 
         canvas.GetComponentsInChildren(true, scrambleTmpTargets);
         canvas.GetComponentsInChildren(true, scrambleLegacyTargets);
@@ -111,6 +115,8 @@ public sealed class M12PhaseAHorrorTextScrambleUi : MonoBehaviour
             return null;
 
         battleCanvas = debugUi.GetComponentInParent<Canvas>();
+        if (battleCanvas == null)
+            battleCanvas = debugUi.ResolveBattleUiCanvas();
         return battleCanvas;
     }
 

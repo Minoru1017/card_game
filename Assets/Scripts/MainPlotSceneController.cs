@@ -176,10 +176,22 @@ public class MainPlotSceneController : MonoBehaviour
     }
 
     /// <summary>1-1 教學、M-1-2 或 M-1-3 劇情播放專屬 BGM。</summary>
-    private bool ShouldPlayPlotBgm() =>
-        (IsOpeningTutorialPlotSession() && StoryProgressSession.TutorialPlotBgmRequested) ||
-        (IsM12PlotSession() && StoryProgressSession.M12PlotBgmRequested) ||
-        (IsM13PlotSession() && StoryProgressSession.M13PlotBgmRequested);
+    private bool ShouldPlayPlotBgm()
+    {
+        if (IsOpeningTutorialPlotSession() && StoryProgressSession.TutorialPlotBgmRequested)
+            return true;
+        if (IsM12PlotSession() && StoryProgressSession.M12PlotBgmRequested)
+            return IsM12PlotBgmEnabledInScene();
+        if (IsM13PlotSession() && StoryProgressSession.M13PlotBgmRequested)
+            return true;
+        return false;
+    }
+
+    private static bool IsM12PlotBgmEnabledInScene()
+    {
+        PlotBackgroundMusicPlayer player = PlotBackgroundMusicPlayer.FindInMainPlotScene();
+        return player == null || player.PlayM12PlotBgmEnabled;
+    }
 
     private bool IsM12PlotSession() =>
         StoryProgressSession.IsM12IntroPlotActive ||

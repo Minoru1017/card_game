@@ -1,13 +1,13 @@
-/// <summary>M-1-2 段考备忘靜態文案（第 2 次落敗解鎖；非戰中教練）。</summary>
+/// <summary>M-1-2 段考備忘靜態文案（第 2 次落敗解鎖；非戰中教練）。</summary>
 public static class M12PhaseAExamMemoCopy
 {
     public const string SpeakerName = TutorialPlotScriptFactory.LinKeSpeaker;
-    public const string PanelTitle = "段考备忘";
+    public const string PanelTitle = "段考備忘";
 
     public static string BuildBodyRichText(bool firstUnlockReveal)
     {
         string intro = firstUnlockReveal
-            ? "你第二次卡在段考 我把" + StoryTextStyle.Em("觸發條件") + "整理成备忘 場內仍不會出聲提示"
+            ? "你第二次卡在段考 我把" + StoryTextStyle.Em("觸發條件") + "整理成備忘 場內仍不會出聲提示"
             : "只記" + StoryTextStyle.Em("怎樣算觸發") + " 不教每一手怎麼出 段考仍靠你自己打";
 
         return intro + "\n\n" +

@@ -1438,6 +1438,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         uiAudioSource.bypassEffects = true;
         uiAudioSource.bypassListenerEffects = true;
         uiAudioSource.ignoreListenerPause = true;
+        GameAudioMixerRouting.ConfigureSource(uiAudioSource, GameAudioChannel.BattleSfx);
     }
 
     private void EnsureHeroDamageMonochromeFlashOverlay(Transform parent)

@@ -56,16 +56,40 @@ public static class GameAudioUserSettings
     }
 
     public static float ScaleBgm(float baseVolume) =>
-        ScaleChannel(baseVolume, GetBgmVolume());
+        ScaleChannelVolume(GameAudioChannel.Bgm, baseVolume);
 
     public static float ScaleNpcVoice(float baseVolume) =>
-        ScaleChannel(baseVolume, GetNpcVoiceVolume());
+        ScaleChannelVolume(GameAudioChannel.NpcVoice, baseVolume);
 
     public static float ScaleButtonSfx(float baseVolume) =>
-        ScaleChannel(baseVolume, GetButtonSfxVolume());
+        ScaleChannelVolume(GameAudioChannel.ButtonSfx, baseVolume);
 
     public static float ScaleBattleSfx(float baseVolume) =>
-        ScaleChannel(baseVolume, GetBattleSfxVolume());
+        ScaleChannelVolume(GameAudioChannel.BattleSfx, baseVolume);
+
+    /// <summary>Mixer 啟用時只保留本地音量；否則乘上 Settings 滑桿。</summary>
+    public static float ScaleChannelVolume(GameAudioChannel channel, float baseVolume)
+    {
+        if (!IsMasterEnabled())
+            return 0f;
+
+        if (GameAudioMixerCatalog.IsActive)
+            return Mathf.Clamp01(baseVolume);
+
+        switch (channel)
+        {
+            case GameAudioChannel.Bgm:
+                return ScaleChannel(baseVolume, GetBgmVolume());
+            case GameAudioChannel.NpcVoice:
+                return ScaleChannel(baseVolume, GetNpcVoiceVolume());
+            case GameAudioChannel.ButtonSfx:
+                return ScaleChannel(baseVolume, GetButtonSfxVolume());
+            case GameAudioChannel.BattleSfx:
+                return ScaleChannel(baseVolume, GetBattleSfxVolume());
+            default:
+                return Mathf.Clamp01(baseVolume);
+        }
+    }
 
     private static float ScaleChannel(float baseVolume, float channelVolume)
     {
@@ -74,10 +98,15 @@ public static class GameAudioUserSettings
         return Mathf.Clamp01(baseVolume) * channelVolume;
     }
 
-    public static void NotifyVolumeChanged() => VolumeChanged?.Invoke();
+    public static void NotifyVolumeChanged()
+    {
+        GameAudioMixerCatalog.ApplyUserSettings();
+        VolumeChanged?.Invoke();
+    }
 
     public static void RefreshActiveBgmVolumes()
     {
+        GameAudioMixerCatalog.ApplyUserSettings();
         HallBackgroundMusicPlayer[] hall = UnityEngine.Object.FindObjectsByType<HallBackgroundMusicPlayer>(FindObjectsSortMode.None);
         for (int i = 0; i < hall.Length; i++)
             hall[i].ApplyUserBgmVolume();
