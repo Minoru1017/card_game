@@ -10,7 +10,7 @@ using UnityEngine.UI;
 /// MCP / 本機 Play Mode 測試自動化入口（僅 Unity Editor）。
 /// 用法（MCP execute_code）：<c>return DevAutomation.TryAdvanceStep();</c>
 /// </summary>
-public static class DevAutomation
+public static partial class DevAutomation
 {
 #if UNITY_EDITOR
     public static string GetStatus()

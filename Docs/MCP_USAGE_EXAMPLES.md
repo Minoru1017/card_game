@@ -100,6 +100,7 @@ return DevAutomation.InvokeButtonExact("EnterStageButton", requireInteractable: 
 | `StartM12PhaseAWinRateSim(games, seed)` | **段考 A 批次模擬**（Editor：開場景 + Play，結束寫 `Assets/SimResults/m12_phase_a_exam_winrate.md`） |
 | `GetM12PhaseAWinRateSimStatus()` | 查段考 A 批次是否在跑 |
 | `TryAdvanceStep()` | **自動推進一步**（見下） |
+| *對戰操作* | 見下方 **「對戰自動化 API」**（`GetBattleStatus`、`PlayHandCard`、`TryBattleStep` 等） |
 
 ---
 
@@ -261,10 +262,116 @@ return DevAutomation.ApplyBattleCardTuningPreset1ToOpenScene();
 |------|--------|
 | Play / Stop、讀 Console、查 Hierarchy | 模擬滑鼠在 Game 視窗座標點擊 |
 | `Button.onClick.Invoke()` | 拖曳手牌、鬥鳥手勢 |
-| `DevAutomation.ForceBattleWin()`（測試） | 代替玩家正常出牌通關（無 API 時） |
+| **`DevAutomation` 對戰 API**（見下） | 代替玩家正常出牌通關（無 API 時） |
 | 改 Component、載場景 | 操作 build 後的 standalone 玩家版 |
 
-卡牌對戰若要自動化，請用 **`DevAutomation`** 或之後擴充的測試 API，不要依賴「假滑鼠」。
+卡牌對戰自動化請用 **`DevAutomation` 對戰 API**（直接呼叫 `BattleSimulationManager`），不要依賴「假滑鼠」。
+
+---
+
+## 對戰自動化 API（`DevAutomation.Battle`）
+
+腳本：`Assets/Scripts/DevAutomation.Battle.cs`（**僅 Unity Editor Play Mode，且場景內有 `BattleSimulationManager`**）
+
+| 方法 | 說明 |
+|------|------|
+| `GetBattleStatus()` | 回合、HP、場怪、手牌索引（`*`=可出、`-`=不可） |
+| `DescribePlayerHand()` | 僅手牌列表 |
+| `PlayHandCard(handIndex)` | 打出指定索引（0-based） |
+| `GetRecommendedPlayHandIndex()` | 查入門級 Greedy 建議出牌索引 |
+| `PlayBestHandCard()` | 入門級 Greedy 自動選牌（`GetRecommendedPlayerPlayHandIndex`） |
+| `EndBattleTurn()` | 結束我方回合（會自動攻擊） |
+| `EndBattleTurnIfFieldOccupied()` | **場上已有怪獸**則結束回合；空場則提示先出牌 |
+| `PlayerAttackNow()` | 立即場怪攻擊／直擊（測試用） |
+| `AutoDiscardOnce()` | 自動棄一張（引擎建議索引） |
+| `AutoDiscardAllPending()` | **自動棄完**所有待棄牌 |
+| `TryBattleDiscardStep(discardAll?)` | 棄牌一步；`discardAll:true` 一次棄完 |
+| `GetRecommendedDiscardHandIndex()` | 查下一張建議棄牌索引 |
+| `DiscardHandCard(handIndex)` | 棄指定手牌 |
+| `ResolveConsecrationChoice(bindToCurrentBishop)` | 祝聖綁定選目標（唯一需「選目標」的 UI） |
+| `TryBattleStep(handIndex?, endTurnIfNoPlay?)` | **推進一步**（含祝聖→棄一張→出牌） |
+| `TryBattlePumpOnce()` | **完整我方回合**（祝聖→棄光→出一張→結束） |
+| `TryBattleCompleteTurn(preferredHandIndex?)` | 等同 `TryBattlePumpOnce` |
+| `PlayBattleToEnd(maxPumps?)` | **背景協程依規則打完本局**（不作弊；**不再因動畫等待 timeout 中斷**；結束後自動匯出戰報） |
+| `GetBattleOutcomeAnalysis()` | 分析勝負關鍵（須對戰已結束） |
+| `ExportBattleRecord(filePath?)` | 匯出本局紀錄至 `Assets/SimResults/`（須對戰已結束） |
+| `StartBattleAutoPlayRoutine(maxPumps?)` | `PlayBattleToEnd` 別名 |
+
+**目標選擇說明：** 出牌／棄牌邏輯對標**入門檔敵 AI**；**每回合最多從手牌打出 1 張**（出牌前驗證索引與 `IsPlayerHandCardPlayableNow`，已出牌或場上有怪獸則直接結束回合）；怪物打出會寫入對戰歷史；結束後自動匯出戰報。
+
+### 範例：手牌超上限棄牌
+
+```csharp
+return DevAutomation.GetBattleStatus();
+return DevAutomation.AutoDiscardAllPending();
+return DevAutomation.TryBattleDiscardStep();          // 棄一張
+return DevAutomation.TryBattleDiscardStep(true);       // 一次棄完
+```
+
+### 範例：查狀態並打出一張牌
+
+```csharp
+return DevAutomation.GetBattleStatus();
+```
+
+```csharp
+return DevAutomation.PlayHandCard(0);
+```
+
+### 範例：逐步自動對戰（MCP 反覆執行）
+
+```csharp
+return DevAutomation.TryBattleStep();
+```
+
+無牌可出且要結束回合：
+
+```csharp
+return DevAutomation.TryBattleStep(endTurnIfNoPlay: true);
+```
+
+### 範例：一整個我方回合
+
+```csharp
+return DevAutomation.TryBattleCompleteTurn();
+```
+
+### 範例：自動打完本局（不作弊）
+
+```csharp
+return DevAutomation.PlayBattleToEnd();
+```
+
+Play Mode 內背景跑；查狀態直到 `battle over`（結束後 status 會含 `exported=Assets/SimResults/...md`）：
+
+```csharp
+return DevAutomation.GetBattleAutoPlayRoutineStatus();
+```
+
+對戰結束後查勝負點／手動匯出：
+
+```csharp
+return DevAutomation.GetBattleOutcomeAnalysis();
+return DevAutomation.ExportBattleRecord();
+```
+
+逐步手動推（每 call 一個完整我方回合）：
+
+```csharp
+return DevAutomation.TryBattlePumpOnce();
+```
+
+### 範例：背景自動打完本局（舊名稱仍可用）
+
+```csharp
+return DevAutomation.StartBattleAutoPlayRoutine(5000);
+```
+
+查協程狀態：
+
+```csharp
+return DevAutomation.GetBattleAutoPlayRoutineStatus();
+```
 
 ---
 
@@ -285,4 +392,4 @@ return DevAutomation.ApplyBattleCardTuningPreset1ToOpenScene();
 
 - MCP 設定：`.cursor/mcp.json`
 - Unity 套件：`Packages/manifest.json` → `com.coplaydev.unity-mcp`
-- 自動化 API：`Assets/Scripts/DevAutomation.cs`
+- 自動化 API：`Assets/Scripts/DevAutomation.cs`、`Assets/Scripts/DevAutomation.Battle.cs`

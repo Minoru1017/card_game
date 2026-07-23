@@ -2226,6 +2226,14 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
                 }
             }
 
+            if (attackData.longbowPierceTriggered && attackData.longbowPierceDamage > 0)
+            {
+                yield return PlayLongbowPierceFxRoutine(
+                    attackerIsPlayer,
+                    attackData.longbowPierceDamage,
+                    hitFxDur);
+            }
+
             if (attackData.counterTriggered)
             {
                 bool counterFromPlayer = !attackerIsPlayer;
@@ -2550,17 +2558,21 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
         const float flashCgPeak = 0.75f;
         float t = 0f;
 
-        while (t < half && overlayObj != null)
+        while (t < half)
         {
+            if (overlayObj == null || cg == null) yield break;
             t += Time.unscaledDeltaTime;
             cg.alpha = Mathf.Clamp01(t / half) * flashCgPeak;
             yield return null;
         }
 
+        if (overlayObj == null || cg == null) yield break;
+
         t = 0f;
         float startAlpha = cg.alpha;
-        while (t < fade && overlayObj != null)
+        while (t < fade)
         {
+            if (overlayObj == null || cg == null) yield break;
             t += Time.unscaledDeltaTime;
             float p = Mathf.Clamp01(t / fade);
             cg.alpha = Mathf.Lerp(startAlpha, 0f, p);

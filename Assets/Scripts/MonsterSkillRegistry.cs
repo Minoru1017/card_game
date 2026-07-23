@@ -166,6 +166,10 @@ public static class MonsterSkillRegistry
                 return HighlightPhrases(plainIntro,
                     new[] { "僅1次" },
                     new[] { "首上場", "0攻友軍", "敵本回合禁直擊", "火球直擊" });
+            case MonsterSkillIds.Longbowman:
+                return HighlightPhrases(plainIntro,
+                    new[] { "遞減50%", "最少1", "僅1次" },
+                    new[] { "打場怪", "溢出穿透", "直擊", "庭訓號令", "火球" });
             default:
                 return plainIntro;
         }
@@ -204,6 +208,10 @@ public static class MonsterSkillRegistry
                 return HighlightPhrases(plainLineB,
                     new[] { "全場1次" },
                     new[] { "首上場", "0攻友軍", "敵本回合禁直擊" });
+            case MonsterSkillIds.Longbowman:
+                return HighlightPhrases(plainLineB,
+                    new[] { "遞減50%", "全場1次" },
+                    new[] { "打場怪", "溢出穿透英雄" });
             default:
                 return plainLineB;
         }
@@ -301,6 +309,13 @@ public static class MonsterSkillRegistry
                     "據說與無法廝殺的同伴同列時，會暫時斷絕敵人直取導師的路",
                     "護聖 首上場有0攻友軍 敵本回合禁直擊 全場1次",
                     "本局首次將聖院騎士置入場上時 若替換下場的友軍攻擊力為0 則敵方本回合無法以場怪直擊我方英雄 亦無法以火球術直擊我方英雄 對戰內僅1次 與國王庭訓號令減傷可並存但本效果為完全阻擋直擊");
+                return true;
+            case MonsterSkillIds.Longbowman:
+                entry = new SkillEntry(
+                    "穿矢",
+                    "據說箭矢會從對手陣中怪獸身上穿過，余勢仍傷及導師",
+                    "穿矢 打場怪 溢出穿透英雄 遞減50% 全場1次",
+                    "長弓兵回合結束攻擊敵方場上怪獸時 溢出傷害 floor(溢出×50%) 穿透至敵方英雄 最少1點 穿透段視為直擊 受庭訓號令與潮印等影響 對戰內僅1次 不含火球與反擊");
                 return true;
             default:
                 entry = default;
@@ -495,6 +510,40 @@ public static class MonsterSkillRegistry
         if (holyGuardUsed || !skillActive || !replacedZeroAttackAlly)
             return false;
         holyGuardUsed = true;
+        return true;
+    }
+
+    public const float LongbowPierceOverflowRatio = 0.5f;
+
+    /// <summary>長弓兵·穿矢：溢出傷害 50% 穿透英雄，最少 1。</summary>
+    public static int ComputeLongbowPierceDamage(int overflow)
+    {
+        if (overflow <= 0)
+            return 0;
+        return Mathf.Max(1, Mathf.FloorToInt(overflow * LongbowPierceOverflowRatio));
+    }
+
+    /// <summary>
+    /// 長弓兵·穿矢：本局首次打場怪且溢出 &gt; 0 時回傳穿透傷害並消耗次數。
+    /// </summary>
+    public static bool TryConsumeLongbowPierce(
+        ref bool pierceUsed,
+        bool skillActive,
+        int attackerMonsterId,
+        int rawFieldDamage,
+        int absorbedDamage,
+        out int pierceDamage)
+    {
+        pierceDamage = 0;
+        if (pierceUsed || !skillActive || attackerMonsterId != MonsterSkillIds.Longbowman)
+            return false;
+
+        int overflow = Mathf.Max(0, rawFieldDamage - absorbedDamage);
+        pierceDamage = ComputeLongbowPierceDamage(overflow);
+        if (pierceDamage <= 0)
+            return false;
+
+        pierceUsed = true;
         return true;
     }
 

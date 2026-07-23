@@ -701,19 +701,6 @@ public static class BattleAutoSimPlugin
             return UiFontResolver.ResolveUiFont();
         }
 
-        private static bool IsPlayerSpellUnplayableNow(BattleSimulationManager b, SpellCard sp)
-        {
-            if (sp == null) return true;
-            if (b.PlayerHasFieldMonster())
-            {
-                if (sp.SpellOrdinal == 1) return false;
-                return true;
-            }
-            if (sp.SpellOrdinal == 1) return true;
-            if (sp.SpellOrdinal == 2 && !b.CanPlayerCastLinGazeNow()) return true;
-            return false;
-        }
-
         private static void TryAutoPlayOneCard(BattleSimulationManager b)
         {
             if (b == null || !b.IsPlayerTurn()) return;
@@ -723,70 +710,18 @@ public static class BattleAutoSimPlugin
                 return;
             }
 
-            if (b.PlayerHasFieldMonster())
-            {
-                if (b.CanPlayerReplaceFieldMonsterForConsecration())
-                {
-                    for (int i = 0; i < b.GetPlayerHandCount(); i++)
-                    {
-                        if (b.GetPlayerHandCard(i) is MonsterCard)
-                        {
-                            b.PlayerPlayCardFromHand(i);
-                            return;
-                        }
-                    }
-                }
-
-                for (int i = 0; i < b.GetPlayerHandCount(); i++)
-                {
-                    if (b.GetPlayerHandCard(i) is SpellCard sp && !IsPlayerSpellUnplayableNow(b, sp))
-                    {
-                        b.PlayerPlayCardFromHand(i);
-                        return;
-                    }
-                }
+            if (b.ShouldPlayerAutoSimSkipHandPlayBecauseFieldOccupied())
                 return;
-            }
 
-            bool spellFirst = IsRunning && Random.value < b.AutoSimPlayerSpellFirstChance;
-            if (spellFirst)
-            {
-                for (int i = 0; i < b.GetPlayerHandCount(); i++)
-                {
-                    if (b.GetPlayerHandCard(i) is SpellCard sp && !IsPlayerSpellUnplayableNow(b, sp))
-                    {
-                        b.PlayerPlayCardFromHand(i);
-                        return;
-                    }
-                }
-                for (int i = 0; i < b.GetPlayerHandCount(); i++)
-                {
-                    if (b.GetPlayerHandCard(i) is MonsterCard)
-                    {
-                        b.PlayerPlayCardFromHand(i);
-                        return;
-                    }
-                }
-            }
-            else
-            {
-                for (int i = 0; i < b.GetPlayerHandCount(); i++)
-                {
-                    if (b.GetPlayerHandCard(i) is MonsterCard)
-                    {
-                        b.PlayerPlayCardFromHand(i);
-                        return;
-                    }
-                }
-                for (int i = 0; i < b.GetPlayerHandCount(); i++)
-                {
-                    if (b.GetPlayerHandCard(i) is SpellCard sp2 && !IsPlayerSpellUnplayableNow(b, sp2))
-                    {
-                        b.PlayerPlayCardFromHand(i);
-                        return;
-                    }
-                }
-            }
+            if (b.HasPlayerPlayedHandCardThisTurn())
+                return;
+
+            int chosen = b.GetRecommendedPlayerPlayHandIndex();
+            if (chosen < 0) return;
+            if (!b.TryValidatePlayerAutoSimHandPlay(chosen, out _))
+                return;
+
+            b.PlayerPlayCardFromHand(chosen);
         }
     }
 }

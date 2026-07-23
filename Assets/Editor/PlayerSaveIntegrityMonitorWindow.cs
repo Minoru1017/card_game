@@ -10,7 +10,7 @@ public sealed class PlayerSaveIntegrityMonitorWindow : EditorWindow
     private List<PlayerSaveIntegrityAlert> alerts = new List<PlayerSaveIntegrityAlert>();
     private string statusLine = string.Empty;
 
-    [MenuItem("Card Game/Player Save/Save Integrity Monitor…")]
+    [MenuItem("Card Game/Player Save/Save Integrity Monitor…", false, 2)]
     public static void ShowWindow()
     {
         var window = GetWindow<PlayerSaveIntegrityMonitorWindow>(false, "Save Integrity", true);

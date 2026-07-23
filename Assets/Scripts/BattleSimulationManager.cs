@@ -65,6 +65,9 @@ public partial class BattleSimulationManager : MonoBehaviour
         public CombatRoleMatchup attackerHitMatchup;
         /// <summary>反擊戰位三角。</summary>
         public CombatRoleMatchup counterHitMatchup;
+        /// <summary>長弓兵·穿矢：打場怪溢出穿透英雄（本局 1 次）。</summary>
+        public bool longbowPierceTriggered;
+        public int longbowPierceDamage;
     }
 
     public event System.Action<Card> EnemyCardPlayed;
@@ -197,8 +200,11 @@ public partial class BattleSimulationManager : MonoBehaviour
     private string runtimeDifficultyLabelZh;
     private bool runtimeDifficultyLabelExplicit;
     private bool lastBattleEndedBySurrender;
+    /// <summary>本局 <see cref="CompleteBattle"/> 傳入的勝負判定說明（供自動化戰報）。</summary>
+    private string lastBattleOutcomeReason = string.Empty;
 
     public bool LastBattleEndedBySurrender => lastBattleEndedBySurrender;
+    public string GetLastBattleOutcomeReason() => lastBattleOutcomeReason ?? string.Empty;
 
     public string CurrentBattleDifficultyLabelZh => GetBattleDifficultyLabelForRecord();
 
@@ -882,6 +888,8 @@ public partial class BattleSimulationManager : MonoBehaviour
         enemyCastleFortressUsed = false;
         playerSanctumHolyGuardUsed = false;
         enemySanctumHolyGuardUsed = false;
+        playerLongbowPierceUsed = false;
+        enemyLongbowPierceUsed = false;
         enemyDirectAttackBlockedByPlayerSanctumThisEnemyTurn = false;
         playerDirectAttackBlockedByEnemySanctumThisPlayerTurn = false;
         playerKingWasOnFieldThisBattle = false;
@@ -935,6 +943,71 @@ public partial class BattleSimulationManager : MonoBehaviour
     }
 
     private static bool IsEnemyCastleSkillActiveForBattle() => true;
+
+    private static bool IsEnemyLongbowSkillActiveForBattle() => true;
+
+    private bool IsPlayerLongbowSkillActive() => IsPlayerMonsterSkillBattleActive(MonsterSkillIds.Longbowman);
+
+    private int TryApplyLongbowPierceAfterFieldAttack(
+        bool attackerIsPlayer,
+        int attackerMonsterId,
+        int rawFieldDamage,
+        int absorbedDamage)
+    {
+        if (IsM12HorrorDamageFrozen)
+            return 0;
+        if (attackerMonsterId != MonsterSkillIds.Longbowman || rawFieldDamage <= 0)
+            return 0;
+
+        if (attackerIsPlayer)
+        {
+            if (!IsPlayerLongbowSkillActive())
+                return 0;
+            if (!MonsterSkillRegistry.TryConsumeLongbowPierce(
+                    ref playerLongbowPierceUsed,
+                    true,
+                    attackerMonsterId,
+                    rawFieldDamage,
+                    absorbedDamage,
+                    out int pierce))
+                return 0;
+
+            int directDmg = ModifyDirectDamageToEnemyHero(pierce);
+            int dealt = ApplyDamageToEnemyHero(directDmg);
+            if (dealt <= 0)
+                return 0;
+
+            LogBattleHistory("穿矢：溢出穿透敵方英雄 " + dealt + " 點 本局僅1次");
+            ShowBattleToast("長弓兵·穿矢：穿透 " + dealt + " 點", 2.4f);
+            return dealt;
+        }
+
+        if (!IsEnemyLongbowSkillActiveForBattle())
+            return 0;
+        if (enemyDirectAttackBlockedByPlayerSanctumThisEnemyTurn)
+        {
+            LogBattleHistory("護聖：穿矢穿透被阻擋 本回合敵方無法直擊我方英雄");
+            ShowBattleToast("聖院騎士·護聖：穿矢穿透被阻擋", 2.4f);
+            return 0;
+        }
+        if (!MonsterSkillRegistry.TryConsumeLongbowPierce(
+                ref enemyLongbowPierceUsed,
+                true,
+                attackerMonsterId,
+                rawFieldDamage,
+                absorbedDamage,
+                out int enemyPierce))
+            return 0;
+
+        int toHero = ModifyDirectDamageToPlayerHero(enemyPierce);
+        int enemyDealt = DealDamageToPlayerHero(toHero, "敵方長弓兵·穿矢穿透");
+        if (enemyDealt <= 0)
+            return 0;
+
+        LogBattleHistory("敵方 穿矢：溢出穿透我方英雄 " + enemyDealt + " 點 本局僅1次");
+        ShowBattleToast("敵方長弓兵·穿矢：穿透 " + enemyDealt + " 點", 2.4f);
+        return enemyDealt;
+    }
 
     private void EnsureConsecrationBoundForField(bool isPlayer)
     {
@@ -1486,6 +1559,8 @@ public partial class BattleSimulationManager : MonoBehaviour
     private bool enemyCastleFortressUsed;
     private bool playerSanctumHolyGuardUsed;
     private bool enemySanctumHolyGuardUsed;
+    private bool playerLongbowPierceUsed;
+    private bool enemyLongbowPierceUsed;
     private bool enemyDirectAttackBlockedByPlayerSanctumThisEnemyTurn;
     private bool playerDirectAttackBlockedByEnemySanctumThisPlayerTurn;
     private LesserHealVisualRequest pendingPlayerLesserHealVisual;
@@ -1668,6 +1743,7 @@ public partial class BattleSimulationManager : MonoBehaviour
         battleOver = false;
         battleResult = 0;
         lastBattleEndedBySurrender = false;
+        lastBattleOutcomeReason = string.Empty;
         battleRuleMessage = string.Empty;
         NotifyTurnBanner(BattleTurnBannerKind.Hidden);
         ClearPlayerLinGaze();
@@ -1909,6 +1985,7 @@ public partial class BattleSimulationManager : MonoBehaviour
             ApplySummonMonsterSkills(playerField, true);
             playerPlacedCardThisRound = true;
             playerPlayedHandCardThisTurn = true;
+            LogBattleHistory("我方打出 怪物牌 " + playerField.cardName);
             BattleVerbose("Player summoned: " + playerField.cardName);
             NotifyPlayerCommittedHandCardToFieldFromHandForUi();
             BattleLayoutVisualRefreshRequested?.Invoke();
@@ -2007,11 +2084,14 @@ public partial class BattleSimulationManager : MonoBehaviour
         {
             string defenderName = enemyField.cardName;
             string attackerName = playerField.cardName;
+            int attackerMonsterId = playerField.id;
             CombatRoleMatchup attackerHitMatchup = ResolveMonsterHitMatchup(true);
             int playerAtkDmg = ModifyDamageToEnemyMonster(
                 ScaleOutgoingMonsterDamageVsEnemyField(playerField.attack));
-            ApplyDamageToEnemyFieldMonster(playerAtkDmg);
-            LogBattleHistory("我方場地上 怪物牌 " + attackerName + " 對敵方造成" + playerAtkDmg + " 點傷害");
+            int absorbedDamage = ApplyCappedDamageToEnemyFieldMonster(playerAtkDmg);
+            LogBattleHistory("我方場地上 怪物牌 " + attackerName + " 對敵方造成" + absorbedDamage + " 點傷害");
+            int longbowPierceDamage = TryApplyLongbowPierceAfterFieldAttack(
+                true, attackerMonsterId, playerAtkDmg, absorbedDamage);
             bool counterTriggered = false;
             int counterDamage = 0;
             CombatRoleMatchup counterHitMatchup = CombatRoleMatchup.Neutral;
@@ -2035,7 +2115,9 @@ public partial class BattleSimulationManager : MonoBehaviour
                 counterTriggered = counterTriggered,
                 counterDamage = counterDamage,
                 attackerHitMatchup = attackerHitMatchup,
-                counterHitMatchup = counterHitMatchup
+                counterHitMatchup = counterHitMatchup,
+                longbowPierceTriggered = longbowPierceDamage > 0,
+                longbowPierceDamage = longbowPierceDamage
             });
         }
         else
@@ -2277,12 +2359,15 @@ public partial class BattleSimulationManager : MonoBehaviour
         {
             int attackerDamage = enemyField.attack;
             string attackerName = enemyField.cardName;
+            int attackerMonsterId = enemyField.id;
             CombatRoleMatchup attackerHitMatchup = ResolveMonsterHitMatchup(false);
             int enemyAtkDmg = ScaleContextualEnemyDamage(
                 ModifyDamageToPlayerMonster(
                     ScaleOutgoingMonsterDamageVsPlayerField(enemyField.attack)));
-            ApplyDamageToPlayerFieldMonster(enemyAtkDmg);
-            LogBattleHistory("敵方場地上 怪物牌 " + attackerName + " 對我方造成" + enemyAtkDmg + " 點傷害");
+            int absorbedDamage = ApplyCappedDamageToPlayerFieldMonster(enemyAtkDmg);
+            LogBattleHistory("敵方場地上 怪物牌 " + attackerName + " 對我方造成" + absorbedDamage + " 點傷害");
+            int longbowPierceDamage = TryApplyLongbowPierceAfterFieldAttack(
+                false, attackerMonsterId, enemyAtkDmg, absorbedDamage);
             bool counterTriggered = false;
             int counterDamage = 0;
             CombatRoleMatchup counterHitMatchup = CombatRoleMatchup.Neutral;
@@ -2306,7 +2391,9 @@ public partial class BattleSimulationManager : MonoBehaviour
                 counterTriggered = counterTriggered,
                 counterDamage = counterDamage,
                 attackerHitMatchup = attackerHitMatchup,
-                counterHitMatchup = counterHitMatchup
+                counterHitMatchup = counterHitMatchup,
+                longbowPierceTriggered = longbowPierceDamage > 0,
+                longbowPierceDamage = longbowPierceDamage
             });
         }
         else
@@ -3930,19 +4017,8 @@ public partial class BattleSimulationManager : MonoBehaviour
         return false;
     }
 
-    private int EvaluatePlayerCardKeepValue(Card card)
-    {
-        if (card is MonsterCard m)
-            return m.attack * 2 + m.healthPointMax;
-        if (card is SpellCard sp)
-        {
-            if (sp.SpellOrdinal == 1) return playerField != null ? 90 : 8;
-            if (sp.SpellOrdinal == 0) return playerField != null ? 55 : 75;
-            if (sp.SpellOrdinal == 2) return CanPlayerCastLinGazeNow() ? 62 : 10;
-            return 20;
-        }
-        return 0;
-    }
+    private int EvaluatePlayerCardKeepValue(Card card) =>
+        EvaluatePlayerCardPlayPriorityForAutoSim(card);
 
     private int ChoosePlayerDiscardIndex()
     {
@@ -4108,6 +4184,7 @@ public partial class BattleSimulationManager : MonoBehaviour
         if (battleOver) return;
         battleOver = true;
         battleResult = result;
+        lastBattleOutcomeReason = verboseMessage ?? string.Empty;
         if (logPlayerHeroDeath && playerHp <= 0 && !playerHeroDeathLoggedThisBattle)
         {
             playerHeroDeathLoggedThisBattle = true;
@@ -4342,6 +4419,7 @@ public partial class BattleSimulationManager : MonoBehaviour
 
     /// <summary>與 <see cref="PlayerAttack"/> 成功發動條件一致；為 false 時目前無法以場上怪物攻擊（開局、已攻擊、無場怪、敵方凝視、敵場空且尚未解鎖直擊、或非可操作視窗等）。</summary>
     public bool HasPlayerAttackedThisTurn() => playerHasAttackedThisTurn;
+    public bool HasPlayerPlayedHandCardThisTurn() => playerPlayedHandCardThisTurn;
 
     public bool CanPlayerMonsterAttackNow()
     {

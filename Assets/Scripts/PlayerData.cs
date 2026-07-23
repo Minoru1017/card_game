@@ -465,9 +465,8 @@ public partial class PlayerData : MonoBehaviour
             string[] c = rows[i].Split(',');
             if (c.Length < 4 || c[0].Trim() != "slot") continue;
             if (!int.TryParse(c[1].Trim(), out int slot) || slot < 1 || slot > MaxPlayerSlots) continue;
-            string key = c[2].Trim();
-            if (key == "card" || key == "deck" || key == "deckslot") nonDefault[slot] = true;
-            if (key == "coins" && int.TryParse(c[3].Trim(), out int coins) && coins != 100) nonDefault[slot] = true;
+            if (SlotRowIndicatesOccupied(slot, c[2].Trim(), c[3].Trim()))
+                nonDefault[slot] = true;
         }
         for (int slot = 1; slot <= MaxPlayerSlots; slot++)
             if (!nonDefault[slot]) return slot;
@@ -555,9 +554,8 @@ public partial class PlayerData : MonoBehaviour
             if (!int.TryParse(c[1].Trim(), out int slot) || slot < 1 || slot > MaxPlayerSlots) continue;
             if (slot == deletedSlot) continue;
             hasRows[slot] = true;
-            string key = c[2].Trim();
-            if (key == "card" || key == "deck" || key == "deckslot") hasData[slot] = true;
-            if (key == "coins" && int.TryParse(c[3].Trim(), out int coins) && coins != 100) hasData[slot] = true;
+            if (SlotRowIndicatesOccupied(slot, c[2].Trim(), c[3].Trim()))
+                hasData[slot] = true;
         }
         for (int slot = 1; slot <= MaxPlayerSlots; slot++)
             if (slot != deletedSlot && hasData[slot]) return slot;
@@ -620,12 +618,43 @@ public partial class PlayerData : MonoBehaviour
             else if (key == "slot_name")
                 names[slot] = string.IsNullOrWhiteSpace(val) ? ("玩家" + slot) : val;
 
-            if (key == "card" || key == "deck" || key == "deckslot")
-                hasData[slot] = true;
-            else if (key == "coins" && coins[slot] != 100)
+            if (SlotRowIndicatesOccupied(slot, key, val))
                 hasData[slot] = true;
         }
         return BuildSnapshots(hasData, coins, names);
+    }
+
+    /// <summary>
+    /// 登入畫面／空槽判定：除牌組外，非預設金幣／寶石、自訂名稱、戰績、鬥鳥 CD 等亦視為已有存檔。
+    /// </summary>
+    private static bool SlotRowIndicatesOccupied(int slot, string key, string val)
+    {
+        if (string.IsNullOrWhiteSpace(key)) return false;
+
+        if (key == "card" || key == "deck" || key == "deckslot")
+            return true;
+
+        if (key == "coins" && int.TryParse(val, out int coins) && coins != 100)
+            return true;
+
+        if (key == "gems" && int.TryParse(val, out int gems) && gems != 300)
+            return true;
+
+        if (key == "bird_cd" || key == "valuable" || key == "battle_record")
+            return true;
+
+        if (key == "slot_name" && !string.IsNullOrWhiteSpace(val) && val != ("玩家" + slot))
+            return true;
+
+        if ((key == "profile_wins" || key == "profile_losses" || key == "profile_draws" || key == "profile_quits")
+            && int.TryParse(val, out int profileCount) && profileCount > 0)
+            return true;
+
+        if ((key == "harbor_combat_clear" || key == "academy_intro_graduated")
+            && string.Equals(val, "1", StringComparison.Ordinal))
+            return true;
+
+        return false;
     }
 
     public static SlotDeleteSummary GetSlotDeleteSummary(int slot)

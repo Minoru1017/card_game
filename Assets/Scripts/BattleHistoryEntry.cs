@@ -138,6 +138,140 @@ public static class BattleHistoryReport
         return string.Join("\n", lines);
     }
 
+    /// <summary>分析本局勝負關鍵（供 DevAutomation 戰報匯出）。</summary>
+    public static string BuildOutcomeAnalysis(
+        IReadOnlyList<BattleHistoryEntry> entries,
+        int battleResult,
+        int finalRound,
+        int playerHeroHp,
+        int enemyHeroHp,
+        string outcomeReason,
+        bool surrendered)
+    {
+        var sb = new StringBuilder(512);
+        string outcomeLabel = battleResult switch
+        {
+            1 => "我方勝利",
+            -1 => "我方戰敗",
+            2 => "平手",
+            _ => "進行中／未知"
+        };
+        sb.Append("結果：").Append(outcomeLabel).Append("（code=").Append(battleResult).Append("）\n");
+        sb.Append("回合數：").Append(Mathf.Max(1, finalRound)).Append('\n');
+        sb.Append("終局 HP：我方英雄 ").Append(playerHeroHp).Append("／敵方英雄 ").Append(enemyHeroHp).Append('\n');
+
+        if (surrendered)
+            sb.Append("勝負點：玩家放棄對戰（ForcePlayerSurrender）\n");
+        else if (!string.IsNullOrWhiteSpace(outcomeReason))
+            sb.Append("勝負點：").Append(outcomeReason.Trim()).Append('\n');
+        else
+            sb.Append("勝負點：").Append(InferOutcomeReasonFromState(battleResult, playerHeroHp, enemyHeroHp)).Append('\n');
+
+        AppendKeyMoments(sb, entries, battleResult);
+        return sb.ToString().TrimEnd();
+    }
+
+    private static string InferOutcomeReasonFromState(int battleResult, int playerHeroHp, int enemyHeroHp)
+    {
+        return battleResult switch
+        {
+            1 when enemyHeroHp <= 0 => "敵方英雄 HP≤0",
+            1 => "敵方符合戰敗條件（英雄 HP≤0 或手牌＋場上無牌）",
+            -1 when playerHeroHp <= 0 => "我方英雄 HP≤0",
+            -1 => "我方符合戰敗條件（英雄 HP≤0 或手牌＋場上無牌）",
+            2 => "雙方皆未分出勝負或同歸於盡",
+            _ => "（無詳細判斷）"
+        };
+    }
+
+    private static void AppendKeyMoments(StringBuilder sb, IReadOnlyList<BattleHistoryEntry> entries, int battleResult)
+    {
+        if (entries == null || entries.Count == 0)
+        {
+            sb.Append("關鍵事件：（本局無歷史紀錄）");
+            return;
+        }
+
+        sb.Append("關鍵事件：\n");
+        int listed = 0;
+        const int maxList = 8;
+        for (int i = 0; i < entries.Count && listed < maxList; i++)
+        {
+            string t = entries[i].Text;
+            if (string.IsNullOrWhiteSpace(t)) continue;
+            if (!IsKeyMomentLine(t)) continue;
+            sb.Append("- [R").Append(entries[i].Round).Append("] ").Append(t.Trim()).Append('\n');
+            listed++;
+        }
+
+        if (listed == 0)
+        {
+            int take = Mathf.Min(5, entries.Count);
+            for (int i = entries.Count - take; i < entries.Count; i++)
+            {
+                sb.Append("- [R").Append(entries[i].Round).Append("] ").Append(entries[i].Text.Trim()).Append('\n');
+            }
+        }
+    }
+
+    private static bool IsKeyMomentLine(string text)
+    {
+        if (string.IsNullOrEmpty(text)) return false;
+        return text.Contains("對戰結束") ||
+               text.Contains("我方勝利") ||
+               text.Contains("我方戰敗") ||
+               text.Contains("平手") ||
+               text.Contains("我方英雄死亡") ||
+               text.Contains("我方英雄受到") ||
+               text.Contains("對敵方英雄造成") ||
+               text.Contains("對我方英雄造成") ||
+               text.Contains("教學戰限時") ||
+               text.Contains("港灣") ||
+               text.Contains("段考") ||
+               text.Contains("限時") ||
+               text.Contains("判定獲勝") ||
+               text.Contains("判定我方獲勝");
+    }
+
+    /// <summary>完整對戰紀錄（含回合標記），供匯出檔案。</summary>
+    public static string BuildFullExportText(
+        IReadOnlyList<BattleHistoryEntry> entries,
+        int battleResult,
+        int finalRound,
+        int playerHeroHp,
+        int enemyHeroHp,
+        string outcomeReason,
+        bool surrendered,
+        string sceneName)
+    {
+        var sb = new StringBuilder(Mathf.Max(256, (entries?.Count ?? 0) * 48));
+        sb.Append("# DevAutomation 對戰紀錄\n\n");
+        sb.Append("- 場景：").Append(string.IsNullOrEmpty(sceneName) ? "?" : sceneName).Append('\n');
+        sb.Append("- 匯出時間：").Append(System.DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")).Append("\n\n");
+        sb.Append("## 勝負分析\n\n");
+        sb.Append(BuildOutcomeAnalysis(entries, battleResult, finalRound, playerHeroHp, enemyHeroHp, outcomeReason, surrendered));
+        sb.Append("\n\n## 完整歷程\n\n");
+        if (entries == null || entries.Count == 0)
+        {
+            sb.Append("（本局尚無對戰歷史紀錄）\n");
+            return sb.ToString();
+        }
+
+        int lastRound = -1;
+        for (int i = 0; i < entries.Count; i++)
+        {
+            BattleHistoryEntry e = entries[i];
+            if (e.Round != lastRound)
+            {
+                if (lastRound >= 0) sb.Append('\n');
+                sb.Append("### 第 ").Append(e.Round).Append(" 回合\n\n");
+                lastRound = e.Round;
+            }
+            sb.Append("- ").Append(e.Text).Append('\n');
+        }
+        return sb.ToString();
+    }
+
     private static int ExtractFirstDamageValue(string text)
     {
         if (string.IsNullOrEmpty(text)) return 0;

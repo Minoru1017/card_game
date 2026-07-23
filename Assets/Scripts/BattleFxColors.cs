@@ -82,6 +82,16 @@ public static class BattleFxColors
     public static readonly Color CastleFortressReduceLabelText = BattleUiColors.Hex("#F4F7FA");
     public static readonly Color CastleFortressLabelText = BattleUiColors.Hex("#D8E4EE");
 
+    // 長弓兵·穿矢（琥珀箭矢穿透）
+    public static readonly Color LongbowPierceTrailCore = BattleUiColors.Hex("#E8BB6A");
+    public static readonly Color LongbowPierceTrailGlow = BattleUiColors.WithAlpha(LongbowPierceTrailCore, 0.58f);
+    public static readonly Color LongbowPierceArrowHead = BattleUiColors.Hex("#FFF2D8");
+    public static readonly Color LongbowPierceFlashPeak = BattleUiColors.WithAlpha(LongbowPierceArrowHead, 0.82f);
+    public static readonly Color LongbowPierceLabelBg = BattleUiColors.WithAlpha(BattleUiColors.Hex("#1A1408"), 0.96f);
+    public static readonly Color LongbowPierceLabelBorder = BattleUiColors.Hex("#FFE8B8");
+    public static readonly Color LongbowPierceLabelText = BattleUiColors.Hex("#FFF8E8");
+    public static readonly Color LongbowPierceLabelGlow = BattleUiColors.WithAlpha(LongbowPierceTrailCore, 0.55f);
+
     // 戰位克制／被克
     public static readonly Color CombatRoleAdvantageCore = BattleUiColors.Hex("#E8BB6A");
     public static readonly Color CombatRoleAdvantageGlow = BattleUiColors.WithAlpha(CombatRoleAdvantageCore, 0.62f);

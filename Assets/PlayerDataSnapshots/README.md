@@ -7,6 +7,9 @@
 | `playerdata.profile_mirror.csv` | 與執行期 `playerdata.csv` 同步的鏡像（開發除錯） |
 | `player_profile.csv` | 玩家資訊摘要鏡像 |
 
+**還原存檔（Editor）**：**Card Game → Player Save → Restore Window…**  
+依槽位選建議來源合併還原；整份覆寫請用視窗下方「進階」。
+
 正式存檔路徑為 `Application.persistentDataPath` 下的 `playerdata.csv`（見 `DECK_SAVE_IMPLEMENTATION.md`）。
 
 若需團隊共用範例存檔，請另建 `*.csv.example` 並手動複製，勿直接 commit 含個人進度的 csv。
