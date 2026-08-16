@@ -1,6 +1,6 @@
 # 手機 Cloud Agent 便利貼
 
-> 手機只是下指令與審查；實際工作在雲端 Linux VM。  
+> 手機只是下指令與審查；實際工作在雲端 Linux VM。
 > Cloud 看不到未 push 的本機檔案，也不能取代 Windows Unity Editor 驗收。
 
 ## 可以放心交辦
