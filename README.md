@@ -2,6 +2,9 @@
 
 本說明以**玩家實際操作時能體驗到的功能**為主；部分內容仍在擴充中，以遊戲內實際畫面為準。
 
+> **使用手機／Cloud Agent 前請先看：**
+> [手機便利貼](./MOBILE_CLOUD_AGENT_NOTE.md) · [完整強制規範](./AGENTS.md)
+
 ## 執行環境
 
 - **專案路徑（請用這個開 Unity）**：`E:\School\Grade_5_2\card-game`  
