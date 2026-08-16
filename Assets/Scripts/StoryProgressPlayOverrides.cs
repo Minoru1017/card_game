@@ -31,6 +31,23 @@ public sealed class StoryProgressPlayOverrides : ScriptableObject
     [Tooltip("需勾選 1-2 全關通關，Story progress 才會解鎖 M-1-3 節點。")]
     public M13RiverForkPlayOverrides riverFork = new M13RiverForkPlayOverrides();
 
+    [Header("A-1 潮間島")]
+    [Tooltip("需 1-2 通關且散策拾取封印法術，Story progress 才會解鎖 S-A-1。")]
+    public SideQuestA1PlayOverrides tideIsland = new SideQuestA1PlayOverrides();
+
+    [System.Serializable]
+    public sealed class SideQuestA1PlayOverrides
+    {
+        [Tooltip("A-1 節點已通關（三畦完成）")]
+        public bool nodeCleared;
+
+        [Tooltip("潮印已解封")]
+        public bool tideMarkUnsealed;
+
+        [Tooltip("休耕畦選擇留海蓬種")]
+        public bool seaPurslaneSeedKept;
+    }
+
     [System.Serializable]
     public sealed class M12SeawallPatrolPlayOverrides
     {
@@ -144,6 +161,14 @@ public sealed class StoryProgressPlayOverrides : ScriptableObject
         M13RiverForkPlayOverrides m13 = riverFork ?? new M13RiverForkPlayOverrides();
         ApplyM13RiverForkOverrides(slot, m13);
 
+        SideQuestA1PlayOverrides a1 = tideIsland ?? new SideQuestA1PlayOverrides();
+        TutorialProgressState.SetA1TideIslandCleared(slot, a1.nodeCleared);
+        TutorialProgressState.SetA1TideMarkUnsealed(slot, a1.tideMarkUnsealed);
+        TutorialProgressState.SetA1SeaPurslaneSeedKept(slot, a1.seaPurslaneSeedKept);
+
+        if (m12.sealedSpellFound)
+            ValuablesVaultCatalog.TrySyncSealedSpellRelicToVault(slot);
+
         if (persistOverridesToSaveFile)
             PlayerSaveCoordinator.FlushDebouncedThenSavePlayerData();
         StoryProgressSceneController.RequestRefreshPresentation();
@@ -237,7 +262,7 @@ public static class StoryProgressPlayOverrideApplicator
         Debug.Log(
             "StoryProgressPlayOverrides: applied inspector flags to slot " +
             (asset.targetPlayerSlot > 0 ? asset.targetPlayerSlot : PlayerData.GetActivePlayerSlotOrDefault()) +
-            " (1-2 / 1-3 story flags).");
+            " (1-2 / 1-3 / A-1 story flags).");
         return true;
     }
 

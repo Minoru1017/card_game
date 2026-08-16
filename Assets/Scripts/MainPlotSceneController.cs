@@ -156,6 +156,12 @@ public class MainPlotSceneController : MonoBehaviour
         plotBegun = false;
     }
 
+    public void ClearTapToContinueUiRefs()
+    {
+        tapToContinueButton = null;
+        tapContinueHintTmp = null;
+    }
+
     public void BeginPlot()
     {
         if (steps == null || steps.Count == 0)
@@ -555,7 +561,11 @@ public class MainPlotSceneController : MonoBehaviour
 
     private void EnsureTapToContinueUi()
     {
-        if (tapToContinueButton != null) return;
+        if (tapToContinueButton)
+            return;
+
+        tapToContinueButton = null;
+        tapContinueHintTmp = null;
 
         Canvas canvas = FindPlotCanvas();
         if (canvas == null) return;
@@ -754,6 +764,10 @@ public class MainPlotSceneController : MonoBehaviour
             StoryProgressSession.IsM13RoseTrialPlotActive)
             StoryProgressSession.NotifyM13PlotChoice(currentStepIndex, choiceIndex);
 
+        if (StoryProgressSession.IsA1HarborPlotActive ||
+            StoryProgressSession.IsA1IslandIntroPlotActive)
+            StoryProgressSession.NotifyA1PlotChoice(currentStepIndex, choiceIndex);
+
         PlotStep step = steps[currentStepIndex];
         int nextIndex = -1;
         switch (choiceIndex)
@@ -789,6 +803,7 @@ public class MainPlotSceneController : MonoBehaviour
         plotNpcVoice?.Stop();
         StopPlotBgm();
         PlotUiOverlayCleanup.DestroyStrayPlotTapUi();
+        ClearTapToContinueUiRefs();
 
         if (StoryProgressSession.IsTutorialPlotEpilogueActive)
         {
@@ -858,6 +873,49 @@ public class MainPlotSceneController : MonoBehaviour
             HideAllChoiceButtons();
             ApplyTapToContinueUi(false);
             M13RiverForkFlow.ShowBirdDuelEntry();
+            return;
+        }
+
+        if (StoryProgressSession.IsA1HarborPlotActive)
+        {
+            StoryProgressSession.EndA1HarborPlotSession();
+            if (StoryProgressSession.ConsumeA1HarborCancelled())
+            {
+                StoryProgressSession.CancelA1QuestSession();
+                StoryProgressSession.LoadStoryProgressWithIrisTransition();
+                return;
+            }
+
+            HideAllChoiceButtons();
+            ApplyTapToContinueUi(false);
+            SideQuestA1Flow.OnHarborPlotFinished();
+            return;
+        }
+
+        if (StoryProgressSession.IsA1IslandIntroPlotActive)
+        {
+            StoryProgressSession.EndA1IslandIntroPlotSession();
+            HideAllChoiceButtons();
+            ApplyTapToContinueUi(false);
+            SideQuestA1Flow.OnIslandIntroPlotFinished();
+            return;
+        }
+
+        if (StoryProgressSession.IsA1UnsealPlotActive)
+        {
+            StoryProgressSession.EndA1UnsealPlotSession();
+            HideAllChoiceButtons();
+            ApplyTapToContinueUi(false);
+            SideQuestA1Flow.OnUnsealPlotFinished();
+            return;
+        }
+
+        if (StoryProgressSession.IsA1ReturnPlotActive ||
+            StoryProgressSession.ShouldCompleteA1ReturnPlot())
+        {
+            HideAllChoiceButtons();
+            ApplyTapToContinueUi(false);
+            SideQuestA1Flow.OnReturnPlotFinished();
             return;
         }
 

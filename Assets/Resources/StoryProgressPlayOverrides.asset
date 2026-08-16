@@ -17,14 +17,14 @@ MonoBehaviour:
   targetPlayerSlot: 0
   harborCombatCleared: 1
   seawallPatrol:
-    introSeen: 0
-    phaseAComplete: 0
-    phaseATrioMilitia: 0
-    phaseATrioQueen: 0
-    phaseATrioKing: 0
-    midPatrolComplete: 0
-    sealedSpellFound: 0
-    nodeCleared: 0
+    introSeen: 1
+    phaseAComplete: 1
+    phaseATrioMilitia: 1
+    phaseATrioQueen: 1
+    phaseATrioKing: 1
+    midPatrolComplete: 1
+    sealedSpellFound: 1
+    nodeCleared: 1
     religiousLineRewardGranted: 0
   riverFork:
     openingSeen: 0
@@ -40,3 +40,7 @@ MonoBehaviour:
     openingWeatherPick: 1
     nodeCleared: 0
     tideMarkGlimmer: 0
+  tideIsland:
+    nodeCleared: 0
+    tideMarkUnsealed: 0
+    seaPurslaneSeedKept: 0

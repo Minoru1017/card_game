@@ -125,6 +125,53 @@ public static class ValuablesVaultCatalog
         return true;
     }
 
+    /// <summary>A-1 解封：移除封印法術關鍵道具，將潮印（spell ordinal 3）加入收藏。</summary>
+    public static bool CanUnsealTideMarkSpell(int playerSlot)
+    {
+        playerSlot = UnityEngine.Mathf.Clamp(playerSlot, 1, PlayerData.MaxPlayerSlots);
+        if (TutorialProgressState.IsA1TideMarkUnsealed(playerSlot))
+            return false;
+        if (!TutorialProgressState.IsA1TideIslandCleared(playerSlot))
+            return false;
+        return FindVaultCellWithDefinition(playerSlot, SealedSpellRelicDefinitionId) >= 0;
+    }
+
+    public static bool TryUnsealTideMarkSpell(int playerSlot, PlayerData playerData = null)
+    {
+        if (!CanUnsealTideMarkSpell(playerSlot))
+            return false;
+
+        int relicCell = FindVaultCellWithDefinition(playerSlot, SealedSpellRelicDefinitionId);
+        if (relicCell < 0)
+            return false;
+
+        playerData = playerData != null ? playerData : PlayerData.ResolveCanonical();
+        if (playerData == null)
+            return false;
+
+        ValuablesVaultState.ClearStack(playerSlot, relicCell);
+
+        int tideMarkKey = DeckCardId.SpellKeyFromOrdinal(3);
+        playerData.AddCollection(tideMarkKey, 1);
+        playerData.SavePlayerData();
+        return true;
+    }
+
+    private static int FindVaultCellWithDefinition(int playerSlot, int definitionId)
+    {
+        for (int cell = 0; cell < ValuablesVaultState.SlotCount; cell++)
+        {
+            if (!ValuablesVaultState.TryGetStack(playerSlot, cell, out ValuablesVaultState.VaultStack stack))
+                continue;
+            if (stack.IsEmpty)
+                continue;
+            if (stack.DefinitionId == definitionId)
+                return cell;
+        }
+
+        return -1;
+    }
+
     private static bool IsCdDiscInVault(int playerSlot, int discDefinitionId) =>
         IsDefinitionInVault(playerSlot, discDefinitionId);
 

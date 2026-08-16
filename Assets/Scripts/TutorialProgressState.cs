@@ -17,6 +17,9 @@ public static class TutorialProgressState
     private const string M12PhaseATrioKingKey = "m12_phase_a_trio_king";
     private const string M12MidPatrolCompleteKey = "m12_mid_patrol_complete";
     private const string M12SealedSpellFoundKey = "m12_sealed_spell_found";
+    private const string A1TideIslandClearedKey = "a1_tide_island_cleared";
+    private const string A1TideMarkUnsealedKey = "a1_tide_mark_unsealed";
+    private const string A1SeaPurslaneSeedKeptKey = "a1_sea_purslane_seed_kept";
     private const string M12IntroSeenKey = "m12_intro_seen";
     private const string M12PhaseADefeatCountKey = "m12_phase_a_defeat_count";
     public const int M12PhaseAExamMemoUnlockDefeatCount = 2;
@@ -488,6 +491,24 @@ public static class TutorialProgressState
 
     public static void SetM12SealedSpellFound(int slot, bool found = true) =>
         WriteCompleted(slot, M12SealedSpellFoundKey, null, found);
+
+    public static bool IsA1TideIslandCleared(int slot) =>
+        ReadCompleted(slot, A1TideIslandClearedKey, null);
+
+    public static void SetA1TideIslandCleared(int slot, bool cleared = true) =>
+        WriteCompleted(slot, A1TideIslandClearedKey, null, cleared);
+
+    public static bool IsA1TideMarkUnsealed(int slot) =>
+        ReadCompleted(slot, A1TideMarkUnsealedKey, null);
+
+    public static void SetA1TideMarkUnsealed(int slot, bool unsealed = true) =>
+        WriteCompleted(slot, A1TideMarkUnsealedKey, null, unsealed);
+
+    public static bool IsA1SeaPurslaneSeedKept(int slot) =>
+        ReadCompleted(slot, A1SeaPurslaneSeedKeptKey, null);
+
+    public static void SetA1SeaPurslaneSeedKept(int slot, bool kept = true) =>
+        WriteCompleted(slot, A1SeaPurslaneSeedKeptKey, null, kept);
 
     public static bool IsM13OpeningSeen(int slot) =>
         ReadCompleted(slot, M13OpeningSeenKey, null);

@@ -76,9 +76,11 @@ public static class ValuablesVaultDisplay
 
         if (ValuablesVaultCatalog.IsSealedSpellRelicDefinition(definitionId))
         {
+            int slot = PlayerData.GetActivePlayerSlotOrDefault();
+            string sealedBody = ResolveSealedSpellRelicBody(slot);
             return new InfoPanelCopy(
                 ValuablesVaultUiCopy.SealedSpellRelicName,
-                ValuablesVaultUiCopy.SealedSpellRelicBody,
+                sealedBody,
                 slotLine,
                 true);
         }
@@ -176,6 +178,15 @@ public static class ValuablesVaultDisplay
         }
 
         return "貴重品 #" + definitionId;
+    }
+
+    private static string ResolveSealedSpellRelicBody(int slot)
+    {
+        if (SideQuestA1ProgressState.CanUnsealTideMarkInVault(slot))
+            return ValuablesVaultUiCopy.SealedSpellRelicBodyReady;
+        if (SideQuestA1ProgressState.IsNodeCleared(slot))
+            return ValuablesVaultUiCopy.SealedSpellRelicBody;
+        return ValuablesVaultUiCopy.SealedSpellRelicBodyLocked;
     }
 
     private static InfoPanelCopy ResolveCdDiscInfoPanel(

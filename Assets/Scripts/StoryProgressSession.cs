@@ -24,12 +24,24 @@ public static class StoryProgressSession
     private static bool tutorialPlotBgmRequested;
     private static bool m12PlotBgmRequested;
     private static bool m13PlotBgmRequested;
+    private static bool a1HarborPlotActive;
+    private static bool a1IslandIntroPlotActive;
+    private static bool a1UnsealPlotActive;
+    private static bool a1ReturnPlotActive;
+    private static bool a1QuestSessionActive;
+    private static bool a1HarborCancelled;
+    private static bool a1SkipFarm;
+    private static SideQuestA1TideMarkRewardService.FarmOutcome a1PendingFarmOutcome;
+    private static bool a1PendingKeptSeaPurslaneSeed;
+    private static SideQuestA1TideMarkRewardService.ApplyResult a1PendingApplyResult;
+    private static bool a1PendingApplyResultSet;
     private static string pendingMapFocusNodeId;
     private static bool pendingEnterMapFocusMode;
     private static bool pendingM13ContinueAfterBirdDuel;
 
     public const string SeawallPatrolNodeId = "M-1-2";
     public const string RiverForkNodeId = "M-1-3";
+    public const string TideIslandSideNodeId = "S-A-1";
 
     /// <summary>教學戰勝利後的 Main Plot 結尾劇情進行中。</summary>
     public static bool IsTutorialPlotEpilogueActive => tutorialPlotEpilogueActive;
@@ -48,6 +60,16 @@ public static class StoryProgressSession
     public static bool IsM13RoseTrialPlotActive => m13RoseTrialPlotActive;
 
     public static bool IsM13EpiloguePlotActive => m13EpiloguePlotActive;
+
+    public static bool IsA1HarborPlotActive => a1HarborPlotActive;
+
+    public static bool IsA1IslandIntroPlotActive => a1IslandIntroPlotActive;
+
+    public static bool IsA1UnsealPlotActive => a1UnsealPlotActive;
+
+    public static bool IsA1ReturnPlotActive => a1ReturnPlotActive;
+
+    public static bool IsA1QuestSessionActive => a1QuestSessionActive;
 
     public static bool TryConsumeLaunchM12PhaseABattleAfterPlot()
     {
@@ -155,6 +177,21 @@ public static class StoryProgressSession
         m13RoseTrialPlotActive = false;
         m13EpiloguePlotActive = false;
         launchM13PhaseBBattleAfterPlot = false;
+    }
+
+    private static void ResetA1PlotSessionFlags()
+    {
+        a1HarborPlotActive = false;
+        a1IslandIntroPlotActive = false;
+        a1UnsealPlotActive = false;
+        a1ReturnPlotActive = false;
+        a1QuestSessionActive = false;
+        a1HarborCancelled = false;
+        a1SkipFarm = false;
+        a1PendingFarmOutcome = SideQuestA1TideMarkRewardService.FarmOutcome.Skipped;
+        a1PendingKeptSeaPurslaneSeed = false;
+        a1PendingApplyResult = default;
+        a1PendingApplyResultSet = false;
     }
 
     /// <summary>離開 1-1 劇情或載入非 Main Plot 場景時呼叫，停止 BGM 並清除請求旗標。</summary>
@@ -443,6 +480,167 @@ public static class StoryProgressSession
         pendingMapFocusNodeId = RiverForkNodeId;
     }
 
+    public static void LaunchA1HarborPlotScene()
+    {
+        ResetA1PlotSessionFlags();
+        ResetM12PlotSessionFlags();
+        ResetM13PlotSessionFlags();
+        ResetCrossChapterBridgeFlags();
+        ClearPlotBgmRequestFlags();
+        a1QuestSessionActive = true;
+        a1HarborPlotActive = true;
+        ResetForPlotLaunch(PlotLaunchTeardownScope.StoryProgressMusicOnly);
+        SetPendingPlotSteps(TutorialPlotScriptFactory.BuildA1HarborPlotSteps());
+        LoadMainPlotOrFallback(() =>
+        {
+            a1HarborPlotActive = false;
+        });
+    }
+
+    public static void LaunchA1IslandIntroPlotInPlace(int slot)
+    {
+        a1IslandIntroPlotActive = true;
+        a1HarborPlotActive = false;
+        SetPendingPlotSteps(TutorialPlotScriptFactory.BuildA1IslandIntroPlotSteps(slot));
+        TryBeginA1PlotInPlace();
+    }
+
+    public static void LaunchA1UnsealPlotInPlace()
+    {
+        a1UnsealPlotActive = true;
+        a1IslandIntroPlotActive = false;
+        SetPendingPlotSteps(TutorialPlotScriptFactory.BuildA1UnsealPlotSteps());
+        TryBeginA1PlotInPlace();
+    }
+
+    public static void LaunchA1ReturnPlotInPlace(bool keptSeaPurslaneSeed)
+    {
+        a1ReturnPlotActive = true;
+        a1UnsealPlotActive = false;
+        a1IslandIntroPlotActive = false;
+        SetPendingPlotSteps(TutorialPlotScriptFactory.BuildA1ReturnPlotSteps(keptSeaPurslaneSeed));
+        TryBeginA1PlotInPlace();
+    }
+
+    public static void EndA1HarborPlotSession()
+    {
+        a1HarborPlotActive = false;
+        PlotUiOverlayCleanup.DestroyStrayPlotTapUi();
+    }
+
+    public static void EndA1IslandIntroPlotSession()
+    {
+        a1IslandIntroPlotActive = false;
+        PlotUiOverlayCleanup.DestroyStrayPlotTapUi();
+    }
+
+    public static void EndA1UnsealPlotSession()
+    {
+        a1UnsealPlotActive = false;
+        PlotUiOverlayCleanup.DestroyStrayPlotTapUi();
+    }
+
+    public static void EndA1ReturnPlotSession()
+    {
+        a1ReturnPlotActive = false;
+        a1QuestSessionActive = false;
+        PlotUiOverlayCleanup.DestroyStrayPlotTapUi();
+        pendingMapFocusNodeId = TideIslandSideNodeId;
+    }
+
+    public static void CancelA1QuestSession() => ResetA1PlotSessionFlags();
+
+    /// <summary>回港短劇結束但 session 旗標遺失時的後備判定。</summary>
+    public static bool ShouldCompleteA1ReturnPlot() =>
+        a1PendingApplyResultSet &&
+        !a1HarborPlotActive &&
+        !a1IslandIntroPlotActive &&
+        !a1UnsealPlotActive;
+
+    public static bool ConsumeA1HarborCancelled()
+    {
+        bool cancelled = a1HarborCancelled;
+        a1HarborCancelled = false;
+        return cancelled;
+    }
+
+    public static bool ConsumeA1SkipFarm()
+    {
+        bool skip = a1SkipFarm;
+        a1SkipFarm = false;
+        return skip;
+    }
+
+    public static void SetA1PendingFarmResult(
+        SideQuestA1TideMarkRewardService.FarmOutcome outcome,
+        bool keptSeaPurslaneSeed)
+    {
+        a1PendingFarmOutcome = outcome;
+        a1PendingKeptSeaPurslaneSeed = keptSeaPurslaneSeed;
+    }
+
+    public static bool TryConsumeA1PendingFarmResult(
+        out SideQuestA1TideMarkRewardService.FarmOutcome outcome,
+        out bool keptSeaPurslaneSeed)
+    {
+        outcome = a1PendingFarmOutcome;
+        keptSeaPurslaneSeed = a1PendingKeptSeaPurslaneSeed;
+        a1PendingFarmOutcome = SideQuestA1TideMarkRewardService.FarmOutcome.Skipped;
+        a1PendingKeptSeaPurslaneSeed = false;
+        return true;
+    }
+
+    public static void SetA1PendingApplyResult(SideQuestA1TideMarkRewardService.ApplyResult apply)
+    {
+        a1PendingApplyResult = apply;
+        a1PendingApplyResultSet = true;
+    }
+
+    public static bool TryConsumeA1PendingApplyResult(out SideQuestA1TideMarkRewardService.ApplyResult apply)
+    {
+        apply = a1PendingApplyResult;
+        bool had = a1PendingApplyResultSet;
+        a1PendingApplyResult = default;
+        a1PendingApplyResultSet = false;
+        return had;
+    }
+
+    public static void NotifyA1PlotChoice(int stepIndex, int choiceIndex)
+    {
+        if (stepIndex == TutorialPlotScriptFactory.A1HarborLaunchChoiceStepIndex)
+        {
+            if (choiceIndex == 1)
+                a1HarborCancelled = true;
+            return;
+        }
+
+        if (stepIndex != TutorialPlotScriptFactory.A1IslandFarmChoiceStepIndex)
+            return;
+
+        if (choiceIndex == 1)
+            a1SkipFarm = true;
+    }
+
+    private static void TryBeginA1PlotInPlace()
+    {
+        if (!TryConsumePendingPlotSteps(out List<MainPlotSceneController.PlotStep> steps))
+            return;
+
+        MainPlotSceneController ctrl =
+            UnityEngine.Object.FindFirstObjectByType<MainPlotSceneController>();
+        if (ctrl == null)
+        {
+            UnityEngine.Debug.LogError("StoryProgressSession: Main Plot controller missing for A-1 handoff.");
+            SetPendingPlotSteps(steps);
+            LoadMainPlotOrFallback(null);
+            return;
+        }
+
+        ctrl.ApplyRuntimeSteps(steps, true);
+        ctrl.ClearTapToContinueUiRefs();
+        ctrl.BeginPlot();
+    }
+
     public static void NotifyM13PlotChoice(int stepIndex, int choiceIndex)
     {
         int slot = PlayerData.GetActivePlayerSlotOrDefault();
@@ -514,6 +712,7 @@ public static class StoryProgressSession
             return;
         }
 
+        TutorialPlotBattleTransition.CancelIfPlaying();
         TutorialPlotBattleTransition.PlayToStoryProgress(fastClose);
     }
 

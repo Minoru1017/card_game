@@ -27,6 +27,12 @@ public static class ValuablesVaultUiCopy
     public const string SealedSpellRelicName = "封印的法術";
     public const string SealedSpellRelicBody =
         "效果: 未知\n解封條件: ???\n\n海牆巡邏中拾得的蠟封殘卷.\n學院尚未歸檔, 關鍵道具無法丟棄.";
+    public const string SealedSpellRelicBodyLocked =
+        "效果: 未知\n解封條件: 完成潮間島還地 (A-1)\n\n海牆巡邏中拾得的蠟封殘卷.\n關鍵道具無法丟棄.";
+    public const string SealedSpellRelicBodyReady =
+        "潮間島還地已完成.\n點選此格解封, 鹽霜化開後潮印將加入收藏.\n\n關鍵道具無法丟棄.";
+    public const string TideMarkUnsealedToast = "潮印已解封\n已加入收藏, 可至背包查看";
+    public const string TideMarkUnsealBlockedToast = "需先完成潮間島還地 (A-1) 才能解封";
 
     public static string FormatSlotLine(int row, int col) =>
         "格位  第 " + row + " 列 / 第 " + col + " 欄";

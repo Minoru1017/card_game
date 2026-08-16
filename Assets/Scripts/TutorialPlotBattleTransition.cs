@@ -17,20 +17,26 @@ public static class TutorialPlotBattleTransition
 
     public static bool IsPlaying => IsPlotToBattlePlaying;
 
-    public static void PlayFromPlotToBattle(string battleSceneOverride = null, bool fastCloseAnimation = false)
+    /// <summary>若前一段過場未正常收尾，強制停止以便再次回 Story progress。</summary>
+    public static void CancelIfPlaying()
     {
-        if (IsPlaying)
+        if (host == null)
             return;
 
+        host.StopAllCoroutines();
+        host.ForceFinishTransition();
+    }
+
+    public static void PlayFromPlotToBattle(string battleSceneOverride = null, bool fastCloseAnimation = false)
+    {
+        CancelIfPlaying();
         EnsureHost().StartPlotToBattle(battleSceneOverride, fastCloseAnimation);
     }
 
     /// <summary>教學戰結束（勝／敗）或結尾劇情後回到 Story progress（與劇情→對戰同一套過場）。</summary>
     public static void PlayToStoryProgress(bool fastCloseAnimation = false)
     {
-        if (IsPlaying)
-            return;
-
+        CancelIfPlaying();
         EnsureHost().StartToStoryProgress(fastCloseAnimation);
     }
 
@@ -102,6 +108,12 @@ public static class TutorialPlotBattleTransition
 
         public bool IsRunning => running;
 
+        public void ForceFinishTransition()
+        {
+            CleanupOverlay();
+            running = false;
+        }
+
         public void StartPlotToBattle(string battleSceneOverride, bool fastClose)
         {
             StopAllCoroutines();
@@ -142,6 +154,8 @@ public static class TutorialPlotBattleTransition
                         StoryProgressSession.EndHarborCombatClearBridgeSession();
                     else if (StoryProgressSession.IsM12VictoryEpilogueActive)
                         StoryProgressSession.EndM12VictoryEpilogueSession();
+                    else if (StoryProgressSession.IsA1QuestSessionActive)
+                        StoryProgressSession.EndA1ReturnPlotSession();
                 },
                 onTargetSceneMissing: null);
         }

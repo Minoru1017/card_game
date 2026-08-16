@@ -257,6 +257,16 @@ public class StoryProgressSceneController : MonoBehaviour
             return;
         }
 
+        if (string.Equals(selectedNode, StoryProgressSession.TideIslandSideNodeId, System.StringComparison.OrdinalIgnoreCase))
+        {
+            if (SideQuestA1Flow.CanEnterFromStoryProgress(slot))
+                SideQuestA1Flow.LaunchFromStoryProgress();
+            else
+                Debug.LogWarning("StoryProgressSceneController: S-A-1 locked — " +
+                                 SideQuestA1ProgressState.BuildLockedHint(slot));
+            return;
+        }
+
         if (TutorialProgressState.IsAcademyIntroGraduated(slot))
         {
             // 已畢業走港灣實戰：一樣先播進關演出，黑幕後開啟難度預覽。
@@ -310,9 +320,12 @@ public class StoryProgressSceneController : MonoBehaviour
             System.StringComparison.OrdinalIgnoreCase);
         bool isM13Selected = string.Equals(selectedNode, StoryProgressSession.RiverForkNodeId,
             System.StringComparison.OrdinalIgnoreCase);
-        bool isStoryStageSelected = isM12Selected || isM13Selected;
+        bool isA1Selected = string.Equals(selectedNode, StoryProgressSession.TideIslandSideNodeId,
+            System.StringComparison.OrdinalIgnoreCase);
+        bool isStoryStageSelected = isM12Selected || isM13Selected || isA1Selected;
         bool canEnterM12 = M12SeawallPatrolFlow.CanEnterFromStoryProgress(slot);
         bool canEnterM13 = M13RiverForkFlow.CanEnterFromStoryProgress(slot);
+        bool canEnterA1 = SideQuestA1Flow.CanEnterFromStoryProgress(slot);
 
         if (scenarioRewardsTmp == null)
             scenarioRewardsTmp = FindFooterRewardsTmp();
@@ -323,6 +336,8 @@ public class StoryProgressSceneController : MonoBehaviour
                 footerRewards = StoryProgressLevelCopyM12.BuildScenarioRewards(cardStore, slot);
             else if (isM13Selected)
                 footerRewards = StoryProgressLevelCopyM13.BuildScenarioRewards(cardStore, slot);
+            else if (isA1Selected)
+                footerRewards = StoryProgressLevelCopyA1.BuildScenarioRewards(slot);
             else
                 footerRewards = StoryProgressLevelCopy.BuildScenarioRewards(cardStore);
         }
@@ -334,6 +349,8 @@ public class StoryProgressSceneController : MonoBehaviour
                 enterLabel = StoryProgressLevelCopyM12.ResolveEnterButtonLabel(slot);
             else if (isM13Selected)
                 enterLabel = StoryProgressLevelCopyM13.ResolveEnterButtonLabel(slot);
+            else if (isA1Selected)
+                enterLabel = StoryProgressLevelCopyA1.ResolveEnterButtonLabel(slot);
             else
                 enterLabel = introGraduated ? "挑戰港灣訓練場" : "進入關卡";
             PlotUiTextUtil.ApplyButtonLabel(enterStageButtonLabel, enterLabel, ResolveUiFontSource());
@@ -345,6 +362,8 @@ public class StoryProgressSceneController : MonoBehaviour
                 enterStageButton.interactable = canEnterM12;
             else if (isM13Selected)
                 enterStageButton.interactable = canEnterM13;
+            else if (isA1Selected)
+                enterStageButton.interactable = canEnterA1;
             else
                 enterStageButton.interactable = true;
         }
@@ -356,6 +375,8 @@ public class StoryProgressSceneController : MonoBehaviour
                 introText = StoryProgressLevelCopyM12.BuildScenarioIntro(slot);
             else if (isM13Selected)
                 introText = StoryProgressLevelCopyM13.BuildScenarioIntro(slot);
+            else if (isA1Selected)
+                introText = StoryProgressLevelCopyA1.BuildScenarioIntro(slot);
             else
                 introText = StoryProgressLevelCopy.BuildScenarioIntro(introGraduated);
             ApplyScenarioIntroText(introText);

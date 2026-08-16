@@ -21,6 +21,14 @@ public static class TutorialPlotScriptFactory
     public const string SelSpeaker = "燈守·賽爾";
     public const string AChaoSpeaker = "阿潮";
     public const string PlayerSpeaker = "你";
+    public const string HelmsmanSpeaker = "舵叔";
+    public const string GrandmaGrassSpeaker = "草奶奶";
+
+    /// <summary>A-1 碼頭「去／改天」選項步驟索引（0-based）。</summary>
+    public const int A1HarborLaunchChoiceStepIndex = 2;
+
+    /// <summary>A-1 登島「我試試／您來」選項步驟索引（0-based）。</summary>
+    public const int A1IslandFarmChoiceStepIndex = 3;
 
     /// <summary>M-1-3 開場誓約選項步驟索引（0-based）。</summary>
     public const int M13OpeningOathChoiceStepIndex = 7;
@@ -217,7 +225,8 @@ public static class TutorialPlotScriptFactory
         var steps = new List<MainPlotSceneController.PlotStep>(10);
         TapStep(steps, LinKeSpeaker,
             "段考剛結束 你怎麼" + StoryTextStyle.Em("臉色蒼白") + " 是考試壓力太大 還是教室裡出了什麼事",
-            1);
+            1,
+            voiceClipId: "2-1_B0");
         ChoiceStep(steps, PlayerSpeaker,
             "——",
             "壓力是有點 剛才手還在抖", 2,
@@ -225,7 +234,8 @@ public static class TutorialPlotScriptFactory
             "沒事 只是海風吹的", 4);
         TapStep(steps, LinKeSpeaker,
             "贏都贏了 別把自己逼太狠 先" + StoryTextStyle.Hi("深呼吸") + " 兩口",
-            5);
+            5,
+            voiceClipId: "2-1_B1");
         TapStep(steps, LinKeSpeaker,
             "……先別在這說 跟我出去走一段 " + StoryTextStyle.Em("海牆") + " 上透口氣",
             5);
@@ -544,5 +554,99 @@ public static class TutorialPlotScriptFactory
     {
         if (speaker != LinKeSpeaker) return;
         step.characterASprite = ResolveLinKePortrait();
+    }
+
+    /// <summary>A-1 碼頭短劇（§A-1.3 幕 1）→ 航程 overlay。</summary>
+    public static List<MainPlotSceneController.PlotStep> BuildA1HarborPlotSteps()
+    {
+        var steps = new List<MainPlotSceneController.PlotStep>(4);
+        TapStep(steps, HelmsmanSpeaker,
+            SideQuestA1PlotCopy.HarborLaunchLines[0],
+            1,
+            voiceClipId: SideQuestA1PlotCopy.Voice.Harbor0);
+        TapStep(steps, HelmsmanSpeaker,
+            SideQuestA1PlotCopy.HarborLaunchLines[1],
+            2,
+            voiceClipId: SideQuestA1PlotCopy.Voice.Harbor1);
+        ChoiceStep(steps, HelmsmanSpeaker,
+            SideQuestA1PlotCopy.HarborChoicePrompt,
+            "去", 3,
+            "改天", -1);
+        TapStepEndPlot(steps, HelmsmanSpeaker,
+            SideQuestA1PlotCopy.HarborLaunchLines[2],
+            voiceClipId: SideQuestA1PlotCopy.Voice.Harbor2);
+        return steps;
+    }
+
+    /// <summary>A-1 登島短劇（§A-1.3 幕 2）→ 三畦農事 overlay。</summary>
+    public static List<MainPlotSceneController.PlotStep> BuildA1IslandIntroPlotSteps(int slot)
+    {
+        var steps = new List<MainPlotSceneController.PlotStep>(6);
+        TapStep(steps, NarratorSpeaker,
+            SideQuestA1PlotCopy.IslandNarration,
+            1,
+            voiceClipId: SideQuestA1PlotCopy.Voice.Island0);
+        TapStep(steps, GrandmaGrassSpeaker,
+            SideQuestA1PlotCopy.IslandGrandmaOpen,
+            2,
+            voiceClipId: SideQuestA1PlotCopy.Voice.Island1);
+        TapStep(steps, GrandmaGrassSpeaker,
+            SideQuestA1PlotCopy.IslandGrandmaOrder,
+            3,
+            voiceClipId: SideQuestA1PlotCopy.Voice.Island2);
+
+        if (SideQuestA1ProgressState.IsSealedSpellReady(slot))
+        {
+            ChoiceStep(steps, PlayerSpeaker,
+                "——",
+                "我試試", 4,
+                "您來", -1);
+            TapStepEndPlot(steps, GrandmaGrassSpeaker,
+                SideQuestA1PlotCopy.IslandSealedSpellHint,
+                voiceClipId: SideQuestA1PlotCopy.Voice.IslandSealedHint);
+        }
+        else
+        {
+            ChoiceStep(steps, PlayerSpeaker,
+                "——",
+                "我試試", -1,
+                "您來", -1);
+        }
+
+        return steps;
+    }
+
+    /// <summary>A-1 解封儀式（§A-1.3 幕 4）→ 回港短劇。</summary>
+    public static List<MainPlotSceneController.PlotStep> BuildA1UnsealPlotSteps()
+    {
+        var steps = new List<MainPlotSceneController.PlotStep>(4);
+        TapStep(steps, GrandmaGrassSpeaker,
+            SideQuestA1PlotCopy.UnsealGrandma1,
+            1,
+            voiceClipId: SideQuestA1PlotCopy.Voice.Unseal1);
+        TapStep(steps, NarratorSpeaker,
+            SideQuestA1PlotCopy.UnsealNarration,
+            2);
+        TapStep(steps, GrandmaGrassSpeaker,
+            SideQuestA1PlotCopy.UnsealGrandma2,
+            3,
+            voiceClipId: SideQuestA1PlotCopy.Voice.Unseal3);
+        TapStepEndPlot(steps, GrandmaGrassSpeaker,
+            SideQuestA1PlotCopy.UnsealGrandma3,
+            voiceClipId: SideQuestA1PlotCopy.Voice.Unseal4);
+        return steps;
+    }
+
+    /// <summary>A-1 回港短劇（§A-1.3 幕 5）→ 回 Story progress。</summary>
+    public static List<MainPlotSceneController.PlotStep> BuildA1ReturnPlotSteps(bool keptSeaPurslaneSeed)
+    {
+        var steps = new List<MainPlotSceneController.PlotStep>(1);
+        string text = SideQuestA1PlotCopy.ReturnDefault;
+        if (keptSeaPurslaneSeed)
+            text += "\n\n" + SideQuestA1PlotCopy.ReturnWithSeed;
+        TapStepEndPlot(steps, HelmsmanSpeaker,
+            text,
+            voiceClipId: SideQuestA1PlotCopy.Voice.Return0);
+        return steps;
     }
 }

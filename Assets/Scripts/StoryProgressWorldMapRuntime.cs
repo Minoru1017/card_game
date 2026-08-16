@@ -516,8 +516,8 @@ public sealed class StoryProgressWorldMapRuntime : MonoBehaviour
             clearedNodeIds.Add("M-1-1");
         if (TutorialProgressState.IsM12TrioMasteryCleared(slot))
             clearedNodeIds.Add(SeawallPatrolNodeId);
-        if (M13RiverForkProgressState.IsNodeCleared(slot))
-            clearedNodeIds.Add(RiverForkNodeId);
+        if (SideQuestA1ProgressState.IsNodeCleared(slot))
+            clearedNodeIds.Add(SideQuestA1ProgressState.NodeId);
     }
 
     private void BuildNodeGraphVisuals()
@@ -1300,6 +1300,14 @@ public sealed class StoryProgressWorldMapRuntime : MonoBehaviour
     private NodeState ResolveNodeState(StoryProgressNodeEntry node)
     {
         if (node == null) return NodeState.Locked;
+        if (string.Equals(node.nodeId, SideQuestA1ProgressState.NodeId, StringComparison.OrdinalIgnoreCase))
+        {
+            int slot = PlayerData.GetActivePlayerSlotOrDefault();
+            if (SideQuestA1ProgressState.IsNodeCleared(slot)) return NodeState.Cleared;
+            if (!SideQuestA1ProgressState.IsNodeAvailable(slot)) return NodeState.Locked;
+            return NodeState.Available;
+        }
+
         if (clearedNodeIds.Contains(node.nodeId)) return NodeState.Cleared;
 
         bool allReady = true;
@@ -1369,7 +1377,8 @@ public sealed class StoryProgressWorldMapRuntime : MonoBehaviour
         NodeState state = ResolveNodeState(node);
         if (string.Equals(node.nodeId, TutorialRootNodeId, StringComparison.OrdinalIgnoreCase) ||
             string.Equals(node.nodeId, SeawallPatrolNodeId, StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(node.nodeId, RiverForkNodeId, StringComparison.OrdinalIgnoreCase))
+            string.Equals(node.nodeId, RiverForkNodeId, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(node.nodeId, SideQuestA1ProgressState.NodeId, StringComparison.OrdinalIgnoreCase))
         {
             if (state == NodeState.Locked)
             {

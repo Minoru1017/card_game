@@ -399,7 +399,7 @@ public partial class BattleSimulationDebugUI : MonoBehaviour
 
         NotifyTurnIdlePromptPlayerTookPlayOrAttackIntent();
 
-        if (card is SpellCard sp && sp.SpellOrdinal == 1)
+        if (card is SpellCard sp && (sp.SpellOrdinal == 1 || sp.SpellOrdinal == 3))
         {
             battleManager.PlayerPlayCardFromHand(handIndex);
             return;

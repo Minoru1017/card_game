@@ -225,6 +225,29 @@ public static class StoryLevelEntryTransition
         "<color=" + ObjectiveHeaderHex + "><b>重溫關卡</b></color>\n" +
         "從邊燈夜話重走 首通獎勵不重發";
 
+    /// <summary>首次或重訪：標題卡 → 碼頭短劇（Main Plot）。</summary>
+    public static void PlayToA1TideIsland(bool replay = false)
+    {
+        if (IsPlaying)
+            return;
+
+        int slot = PlayerData.GetActivePlayerSlotOrDefault();
+        EnsureHost().Begin(
+            StoryProgressLevelCopyA1.LevelTitle,
+            replay ? BuildA1ReplayObjectivesText() : BuildA1ObjectivesText(slot),
+            StoryProgressSession.LaunchA1HarborPlotScene,
+            StoryProgressSession.MainPlotSceneName);
+    }
+
+    private static string BuildA1ObjectivesText(int slot) =>
+        "<color=" + ObjectiveHeaderHex + "><b>達成目標</b></color>\n" +
+        "搭舵叔的舢板登島 · 完成三畦輪作\n" +
+        "通關解封潮印（可跳過，跳過不解封）";
+
+    private static string BuildA1ReplayObjectivesText() =>
+        "<color=" + ObjectiveHeaderHex + "><b>重訪潮間島</b></color>\n" +
+        "三畦農事可重溫 · 解封僅首次有效";
+
     private static Host EnsureHost()
     {
         if (host != null)

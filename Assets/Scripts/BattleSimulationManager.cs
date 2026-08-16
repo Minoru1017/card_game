@@ -375,6 +375,7 @@ public partial class BattleSimulationManager : MonoBehaviour
     private int bonusEnemyOpeningExtraDraw;
     private bool bonusEnemyOpeningDrawConsumed;
     private bool bonusPlayerHeroShieldRemaining;
+    private int playerTideMarkChargesRemaining;
     private bool m12PhaseAHeroCharmShieldActive;
     private bool m13HotBloodReversalConsumed;
     private int bonusPlayerRarityDrawMaxRound;
@@ -1748,6 +1749,7 @@ public partial class BattleSimulationManager : MonoBehaviour
         NotifyTurnBanner(BattleTurnBannerKind.Hidden);
         ClearPlayerLinGaze();
         ClearEnemyLinGaze();
+        playerTideMarkChargesRemaining = 0;
         ResetMonsterSkillBattleState();
         enemySchemingHoldStreak = 0;
         battleToastMessage = string.Empty;
@@ -1970,10 +1972,11 @@ public partial class BattleSimulationManager : MonoBehaviour
                 return false;
             }
 
-            bool lesserHealExempt = selected is SpellCard spPre && spPre.SpellOrdinal == 1;
-            if (!lesserHealExempt)
+            bool fieldDefenseSpellExempt = selected is SpellCard spPre &&
+                                           IsPlayerFieldDefenseSpellPlayableWhileFieldOccupied(spPre);
+            if (!fieldDefenseSpellExempt)
             {
-                ShowBattleToast("我方場上已有怪獸時，僅能打初級治療；其他手牌無法打出。", 2.5f);
+                ShowBattleToast("我方場上已有怪獸時，僅能打初級治療或潮印；其他手牌無法打出。", 2.5f);
                 return false;
             }
         }
@@ -2684,11 +2687,16 @@ public partial class BattleSimulationManager : MonoBehaviour
                 return ApplyPlayerSpellLesserHeal(spell);
             case 2:
                 return ApplyPlayerSpellLinGaze(spell);
+            case 3:
+                return ApplyPlayerSpellTideMark(spell);
             default:
                 Debug.LogWarning("Unknown player spell ordinal: " + spell.SpellOrdinal);
                 return true;
         }
     }
+
+    private static bool IsPlayerFieldDefenseSpellPlayableWhileFieldOccupied(SpellCard spell) =>
+        spell != null && (spell.SpellOrdinal == 1 || spell.SpellOrdinal == 3);
 
     private void ApplyPlayerSpellFireball(SpellCard spell)
     {
@@ -2771,6 +2779,19 @@ public partial class BattleSimulationManager : MonoBehaviour
         playerLinGazeSource = spell;
         playerLinGazeRoundsRemaining = 3;
         ShowBattleToast("林可的凝視：已置於場上。3 回合內每回合全體 -5 HP，且敵方無法攻擊。", 3.5f);
+        return true;
+    }
+
+    private bool ApplyPlayerSpellTideMark(SpellCard spell)
+    {
+        playerTideMarkChargesRemaining++;
+        ShowBattleToast("潮印：下一次對我方英雄的直擊傷害 -5（最少 1）。" +
+                        (playerTideMarkChargesRemaining > 1
+                            ? "（待結算 " + playerTideMarkChargesRemaining + " 次）"
+                            : string.Empty),
+            2.8f);
+        LogBattleHistory("我方使用了 法術牌 " + spell.cardName + "（待結算直擊減傷 ×" +
+                         playerTideMarkChargesRemaining + "）");
         return true;
     }
 
@@ -2891,6 +2912,18 @@ public partial class BattleSimulationManager : MonoBehaviour
             LogBattleHistory(shieldLabel + "：抵銷對我方英雄的傷害（" + sourceLabel + "，原 " + dmg + " 點）");
             PlayerHeroShieldConsumed?.Invoke();
             return 0;
+        }
+
+        if (playerTideMarkChargesRemaining > 0)
+        {
+            playerTideMarkChargesRemaining--;
+            int reduced = Mathf.Max(1, dmg - 5);
+            if (reduced < dmg)
+            {
+                ShowBattleToast("潮印：直擊傷害 " + dmg + " → " + reduced + "。", 2.6f);
+                LogBattleHistory("潮印：直擊傷害由 " + dmg + " 降為 " + reduced + "（" + sourceLabel + "）");
+            }
+            dmg = reduced;
         }
 
         if (IsM12HorrorDamageFrozen)
@@ -4006,7 +4039,8 @@ public partial class BattleSimulationManager : MonoBehaviour
         {
             if (card is MonsterCard && CanReplaceFieldMonsterForConsecration(true))
                 return false;
-            if (card is SpellCard spOnField) return spOnField.SpellOrdinal != 1;
+            if (card is SpellCard spOnField)
+                return !IsPlayerFieldDefenseSpellPlayableWhileFieldOccupied(spOnField);
             return true;
         }
         if (card is SpellCard sp)
@@ -4458,7 +4492,7 @@ public partial class BattleSimulationManager : MonoBehaviour
         {
             if (card is MonsterCard)
                 return CanReplaceFieldMonsterForConsecration(true);
-            return card is SpellCard sp && sp.SpellOrdinal == 1;
+            return card is SpellCard sp && IsPlayerFieldDefenseSpellPlayableWhileFieldOccupied(sp);
         }
 
         if (card is SpellCard spell)
@@ -4516,6 +4550,7 @@ public partial class BattleSimulationManager : MonoBehaviour
     public int GetPlayerHeroHp() { return playerHp; }
 
     public bool HasPlayerHeroShieldRemaining => bonusPlayerHeroShieldRemaining;
+    public bool HasPlayerTideMarkChargesRemaining => playerTideMarkChargesRemaining > 0;
 
     #region Harbor combat coach (read-only damage estimates)
 
@@ -4685,6 +4720,8 @@ public partial class BattleSimulationManager : MonoBehaviour
                     return "在手牌點擊：我方場上怪獸回復 40 HP（可溢出，溢出以綠字顯示）。消耗。場上已有怪獸時，僅此法術可從手牌打出。";
                 case 2:
                     return "僅在我方場上無怪獸時可發動。置於場上：3 回合每回合全體 -5 HP；期間敵方無法攻擊。3 回合後消失。";
+                case 3:
+                    return "手牌點擊：本局下一次對我方英雄的直擊傷害 -5（最少 1）。消耗。場上已有怪獸時也可打出。";
                 default:
                     return spell.effect;
             }

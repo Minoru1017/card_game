@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
@@ -35,6 +36,8 @@ public sealed class GlobalNavValuablesVaultOverlay
     private static readonly Color DetailBodyColor = new Color(0.28f, 0.24f, 0.2f, 1f);
     private static readonly Color DetailMutedColor = new Color(0.48f, 0.42f, 0.36f, 1f);
 
+    private static readonly Color CellSealedReadyBorder = new Color(1f, 0.82f, 0.28f, 0.98f);
+
     private readonly Action<TextMeshProUGUI> applyFont;
     private readonly Func<Transform, GameObject> createCloseButton;
 
@@ -49,7 +52,11 @@ public sealed class GlobalNavValuablesVaultOverlay
     private ScrollRect vaultScrollRect;
     private int builtLayoutVersion;
     private int selectedCellIndex = -1;
+    private bool unsealEffectRunning;
+    private VaultOverlayDriver driver;
     private readonly CellUi[] cells = new CellUi[ValuablesVaultState.SlotCount];
+
+    private sealed class VaultOverlayDriver : MonoBehaviour { }
 
     private sealed class CellUi
     {
@@ -100,6 +107,10 @@ public sealed class GlobalNavValuablesVaultOverlay
         BuildHeader(panel.transform, panelWidth);
         BuildFooter(panel.transform);
         BuildBody(panel.transform, panelWidth, panelHeight);
+
+        driver = root.GetComponent<VaultOverlayDriver>();
+        if (driver == null)
+            driver = root.AddComponent<VaultOverlayDriver>();
 
         root.SetActive(false);
         builtLayoutVersion = OverlayLayoutVersion;
@@ -521,9 +532,106 @@ public sealed class GlobalNavValuablesVaultOverlay
 
     private void OnCellClicked(int cellIndex)
     {
+        if (unsealEffectRunning)
+            return;
+
+        int slot = PlayerData.GetActivePlayerSlotOrDefault();
+        if (ValuablesVaultState.TryGetStack(slot, cellIndex, out ValuablesVaultState.VaultStack stack)
+            && !stack.IsEmpty
+            && ValuablesVaultCatalog.IsSealedSpellRelicDefinition(stack.DefinitionId))
+        {
+            if (ValuablesVaultCatalog.CanUnsealTideMarkSpell(slot))
+            {
+                if (driver != null)
+                    driver.StartCoroutine(CoUnsealSealedSpellAtCell(cellIndex));
+                else
+                    CompleteSealedSpellUnseal(cellIndex);
+                return;
+            }
+
+            selectedCellIndex = cellIndex;
+            RefreshCellSelectionVisuals();
+            RefreshDetailPanel(cellIndex);
+            if (!SideQuestA1ProgressState.IsNodeCleared(slot))
+                SceneToast.Show(ValuablesVaultUiCopy.TideMarkUnsealBlockedToast);
+            return;
+        }
+
         selectedCellIndex = cellIndex;
         RefreshCellSelectionVisuals();
         RefreshDetailPanel(cellIndex);
+    }
+
+    private IEnumerator CoUnsealSealedSpellAtCell(int cellIndex)
+    {
+        unsealEffectRunning = true;
+        selectedCellIndex = cellIndex;
+        RefreshCellSelectionVisuals();
+        RefreshDetailPanel(cellIndex);
+
+        yield return CoFlashUnsealCell(cellIndex);
+        CompleteSealedSpellUnseal(cellIndex);
+        unsealEffectRunning = false;
+    }
+
+    private IEnumerator CoFlashUnsealCell(int cellIndex)
+    {
+        CellUi cell = cellIndex >= 0 && cellIndex < cells.Length ? cells[cellIndex] : null;
+        if (cell == null || cell.background == null || cell.outline == null)
+            yield break;
+
+        Color startBg = cell.background.color;
+        Color startOutline = cell.outline.effectColor;
+        Vector2 startDistance = cell.outline.effectDistance;
+        Vector3 startScale = cell.background.rectTransform.localScale;
+
+        const float dur = 0.42f;
+        float t = 0f;
+        while (t < dur)
+        {
+            t += Time.unscaledDeltaTime;
+            float p = Mathf.Clamp01(t / dur);
+            float wave = Mathf.Sin(p * Mathf.PI);
+            cell.background.color = Color.Lerp(startBg, new Color(1f, 0.94f, 0.52f, 1f), wave);
+            cell.outline.effectColor = Color.Lerp(startOutline, new Color(1f, 0.88f, 0.18f, 1f), wave);
+            cell.outline.effectDistance = startDistance + new Vector2(5f, -5f) * wave;
+            cell.background.rectTransform.localScale = startScale * (1f + 0.12f * wave);
+            if (cell.label != null)
+            {
+                cell.label.color = Color.Lerp(
+                    new Color(0.22f, 0.18f, 0.14f, 1f),
+                    new Color(0.92f, 0.42f, 0.12f, 1f),
+                    wave);
+            }
+            yield return null;
+        }
+
+        cell.background.color = startBg;
+        cell.outline.effectColor = startOutline;
+        cell.outline.effectDistance = startDistance;
+        cell.background.rectTransform.localScale = startScale;
+        if (cell.label != null)
+            cell.label.color = new Color(0.22f, 0.18f, 0.14f, 1f);
+    }
+
+    private void CompleteSealedSpellUnseal(int cellIndex)
+    {
+        int slot = PlayerData.GetActivePlayerSlotOrDefault();
+        PlayerData playerData = PlayerData.ResolveCanonical();
+        if (playerData == null)
+            return;
+
+        if (!ValuablesVaultCatalog.TryUnsealTideMarkSpell(slot, playerData))
+            return;
+
+        SideQuestA1ProgressState.MarkTideMarkUnsealed(slot);
+        PlayerSaveCoordinator.FlushDebouncedThenSavePlayerData();
+
+        selectedCellIndex = -1;
+        RefreshAllCells();
+        RefreshDetailPanel(-1);
+        RefreshCellSelectionVisuals();
+        SceneToast.Show(ValuablesVaultUiCopy.TideMarkUnsealedToast, 2.8f);
     }
 
     private void RefreshDetailPanel(int cellIndex)
@@ -756,6 +864,7 @@ public sealed class GlobalNavValuablesVaultOverlay
 
     private void RefreshCellSelectionVisuals()
     {
+        int slot = PlayerData.GetActivePlayerSlotOrDefault();
         for (int i = 0; i < cells.Length; i++)
         {
             CellUi cell = cells[i];
@@ -763,8 +872,22 @@ public sealed class GlobalNavValuablesVaultOverlay
                 continue;
 
             bool selected = i == selectedCellIndex;
-            cell.outline.effectColor = selected ? CellSelectedBorder : CellBorder;
-            cell.outline.effectDistance = selected
+            bool readyToUnseal = false;
+            if (ValuablesVaultState.TryGetStack(slot, i, out ValuablesVaultState.VaultStack stack)
+                && !stack.IsEmpty
+                && ValuablesVaultCatalog.IsSealedSpellRelicDefinition(stack.DefinitionId))
+            {
+                readyToUnseal = ValuablesVaultCatalog.CanUnsealTideMarkSpell(slot);
+            }
+
+            if (selected)
+                cell.outline.effectColor = CellSelectedBorder;
+            else if (readyToUnseal)
+                cell.outline.effectColor = CellSealedReadyBorder;
+            else
+                cell.outline.effectColor = CellBorder;
+
+            cell.outline.effectDistance = selected || readyToUnseal
                 ? new Vector2(2f, -2f)
                 : new Vector2(1.5f, -1.5f);
         }
@@ -792,6 +915,15 @@ public sealed class GlobalNavValuablesVaultOverlay
 
             cell.background.color = CellFilledBg;
             cell.label.text = ValuablesVaultDisplay.ResolveLabel(stack.DefinitionId, stack.Quantity);
+            if (ValuablesVaultCatalog.IsSealedSpellRelicDefinition(stack.DefinitionId)
+                && ValuablesVaultCatalog.CanUnsealTideMarkSpell(slot))
+            {
+                cell.label.color = new Color(0.78f, 0.52f, 0.12f, 1f);
+            }
+            else
+            {
+                cell.label.color = new Color(0.22f, 0.18f, 0.14f, 1f);
+            }
             Sprite sprite = ValuablesVaultDisplay.ResolveIcon(stack.DefinitionId);
             if (sprite != null)
             {

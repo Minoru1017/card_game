@@ -13,7 +13,8 @@
 2. [`STORY_PROGRESS_WORLDVIEW.md`](STORY_PROGRESS_WORLDVIEW.md) — 空間、敘事、三層命名  
 3. [`LEVEL_DESIGN_GDD.md`](LEVEL_DESIGN_GDD.md) — 1-1 流程、獎勵、地圖解鎖（**進度語意以此為準**）  
 3b. [`LEVEL_DESIGN_M-1-2.md`](LEVEL_DESIGN_M-1-2.md) — 1-2 段考、宗教三張 B、御三家觸發目標  
-4. [`TUTORIAL_PLOT_SCRIPT.md`](TUTORIAL_PLOT_SCRIPT.md) — **主劇情台詞表**（1-1 入門 §一～§六；**1-2 海牆巡邏 §八**）；1-3 見 [`M13_PLOT_SCRIPT.md`](M13_PLOT_SCRIPT.md)  
+3c. [`LEVEL_DESIGN_A-1.md`](LEVEL_DESIGN_A-1.md) — **支線 A-1 潮間島**（三畦耕田、潮印解封、Main Plot 劇情）  
+4. [`TUTORIAL_PLOT_SCRIPT.md`](TUTORIAL_PLOT_SCRIPT.md) — **主劇情台詞表**（1-1 入門 §一～§六；**1-2 海牆巡邏 §八**）；1-3 見 [`M13_PLOT_SCRIPT.md`](M13_PLOT_SCRIPT.md)；**A-1 台詞**見 `SideQuestA1PlotCopy.cs` ＋ [`LEVEL_DESIGN_A-1.md`](LEVEL_DESIGN_A-1.md) §四  
 5. [`GAMEPLAY_AND_RULES.md`](GAMEPLAY_AND_RULES.md) — 對戰規則、卡牌表、Settings  
 6. 實作對照：`Assets/Resources/StoryProgressNodeDatabase.json`、`Assets/Scripts/PROJECT_CODE_INDEX_v2.md`
 
@@ -26,7 +27,7 @@
 | [`README.md`](README.md) | 玩家向功能說明、執行環境 |
 | [`PLANNING_MASTER_TABLE.md`](PLANNING_MASTER_TABLE.md) | **企劃總表**（領域 × 狀態 × 主文件） |
 | [`PLANNING_OPEN_ITEMS.md`](PLANNING_OPEN_ITEMS.md) | **待定／未定義**集中清單 |
-| [`企劃發想.md`](企劃發想.md) | **體驗發想**（爽感、探索感、鬥鳥、**§十 Deck Pack／自由對戰**、**§七 驚奇感**、**§八 結算 UI**、**§九 展示借鏡**） |
+| [`企劃發想.md`](企劃發想.md) | **體驗發想**（爽感、探索感、鬥鳥、**§十 Deck Pack／自由對戰**、**§七 驚奇感**、**§八 結算 UI**、**§九 展示借鏡**、**§十二 支線 A-1 島嶼老人**） |
 | [`Docs/鬥鳥手勢小遊戲企劃.md`](Docs/鬥鳥手勢小遊戲企劃.md) | **鬥鳥暖身賽**（BGM 鼓點節奏反制；戰前讀心與進階 AI 情報）；**已取代戰前謎題**：戰前一律先鬥鳥，勝出可挑戰魔王級，情報帶入戰鬥；**CD 光碟**含 §12.4.1 難度梯度（港灣最簡 → 庭訓略難） |
 | [`ARCHITECTURE_OVERVIEW.md`](ARCHITECTURE_OVERVIEW.md) | 場景流程、存檔、DataManager（英文架構圖） |
 
@@ -39,6 +40,7 @@
 | [`STORY_PROGRESS_WORLDVIEW.md`](STORY_PROGRESS_WORLDVIEW.md) | 港灣／學院分層、文案圓法、常見誤解 |
 | [`LEVEL_DESIGN_GDD.md`](LEVEL_DESIGN_GDD.md) | **關卡設計 GDD**（1-1 港灣定案） |
 | [`LEVEL_DESIGN_M-1-2.md`](LEVEL_DESIGN_M-1-2.md) | **1-2 海牆巡邏**（段考雙戰鬥、獎勵 B） |
+| [`LEVEL_DESIGN_A-1.md`](LEVEL_DESIGN_A-1.md) | **支線 A-1 潮間島**（S-A-1、三畦耕田、潮印解封） |
 | [`HARBOR_1-1_VS_TRAINING_GROUND_DIFFICULTY.md`](HARBOR_1-1_VS_TRAINING_GROUND_DIFFICULTY.md) | **1-1 實戰 vs Buildbeck 訓練場** 簡單／普通難度對照表 |
 | [`HARBOR_COMBAT_COACH_GDD.md`](HARBOR_COMBAT_COACH_GDD.md) | **港灣實戰區戰術教練**（關鍵時刻提示；與入門 coach 分離） |
 | [`Assets/Scripts/HARBOR_COMBAT_COACH_IMPLEMENTATION.md`](Assets/Scripts/HARBOR_COMBAT_COACH_IMPLEMENTATION.md) | 港灣教練**程式實作**（類別、API、資源路徑） |
@@ -120,6 +122,9 @@
 
 | 日期 | 說明 |
 |------|------|
+| 2026-07-31 | 新增 [`LEVEL_DESIGN_A-1.md`](LEVEL_DESIGN_A-1.md)：A-1 MVP 定案（Main Plot 劇情、三畦 overlay、貴重品庫解封潮印）；`企劃發想.md` §十二同步 |
+| 2026-07-30 | `企劃發想.md` §十二 A-1：**劇情分幕**（蒲三畦・舵叔・檜；無林可）＋三作物＋2D 耕田 |
+| 2026-07-25 | `企劃發想.md` §十二：**A-1 島嶼老人**支線草案（封印法術解封候選；連結 L1-2-013） |
 | 2026-07-03 | 企劃↔程式同步：Deck Pack／Free Battle 場景與 hall 導流；全局 ≡ hub 白名單；自由對戰 70% 隨機鬥鳥暖身；鬥鳥 UI 色票 `BirdDuelUiColors`（`ARCHITECTURE_OVERVIEW`、`DECK_SAVE` §11、`PROJECT_CODE_INDEX_v2` §I） |
 | 2026-06-21 | 封印法術真身定案 **潮印**（§3.3.3a）；1-2 中段仍為封印态 |
 | 2026-06-21 | 1-2 中段 **封印法術**伏筆定案（§3.3.3）；支線解封待 L1-2-013 |
