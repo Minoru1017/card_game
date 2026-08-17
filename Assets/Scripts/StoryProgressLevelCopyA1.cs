@@ -2,6 +2,10 @@
 public static class StoryProgressLevelCopyA1
 {
     public const string LevelTitle = "潮間島";
+    public const string FirstVisitIntro =
+        "退潮只留下一趟船。\n" +
+        "跟隨舵叔前往灰綠色的潮間島，協助草奶奶照料三畦土地。" +
+        "或許在輪作、休耕與還地之間，藏著揭開封印的方法。";
 
     public static string BuildScenarioIntro(int slot)
     {
@@ -9,7 +13,7 @@ public static class StoryProgressLevelCopyA1
             return "潮間島 · 草奶奶的三畦輪作已完成。可重溫農事，解封僅首次有效。";
         if (!SideQuestA1ProgressState.IsSealedSpellReady(slot))
             return "潮間島 · 需先在 M-1-2 海牆散策取得封印的法術。";
-        return "潮間島 · 搭舵叔的舢板登島，幫草奶奶完成三畦輪作，解封潮印。";
+        return FirstVisitIntro;
     }
 
     public static string BuildScenarioRewards(int slot)

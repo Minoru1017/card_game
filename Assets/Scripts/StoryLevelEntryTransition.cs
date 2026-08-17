@@ -241,8 +241,8 @@ public static class StoryLevelEntryTransition
 
     private static string BuildA1ObjectivesText(int slot) =>
         "<color=" + ObjectiveHeaderHex + "><b>達成目標</b></color>\n" +
-        "搭舵叔的舢板登島 · 完成三畦輪作\n" +
-        "通關解封潮印（可跳過，跳過不解封）";
+        "完成三畦耕作 · 找出封印法術的解封線索\n" +
+        "支線／非戰鬥／探索與耕作 · 約 3～5 分鐘";
 
     private static string BuildA1ReplayObjectivesText() =>
         "<color=" + ObjectiveHeaderHex + "><b>重訪潮間島</b></color>\n" +
