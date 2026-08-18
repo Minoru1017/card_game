@@ -21,7 +21,7 @@
 |------|------|
 | `Assets/Experimental/A1FarmV2/A1FarmStateMachineV2.cs` | 純 C# 農事狀態機、集中式閾值與快照 |
 | `Assets/Experimental/A1FarmV2/CardGame.A1Farm.Experimental.asmdef` | 預設停用且不自動引用的 assembly |
-| `Assets/Editor/Experimental/A1FarmV2/A1FarmStateMachineV2Tests.cs` | Legacy MVP 行為對照測試 |
+| `Assets/Editor/Experimental/A1FarmV2/A1FarmStateMachineV2Tests.cs` | 舊版閾值、V2 修正與完整流程測試 |
 | `Assets/Editor/Experimental/A1FarmV2/CardGame.A1Farm.Experimental.Tests.asmdef` | 僅 Editor、僅 define 開啟時編譯的測試 assembly |
 
 ## 舊版與 V2 差異
@@ -31,7 +31,7 @@
 | 核心結構 | 約 1,780 行 MonoBehaviour | 獨立純 C# 狀態機 |
 | UI／規則 | 同一類別 | 完全分離；V2 無 UI |
 | Unity 相依 | `Time`、Coroutine、RectTransform、TMP、Image | 無 UnityEngine 相依 |
-| 閾值 | 分散於多個 private handler | 集中於 `A1FarmConfig.LegacyMvp` |
+| 閾值 | 分散於多個 private handler | 集中於 `A1FarmConfig.LegacyThresholds` |
 | 進度儲存 | 多組 bool、陣列、HashSet、counter | `ulong` bit mask、counter 與 snapshot |
 | 每次輸入成本 | Drag 時可能遍歷並重繪 20 格 | 狀態更新為 O(1)，不產生 UI |
 | 時間輸入 | `Time.unscaledTime`／Coroutine | 呼叫端傳入 beat offset／elapsed seconds |
@@ -39,18 +39,23 @@
 | 測試 | 無 A-1 農事單元測試 | 閾值、節拍、鐮刀、跳過、完整流程測試 |
 | 執行狀態 | 正式使用 | 預設不編譯、不接線 |
 
-## Legacy 行為對照
+## 舊版對照與刻意差異
 
-V2 首版刻意保留現行 MVP 規則，方便比較：
+V2 首版保留現行 MVP 的步驟順序與數量閾值，方便比較：
 
 - 黑麥犁溝：20 格中完成 16 格。
-- 壓土節拍：誤差不超過 0.35 秒，成功 2 次。
-- 鐮刀：左右各跨越 80 單位，可跨多次輸入累積。
+- 鐮刀：左右位移必須嚴格超過 80 單位，可跨多次輸入累積。
 - 休耕土塊：3 個；鹽網：14 格；海蓬：5 叢。
 - 泡種：目前維持點擊 3 次。
 - 點種：6 格；引水：6 個不重複格；除藤：2 處；收莢：3 處。
 - 等待動畫規則：累計 1.6 秒。
 - 任意未結束步驟都可 Skip；終止後拒絕其他輸入。
+
+V2 **刻意修正**舊版節拍判定：
+
+- 舊版在 90 BPM 下使用 `error > 0.35 && error < 0.3167`，條件不可能成立，因此實際上所有點擊都會成功。
+- V2 改由呼叫端傳入「距離最近拍點的絕對秒數」，僅 `<= 0.35` 視為成功。
+- 這是實驗性的行為修正，不是 Legacy parity；因 V2 未接線，不會改變現行玩法。
 
 目前企劃中的「泡種長按」及「L 形連通水路」與舊 MVP 實作不同。V2 不擅自改玩法，未來應另加 Spec-Aligned config，而不是偷偷改變 Legacy parity。
 

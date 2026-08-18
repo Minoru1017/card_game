@@ -20,6 +20,8 @@ namespace CardGame.Experimental.Tests.A1
 
             CompleteBean(machine);
             Assert.That(machine.Snapshot.Outcome, Is.EqualTo(A1FarmRunOutcome.Completed));
+            Assert.That(machine.Snapshot.StepKind, Is.EqualTo(A1FarmStepKind.Terminal));
+            Assert.That(machine.Snapshot.StepIndex, Is.EqualTo(5));
             Assert.That(machine.IsTerminal, Is.True);
         }
 
@@ -43,7 +45,7 @@ namespace CardGame.Experimental.Tests.A1
         }
 
         [Test]
-        public void RhythmMiss_DoesNotAdvanceProgress()
+        public void CorrectedRhythmWindow_RejectsOffsetOutsideWindow()
         {
             var machine = new A1FarmStateMachineV2();
             AdvanceToRhythm(machine);
@@ -62,12 +64,17 @@ namespace CardGame.Experimental.Tests.A1
             var machine = new A1FarmStateMachineV2();
             AdvanceToScythe(machine);
 
-            A1FarmTransition incomplete = machine.ApplyScytheDrag(-80f, endDrag: true);
+            A1FarmTransition exactBoundary = machine.ApplyScytheDrag(-80f, endDrag: true);
+            Assert.That(exactBoundary.Feedback, Is.EqualTo(A1FarmFeedback.ScytheIncomplete));
+            Assert.That(machine.Snapshot.ScytheLeftComplete, Is.False);
+
+            machine.ApplyScytheDrag(-80.1f, endDrag: false);
+            A1FarmTransition incomplete = machine.ApplyScytheDrag(80f, endDrag: true);
             Assert.That(incomplete.Feedback, Is.EqualTo(A1FarmFeedback.ScytheIncomplete));
             Assert.That(machine.Snapshot.ScytheLeftComplete, Is.True);
             Assert.That(machine.Snapshot.ScytheRightComplete, Is.False);
 
-            A1FarmTransition complete = machine.ApplyScytheDrag(80f, endDrag: true);
+            A1FarmTransition complete = machine.ApplyScytheDrag(80.1f, endDrag: true);
             Assert.That(complete.Feedback, Is.EqualTo(A1FarmFeedback.CropAdvanced));
             Assert.That(machine.Snapshot.Crop, Is.EqualTo(A1FarmCrop.Fallow));
         }
@@ -125,8 +132,8 @@ namespace CardGame.Experimental.Tests.A1
         private static void CompleteRye(A1FarmStateMachineV2 machine)
         {
             AdvanceToScythe(machine);
-            machine.ApplyScytheDrag(-80f, endDrag: false);
-            machine.ApplyScytheDrag(80f, endDrag: true);
+            machine.ApplyScytheDrag(-80.1f, endDrag: false);
+            machine.ApplyScytheDrag(80.1f, endDrag: true);
         }
 
         private static void CompleteFallow(A1FarmStateMachineV2 machine, bool keepSeed)

@@ -26,7 +26,8 @@ namespace CardGame.Experimental.A1
         ClickSeedCells,
         WaterChannelDrag,
         ClickWeeds,
-        ClickPods
+        ClickPods,
+        Terminal
     }
 
     public enum A1FarmRunOutcome
@@ -60,7 +61,7 @@ namespace CardGame.Experimental.A1
         public float ScytheSwipeThreshold { get; }
         public float WaitDurationSeconds { get; }
 
-        public static A1FarmConfig LegacyMvp =>
+        public static A1FarmConfig LegacyThresholds =>
             new A1FarmConfig(
                 plotCellCount: 20,
                 plowCellsRequired: 16,
@@ -208,7 +209,7 @@ namespace CardGame.Experimental.A1
 
         public A1FarmStateMachineV2(A1FarmConfig config = null)
         {
-            this.config = config ?? A1FarmConfig.LegacyMvp;
+            this.config = config ?? A1FarmConfig.LegacyThresholds;
             crop = A1FarmCrop.Rye;
             stepIndex = 0;
             outcome = A1FarmRunOutcome.InProgress;
@@ -346,9 +347,9 @@ namespace CardGame.Experimental.A1
             if (IsTerminal || CurrentStep != A1FarmStepKind.ScytheSwipe)
                 return Reject();
 
-            if (horizontalDelta <= -config.ScytheSwipeThreshold)
+            if (horizontalDelta < -config.ScytheSwipeThreshold)
                 scytheLeftComplete = true;
-            if (horizontalDelta >= config.ScytheSwipeThreshold)
+            if (horizontalDelta > config.ScytheSwipeThreshold)
                 scytheRightComplete = true;
 
             if (!endDrag)
@@ -402,7 +403,7 @@ namespace CardGame.Experimental.A1
                 return Result(true, A1FarmFeedback.CropAdvanced);
             }
 
-            stepIndex = steps.Length - 1;
+            stepIndex = steps.Length;
             outcome = A1FarmRunOutcome.Completed;
             ResetStepProgress();
             return Result(true, A1FarmFeedback.RunCompleted);
@@ -422,7 +423,7 @@ namespace CardGame.Experimental.A1
             return new A1FarmSnapshot(
                 crop,
                 stepIndex,
-                CurrentStep,
+                IsTerminal ? A1FarmStepKind.Terminal : CurrentStep,
                 outcome,
                 keptSeaPurslaneSeed,
                 progressCounter > 0 ? progressCounter : CountBits(progressMask),
