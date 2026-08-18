@@ -1,0 +1,24 @@
+{
+    "name": "CardGame.A1Farm.Experimental.Tests",
+    "rootNamespace": "CardGame.Experimental.Tests.A1",
+    "references": [
+        "CardGame.A1Farm.Experimental"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS",
+        "CARDGAME_A1_FARM_V2"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false,
+    "optionalUnityReferences": [
+        "TestAssemblies"
+    ]
+}

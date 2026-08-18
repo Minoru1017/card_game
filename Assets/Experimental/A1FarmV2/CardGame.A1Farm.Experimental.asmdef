@@ -1,0 +1,16 @@
+{
+    "name": "CardGame.A1Farm.Experimental",
+    "rootNamespace": "CardGame.Experimental.A1",
+    "references": [],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "CARDGAME_A1_FARM_V2"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": true
+}
