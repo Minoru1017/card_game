@@ -1,6 +1,6 @@
 # 企劃待定與未定義項
 
-> **狀態**：維護中（2026-05-30）  
+> **狀態**：維護中（2026-10-23）
 > **用途**：集中記錄**尚未定義清楚**、**文件互相矛盾**或**僅實作未寫入企劃**的項目；定案後請更新主文件並將本表該列標為「已關閉」。  
 > **總表**：[`PLANNING_MASTER_TABLE.md`](PLANNING_MASTER_TABLE.md) · **索引**：[`PLANNING_DOCS_INDEX.md`](PLANNING_DOCS_INDEX.md)
 
@@ -32,7 +32,7 @@
 | ID | 優先 | 議題 | 現況 | 建議定案方向 |
 |----|------|------|------|----------------|
 | L1-1-DIFF-001 | P0 | **簡單／普通／困難差異** | ✅ 已定案 | 三檔**非**僅 UI 不同；對照表見 `LEVEL_DESIGN_GDD.md` §4.0 · `HARBOR_1-1_VS_TRAINING_GROUND_DIFFICULTY.md` §4.1 |
-| L1-1-DIFF-002 | P1 | **AI 風格** | 港灣固定 `EnemyAiPlayStyle.FastAttack` | 是否三檔皆快攻；若困難要換風格需改 `SceneLoader.HarborTraining.cs` |
+| L1-1-DIFF-002 | P1 | **AI 風格** | ✅ 已定案：港灣三檔皆為 `EnemyAiPlayStyle.FastAttack` | 難度差異由 Rules 數值與牌組構成提供 |
 | L1-1-BTL-001 | P1 | **平手** | ✅ 已定案 | **不算**實戰關 Clear；僅勝利 `result == 1` → `ProcessVictory` |
 | L1-1-BTL-002 | P2 | **放棄對戰** | 預覽有放棄；無企劃說明 | 是否影響進度、是否扣資源 |
 | L1-1-BTL-003 | P2 | **戰敗再戰** | 敗北無懲罰（GDD 傾向） | 是否限制每日次數、是否顯示提示文案 |
@@ -78,8 +78,8 @@
 | 勾選 | ID | 優先 | 待決內容 | 定案時更新 |
 |:----:|----|------|----------|------------|
 | [x] | **L1-2-002** | P1 | M-1-1 實戰 Clear 後：**短台詞 + 自動聚焦 M-1-2** | `LEVEL_DESIGN_M-1-2.md` §2.5 · `StoryProgressSession` |
-| [ ] | **MAP-002b** | P1 | 地圖點 **M-1-2** → 進關（現：解鎖後僅 log） | 流程：解鎖 → 面板文案 → 預覽 → 場景；`StoryProgressWorldMapRuntime` |
-| [ ] | **L1-2-004** | P2 | 進關入口：Story progress 按鈕 vs 地圖直進；是否戰前鬥鳥／預覽 | `LEVEL_DESIGN_M-1-2.md` §三 · `SceneLoader` |
+| [x] | **MAP-002b** | P1 | 地圖點 **M-1-2** 會選取節點並刷新面板；由「進入關卡」按鈕啟動流程，非點節點直進戰鬥 | `StoryProgressWorldMapRuntime` · `StoryLevelEntryTransition` |
+| [x] | **L1-2-004** | P2 | 入口定案：Story progress 面板「進入關卡」按鈕；不加戰前鬥鳥 | `LEVEL_DESIGN_M-1-2.md` §三 · `StoryLevelEntryTransition` |
 | [ ] | **MAP-003** | P2 | Available 節點文案與 `StoryProgressLevelCopy` 驗收對照表 | JSON · GDD §六 |
 
 ---
@@ -92,11 +92,11 @@
 | [x] | **L1-2-006b** | P1 | 階段 B：**鎖定 20 張**；目標教會三張搭配 | §3.0／§3.2 |
 | [x] | **L1-2-007** | P1 | 階段 B 難度：**港灣簡單** | §3.2 |
 | [x] | **L1-2-008** | P1 | 戰技：**A+B 合計**各 ≥1；B 須勝利 | §3.0 · §四 |
-| [ ] | **L1-2-009** | P1 | **教練來源**：`TutorialBattleCoachUi` 擴充 vs M-1-2 專表 vs `HarborCombatCoach` | `HARBOR_COMBAT_COACH_GDD.md` 或新 `M12` 台詞表 |
-| [ ] | **L1-2-010** | P2 | **中段散策**：3 熱區台詞定稿；**暫定玩法**（不好玩可換）；封印法術熱區演出 | §3.3.2 · §3.3.3 · §八 |
+| [x] | **L1-2-009** | P1 | **教練來源**定案：A 無教練；B 使用 `M12BattleCoachCatalog` + `M12BattleCoachUi` | `LEVEL_DESIGN_M-1-2.md` §3.1～§3.2 |
+| [~] | **L1-2-010** | P2 | **中段散策 MVP 已實裝**；3 熱區、封印法術演出與體感仍待 Unity 驗收 | §3.3.2 · §3.3.3 · §八 |
 | [~] | **L1-2-013** | P2 | **封印法術支線 · A-1 MVP**：✅ 潮印真身、**S-A-1** 三畦、Main Plot 劇情、貴重品庫解封；待：語音 mp3、草奶奶手記、疊加序驗收 | [`LEVEL_DESIGN_A-1.md`](LEVEL_DESIGN_A-1.md) · `企劃發想.md` §十二 |
 | [ ] | **L1-2-011** | P2 | **中段跳過**：整段散策可否跳過；`m12_patrol_beat_seen` 是否強制看一次 | §3.3.5 |
-| [ ] | **L1-2-012** | P2 | **發獎時機**：僅 B 勝後 vs §五備註「A 後發」— 關閉備選，只留一條 | §五 · §3.3.2 與獎勵列 |
+| [x] | **L1-2-012** | P2 | **發獎時機**定案並已實裝：僅 B 勝利且 A+B 合計條件達標後發放 | §五 · `M12BattleSettlementUi` |
 
 ---
 
@@ -104,8 +104,8 @@
 
 | 勾選 | ID | 優先 | 待決／待做 | 定案時更新 |
 |:----:|----|------|------------|------------|
-| [ ] | **L1-2-005** | P1 | Main Plot **1-2** 劇情（開場段考說明） | Main Plot / `BuildM12PatrolSteps` |
-| [ ] | **L1-2-005b** | P1 | 雙戰鬥場景串接（A 教學戰 → 中段 → B 教練戰） | `BattleLaunchContext` · 場景流 |
+| [x] | **L1-2-005** | P1 | Main Plot **1-2** 開場、中段、勝利劇情 steps 已接 | `BuildM12IntroPlotSteps` · `BuildM12MidPatrolPlotSteps` · `BuildM12VictoryEpilogueSteps` |
+| [x] | **L1-2-005b** | P1 | A 教學戰 → 中段散策 → B 教練戰 → 勝利收尾已串接 | `M12SeawallPatrolFlow` · `BattleLaunchContext` |
 | [ ] | **L1-2-005c** | P1 | 結算 **三卡展示 UI** + 副標「海牆巡邏段考通過」 | §六 · 結算 prefab |
 | [ ] | **L1-2-005d** | P2 | §八體驗檢查清單全勾（重溫不重發、未觸發戰技不發獎等） | QA · GDD §八 |
 
@@ -137,7 +137,7 @@
 |----|------|------|------|----------------|
 | MAP-001 | P1 | **M-1-1 點擊** | 聚焦地圖；實戰從 Story progress 按鈕進入 | 定案：Clear 後點節點是否仍只聚焦、是否直開港灣預覽 |
 | MAP-002 | P1 | **地圖 NEW 與玩家資訊不一致** | 入門已畢業／御三家已領時，玩家資訊顯示實戰區，M-1-1 節點徽章仍 NEW；或已港灣首通仍顯示實戰區而非 Clear | ✅ `EnsureSlotIntroProgressConsistent` + `EnsureSlotHarborProgressConsistent`（戰績 簡單～困難 勝利、畢業證、M-1-2）。**minori1017** |
-| MAP-002b | P1 | **M-1-2 點擊 → 進關** | 未接戰鬥場景 | 詳見 **§L1-2 B** 勾選表 |
+| MAP-002b | P1 | **M-1-2 點擊 → 進關** | ✅ 節點點擊負責選取與面板刷新；「進入關卡」按鈕啟動流程 | 詳見 **§L1-2 B** 勾選表 |
 | MAP-003 | P2 | **Available 節點文案** | 資料庫有 title；無 GDD 驗收表 | 與 `StoryProgressLevelCopy` 對照表 |
 
 ---
@@ -201,7 +201,7 @@
 
 | ID | 優先 | 議題 | 現況 | 建議定案方向 |
 |----|------|------|------|----------------|
-| BD-CD-001 | P1 | **Phase 1 實裝** | 未實作 | `BirdDuelCdProfile`、選碟 UI、勝利 draft 白名單、預設《港灣練習帶》 |
+| BD-CD-001 | P1 | **Phase 1 實裝** | **部分實裝**：核心資料與部分流程已存在，選碟／完整勝利 draft 與 QA 尚未完成 | `BirdDuelCdProfile`、選碟 UI、勝利 draft 白名單、預設《港灣練習帶》 |
 | BD-CD-002 | P1 | **陣營子池名單** | 第十二章僅方向 | 國王／教會各至少 5 個 `BirdDuelBonusId` 入池表 |
 | BD-CD-003 | — | **商店抽選機率** | ✅ 已定案 | `Docs/鬥鳥手勢小遊戲企劃.md` §12.5.3 |
 | BD-CD-004 | P2 | **碎片用途** | 重複→碎片已定案（§12.5.4） | Phase 3：同碟升階／200 碎片定向換 R |
@@ -215,6 +215,11 @@
 
 | ID | 關閉日期 | 定案摘要 | 更新文件 |
 |----|----------|----------|----------|
+| CARD-ATTR-003 | 2026-10-23 | M-1-2 A 關閉戰位克制、B 啟用 | `CARD_ATTRIBUTES_GDD.md` · `CombatRoleBattleRules` |
+| MAP-002b / L1-2-004 | 2026-10-23 | 點節點選取並刷新面板；由「進入關卡」按鈕啟動 M-1-2 | `LEVEL_DESIGN_M-1-2.md` · `StoryLevelEntryTransition` |
+| L1-2-005 / 005b | 2026-10-23 | 1-2 Main Plot 與 A→中段→B→收尾流程已串接 | `M12SeawallPatrolFlow` · `TutorialPlotScriptFactory` |
+| L1-2-009 / 012 | 2026-10-23 | B 使用 M12 專用教練；宗教三張僅於 B 勝且合計達標後發放 | `M12BattleCoachCatalog` · `M12BattleSettlementUi` |
+| L1-1-DIFF-002 | 2026-10-23 | 港灣三難度皆採 FastAttack；由數值與牌組區分難度 | `SceneLoader.HarborTraining.cs` |
 | L1-2-008 | 2026-06-21 | A+B 合計御三家各 ≥1；A 本局三戰技；B 須勝利 | `LEVEL_DESIGN_M-1-2.md` §3.0 · §四 |
 | L1-2-007 | 2026-06-21 | 階段 B 難度：港灣簡單 | §3.2 |
 | L1-2-006 | 2026-06-21 | 階段 A 鎖 15 張、御三家應用；B 鎖 20 張、教會三張搭配 | §3.0～§3.2 |
@@ -239,7 +244,7 @@
 |----|------|------|------|----------------|
 | CARD-ATTR-001 | P1 | **戰鬥屬性 v1** | ✅ 方向定案 | 見 [`CARD_ATTRIBUTES_GDD.md`](CARD_ATTRIBUTES_GDD.md)：四屬、三角克制、入門關關閉 |
 | CARD-ATTR-002 | P2 | **空 combat_role 默認** | 未定 | Strike 或強制填表 |
-| CARD-ATTR-003 | P2 | **M-1-2 段考是否啟用克制** | 未定 | 建議關閉 |
+| CARD-ATTR-003 | P2 | **M-1-2 段考是否啟用克制** | ✅ 已定案並實裝：A 關閉、B 啟用 | `CombatRoleBattleRules.IsMechanicsEnabled` |
 | CARD-SYN-001 | P3 | **合成／大牌（方案 2）** | **觀望** | Boss 試水 1 張前不實作；禁法術與段考衝突 |
 
 ---
@@ -248,6 +253,7 @@
 
 | 日期 | 說明 |
 |------|------|
+| 2026-10-23 | 依現行程式關閉 M-1-2 入口、劇情串接、教練、發獎與戰位規則；更新散策與 CD Phase 1 部分實裝狀態 |
 | 2026-06-21 | 定案 M-1-2 段考 A/B 任務欄、鎖牌 15／20 張、B 港灣簡單（L1-2-006～008） |
 | 2026-06-21 | 關閉 L1-2-002：港灣首通銜接過場（`LEVEL_DESIGN_M-1-2.md` §2.5） |
 | 2026-06-21 | 關閉 L1-1-DIFF-001：港灣三難度企劃對照表（GDD §4.0） |

@@ -1,0 +1,103 @@
+name: Project quality
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: project-quality-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  static-checks:
+    name: Static checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository without LFS payloads
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          lfs: false
+
+      - name: Run read-only project checks
+        run: python3 tools/ci_static_checks.py
+
+      - name: Run legacy quality report in an isolated copy
+        id: quality-report
+        shell: bash
+        run: |
+          set -euo pipefail
+          scan_root="$RUNNER_TEMP/code-quality-scan"
+          mkdir -p "$scan_root"
+          git archive HEAD | tar -x -C "$scan_root"
+          (
+            cd "$scan_root"
+            python3 tools/code_quality_scan.py
+          )
+          report="$scan_root/Docs/CODE_QUALITY_SCAN_REPORT.md"
+          if [[ -f "$report" ]]; then
+            echo "report=$report" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload isolated quality report
+        if: always() && steps.quality-report.outputs.report != ''
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: code-quality-report
+          path: ${{ steps.quality-report.outputs.report }}
+          if-no-files-found: warn
+          retention-days: 14
+
+  unity-editmode:
+    name: Unity EditMode tests (manual)
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository with LFS payloads
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          lfs: true
+
+      - name: Check Unity license configuration
+        id: unity-license
+        shell: bash
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        run: |
+          if [[ -n "$UNITY_LICENSE" && -n "$UNITY_EMAIL" && -n "$UNITY_PASSWORD" ]]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Unity credentials are not configured; EditMode tests were skipped."
+          fi
+
+      - name: Run Unity EditMode tests
+        if: steps.unity-license.outputs.available == 'true'
+        uses: game-ci/unity-test-runner@32e57712352b500e17974b245a6dce9e11a73213 # v4.4.0
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          unityVersion: 2023.1.22f1
+          testMode: editmode
+          artifactsPath: artifacts
+          githubToken: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Unity test artifacts
+        if: always() && steps.unity-license.outputs.available == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: unity-editmode-results
+          path: artifacts
+          if-no-files-found: warn
+          retention-days: 14

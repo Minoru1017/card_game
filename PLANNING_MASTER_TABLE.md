@@ -1,6 +1,6 @@
 # 企劃總表
 
-> **狀態**：維護中（2026-05-30）  
+> **狀態**：維護中（2026-10-23）
 > **用途**：一頁掌握各企劃領域的**主文件、定案程度、讀者與程式錨點**。細節請進主文件；未定義項見 [`PLANNING_OPEN_ITEMS.md`](PLANNING_OPEN_ITEMS.md)。  
 > **文件索引**：[`PLANNING_DOCS_INDEX.md`](PLANNING_DOCS_INDEX.md)
 
@@ -23,21 +23,23 @@
 |------|--------|------|----------|----------------|----------|
 | **企劃入口** | `PLANNING_DOCS_INDEX.md` | 定案 | 全員 | — | — |
 | **主線世界觀** | `STORY_PROGRESS_WORLDVIEW.md` | 定案 | 企劃、美術、文案 | `StoryProgressLevelCopy.cs`、`StoryProgressNodeDatabase.json` | Clear 語意見 GDD §2.3 |
-| **關卡 1-1** | `LEVEL_DESIGN_GDD.md` | **部分定案** | 企劃、程式 | `HarborTrainingProgressState`、`HarborTrainingRewardService`、`SceneLoader.HarborTraining.cs` | 三難度數值表、放棄、通關獎勵 UI 狀態（平手已定案不算 Clear，見 §L1-1） |
-| **關卡 1-2+** | —（待 `LEVEL_DESIGN_M-1-2.md` 或擴章） | **待開案** | 企劃 | `M-1-2` 節點於 JSON；地圖點擊未接戰鬥 | 海牆巡邏全流程（見待定 §L1-2） |
+| **關卡 1-1** | `LEVEL_DESIGN_GDD.md` | **部分定案** | 企劃、程式 | `HarborTrainingProgressState`、`HarborTrainingRewardService`、`SceneLoader.HarborTraining.cs` | 三難度數值已定；待放棄規則、通關獎勵 UI 與最高難度顯示（見 §L1-1） |
+| **關卡 1-2** | `LEVEL_DESIGN_M-1-2.md` | **部分定案** | 企劃、程式、QA | `M12SeawallPatrolFlow`、`M12PhaseDeckCatalog`、`M12BattleSettlementUi`、`M12SeawallStrollOverlay` | 雙戰與散策骨架已接；待結算三卡 UI、跳過規則與 §八 Unity QA |
+| **關卡 1-3** | `LEVEL_DESIGN_M-1-3.md` | **部分定案** | 企劃、程式、QA | `M13RiverForkFlow`、`M13PhaseABattleRules`、`M13PhaseBBattleRules` | 主流程 MVP 已接；待 Phase A 任務收斂與 §十四 Unity QA |
+| **支線 A-1** | `LEVEL_DESIGN_A-1.md` | **部分定案** | 企劃、程式、QA | `SideQuestA1Flow`、`SideQuestA1TideIslandFarmOverlay`、`SideQuestA1TideMarkRewardService` | MVP 已接；待語音、美術、手記與 §九 Unity QA |
 | **入門劇本** | `TUTORIAL_PLOT_SCRIPT.md` | 定案 | 文案、程式 | `TutorialPlotScriptFactory.cs`、`MainPlotSceneController.cs` | 重溫入門是否跳劇情（見待定 §TUT） |
 | **教學進度旗標** | `LEVEL_DESIGN_GDD.md` §二、`TUTORIAL_PLOT_SCRIPT.md` | 部分定案 | 程式 | `TutorialProgressState.cs` | 舊存檔遷移（見待定 §SAVE） |
 | **對戰規則** | `GAMEPLAY_AND_RULES.md` | 定案 | 企劃、程式 | `BattleSimulationManager.cs`、`CardList.csv` | — |
-| **難度與 AI** | `DIFFICULTY_AND_AI_DESIGN.md` | 定案（報告） | 程式、口試 | `BuildDifficultyConfig`、`EnemyAiPlayStyle` | 港灣三檔是否僅標籤差異（見待定 §L1-1） |
+| **難度與 AI** | `DIFFICULTY_AND_AI_DESIGN.md` | 定案（報告） | 程式、口試 | `BuildDifficultyConfig`、`EnemyAiPlayStyle` | 港灣三檔皆採 `FastAttack`，數值與牌組依 Rules 區分 |
 | **敵 AI 細節** | `ENEMY_AI_DECISION_TREE.md` | 定案 | 程式 | `EnemyAi*.cs` | — |
 | **戰前預覽謎題** | `BATTLE_PREVIEW_PUZZLE_INDEX.md` | **已停用**（PZ 謎題）；預覽 modal 仍用 | 程式、美術 | `SceneLoader.BattlePreview.cs` | 謎題解鎖已由鬥鳥取代；港灣預覽敘事（見待定 §ART） |
 | **鬥鳥暖身賽** | `Docs/鬥鳥手勢小遊戲企劃.md` | **定案** | 企劃、程式 | `FightingBirdGameSceneController.*`、`BirdDuelCore`、`SceneLoader.BirdDuel`、`BirdDuelRhythmSync` | CD Phase1 實裝見待定 §BD-CD |
 | **卡牌熟練度** | `CARD_PROFICIENCY_GDD.md` | 部分定案（v1 暫採） | 企劃 | `proficiency` CSV 鍵、`MonsterSkillRegistry` | §7 八項待決；彙總見待定 §PROF |
-| **卡牌戰鬥屬性** | `CARD_ATTRIBUTES_GDD.md` | **定案方向**（v1 四屬） | 企劃、程式 | `CardList.csv`（規劃 `combat_role`） | 元素 v1 場地化；§CARD-ATTR |
+| **卡牌戰鬥屬性** | `CARD_ATTRIBUTES_GDD.md` | **部分定案並已實裝**（v1 四戰位） | 企劃、程式 | `CardList.csv`（`combat_role`）、`CombatRoleBattleRules` | 入門／M-1-2 A 關閉克制；其餘細項見 §CARD-ATTR |
 | **卡牌合成／大牌** | —（觀望） | **觀望** | 企劃 | — | 見待定 §CARD-SYN |
 | **單卡戰技文案** | `卡牌技能階段式揭露.md` | 草案 | 企劃 | `MonsterSkillRegistry` | 逐卡填表進度 |
 | **牌組存檔** | `DECK_SAVE_IMPLEMENTATION.md` | **定案**（2026-06 牌組名稱驗收） | 程式 | `PlayerDeckSlotNameStorage`、`PlayerData`、`DeckManager` | 驗收：[`Docs/DECK_SLOT_NAME_BUG_CHECKLIST.md`](Docs/DECK_SLOT_NAME_BUG_CHECKLIST.md) |
-| **大地圖節點文案** | `StoryProgressNodeDatabase.json` + `StoryProgressLevelCopy.cs` | 部分定案 | 程式 | `StoryProgressWorldMapRuntime.cs` | 節點點擊→進關流程（見待定 §MAP） |
+| **大地圖節點文案** | `StoryProgressNodeDatabase.json` + `StoryProgressLevelCopy*.cs` | 部分定案 | 程式、QA | `StoryProgressWorldMapRuntime.cs`、`StoryProgressSceneController.cs` | 點節點＝選取＋面板；由「進入關卡」按鈕啟動流程；待 MAP-003 文案驗收表 |
 | **登入／大廳導流** | `TUTORIAL_PLOT_SCRIPT.md`（首段）、`ARCHITECTURE_OVERVIEW.md` | **部分定案** | 程式 | 登入場景、`hall`、`HallSceneFeatureBinder` | hall「牌組」→ **Deck Pack**（非直連 Buildbeck）；「自由對戰」→ **Free Battle**（見 §FLOW） |
 | **牌組管理（Deck Pack）** | `ARCHITECTURE_OVERVIEW.md`、`DECK_SAVE_IMPLEMENTATION.md` §11 | **定案**（2026-07） | 程式 | `DeckPackSceneController`、`DeckPackViewSession` | 查看／編輯分流；空槽不進背包 |
 | **自由對戰（Free Battle）** | `ARCHITECTURE_OVERVIEW.md`、`FreeBattleBattleCopy.cs` | **部分定案** | 程式 | `FreeBattleSceneController`、`FreeBattleViewSession`、`SceneLoader.FreeBattle` | 三 AI 風格；70% 隨機鬥鳥暖身（`BirdDuelRandomEventChance`）；無關卡 GDD |
@@ -71,11 +73,11 @@
 | 優先 | 產出物 | 解除待定 |
 |------|--------|----------|
 | P0 | ~~修訂 `STORY_PROGRESS_WORLDVIEW.md` §三、§七~~ | ✅ 2026-06-21 對齊 GDD §2.3 |
-| P0 | `LEVEL_DESIGN` 補港灣三難度數值表或「同配置僅標籤」聲明 | §L1-1-DIFF |
-| P1 | `LEVEL_DESIGN_M-1-2.md`（或 GDD 第二章） | §L1-2 |
-| P1 | **卡牌戰鬥屬性 v1** 實作（CSV + 克制 + 入門關關閉） | §CARD-ATTR |
-| P1 | 大地圖「點擊節點 → 進關」流程圖 | §MAP |
-| P2 | 舊存檔遷移說明 | §SAVE |
+| P0 | M-1-2 §八、M-1-3 §十四、A-1 §九 Windows Unity QA | 各關卡體驗驗收 |
+| P1 | M-1-1／M-1-2 純邏輯 EditMode 回歸測試 | 進度、戰位、段考 tracker |
+| P1 | M-1-2 結算三卡 UI 與散策跳過規則定案 | L1-2-005c／011 |
+| P1 | 大地圖節點文案驗收對照表 | MAP-003 |
+| P2 | 舊存檔遷移政策與回歸案例 | SAVE-001 |
 
 ---
 
@@ -87,3 +89,4 @@
 | 2026-06-21 | 進度語意改為教學關／實戰關雙 Clear（GDD §2.3）；世界觀 §三、§七 對齊 |
 | 2026-07-03 | 新增 Deck Pack／Free Battle／全局 hub 白名單列；hall 牌組改接 Deck Pack |
 | 2026-06-19 | 新增「鬥鳥暖身賽」列；戰前謎題列改已停用；程式錨點對齊 `PROJECT_CODE_INDEX_v2` §I |
+| 2026-10-23 | 依現行程式同步 M-1-2、M-1-3、A-1、戰位與 Story progress 狀態；更新下一批產出 |
