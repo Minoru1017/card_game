@@ -1,6 +1,6 @@
 # 企劃總表
 
-> **狀態**：維護中（2026-10-23）  
+> **狀態**：維護中（2026-10-23）
 > **用途**：一頁掌握各企劃領域的**主文件、定案程度、讀者與程式錨點**。細節請進主文件；未定義項見 [`PLANNING_OPEN_ITEMS.md`](PLANNING_OPEN_ITEMS.md)。  
 > **文件索引**：[`PLANNING_DOCS_INDEX.md`](PLANNING_DOCS_INDEX.md)
 

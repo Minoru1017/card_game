@@ -1,6 +1,6 @@
 # 企劃待定與未定義項
 
-> **狀態**：維護中（2026-10-23）  
+> **狀態**：維護中（2026-10-23）
 > **用途**：集中記錄**尚未定義清楚**、**文件互相矛盾**或**僅實作未寫入企劃**的項目；定案後請更新主文件並將本表該列標為「已關閉」。  
 > **總表**：[`PLANNING_MASTER_TABLE.md`](PLANNING_MASTER_TABLE.md) · **索引**：[`PLANNING_DOCS_INDEX.md`](PLANNING_DOCS_INDEX.md)
 

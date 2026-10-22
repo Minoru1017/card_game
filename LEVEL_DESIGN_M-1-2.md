@@ -1,6 +1,6 @@
 # 關卡設計企劃：1-2 海牆巡邏（M-1-2）
 
-> **狀態**：定案，程式同步至 2026-10-23  
+> **狀態**：定案，程式同步至 2026-10-23
 > **用途**：M-1-2 流程、雙戰鬥、御三家戰技段考、宗教線畢業獎勵。  
 > **關聯**：[`LEVEL_DESIGN_GDD.md`](LEVEL_DESIGN_GDD.md)（M-1-1 港灣）· [`CARD_PROFICIENCY_GDD.md`](CARD_PROFICIENCY_GDD.md) · [`卡牌技能階段式揭露.md`](卡牌技能階段式揭露.md) · [`HARBOR_COMBAT_COACH_GDD.md`](HARBOR_COMBAT_COACH_GDD.md) · `StoryProgressNodeDatabase.json`（`M-1-2`）
 
